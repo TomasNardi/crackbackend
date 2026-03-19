@@ -38,7 +38,13 @@ class BannerViewSet(viewsets.ModelViewSet):
         return [permissions.IsAdminUser()]
 
 
-class EmailSubscribeView(APIView):
+class PingView(APIView):
+    """GET /ping/ — keep alive para evitar que Render duerma el servicio."""
+
+    permission_classes = [permissions.AllowAny]
+
+    def get(self, request):
+        return Response({"status": "ok"})
     """POST /subscribe/ — suscribirse al newsletter."""
 
     permission_classes = [permissions.AllowAny]

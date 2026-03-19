@@ -18,7 +18,7 @@ from apps.products.views import (
     CardConditionViewSet,
 )
 from apps.orders.views import OrderViewSet, MercadoPagoWebhookView, ValidateDiscountView
-from apps.core.views import BannerViewSet, SiteConfigView, EmailSubscribeView
+from apps.core.views import BannerViewSet, SiteConfigView, EmailSubscribeView, PingView
 
 router = DefaultRouter()
 
@@ -50,6 +50,7 @@ urlpatterns = [
     # Core
     path("site-config/", SiteConfigView.as_view(), name="site_config"),
     path("subscribe/", EmailSubscribeView.as_view(), name="email_subscribe"),
+    path("ping/", PingView.as_view(), name="ping"),
 
     # Router URLs
     path("", include(router.urls)),
