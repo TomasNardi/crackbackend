@@ -3,7 +3,6 @@ Users Views
 ============
 """
 
-import os
 from rest_framework import generics, permissions
 from rest_framework.views import APIView
 from rest_framework.response import Response
@@ -43,18 +42,13 @@ class UserProfileView(generics.RetrieveUpdateAPIView):
 
 class CreateSuperuserView(APIView):
     """
-    Crea el superusuario inicial. Protegido por ADMIN_SECRET en el header.
-    Solo funciona si no existe ningún superusuario todavía.
-    DELETE este endpoint una vez creado el admin.
+    Crea el superusuario inicial.
+    Solo funciona una vez — si ya existe un superusuario, falla.
     """
 
     permission_classes = [permissions.AllowAny]
 
     def post(self, request):
-        secret = request.headers.get("X-Admin-Secret")
-        if not secret or secret != os.environ.get("ADMIN_SECRET"):
-            return Response({"detail": "Forbidden."}, status=status.HTTP_403_FORBIDDEN)
-
         if User.objects.filter(is_superuser=True).exists():
             return Response({"detail": "Superuser already exists."}, status=status.HTTP_400_BAD_REQUEST)
 
