@@ -183,7 +183,7 @@ CORS_ALLOWED_ORIGINS = [
 
 # Agregar el dominio del frontend en producción via env var
 FRONTEND_URL = os.environ.get("FRONTEND_URL")
-if FRONTEND_URL:
+if FRONTEND_URL and FRONTEND_URL.startswith("http"):
     CORS_ALLOWED_ORIGINS.append(FRONTEND_URL)
 
 # Permite subdominios de Vercel automáticamente
