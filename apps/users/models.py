@@ -1,0 +1,82 @@
+"""
+Users Models
+=============
+Extiende el User de Django con un perfil custom.
+Preparado para el showroom de cartas en fases futuras.
+"""
+
+from django.contrib.auth.models import AbstractUser
+from django.db import models
+
+
+class User(AbstractUser):
+    """
+    Usuario custom. Hereda todo de AbstractUser (username, email, password, etc.)
+    y agrega campos propios del negocio.
+    """
+
+    email = models.EmailField(unique=True)
+
+    # Datos de contacto
+    phone = models.CharField(max_length=30, blank=True)
+
+    # Dirección de envío por defecto (para agilizar el checkout)
+    default_address = models.TextField(blank=True)
+    default_city = models.CharField(max_length=100, blank=True)
+    default_province = models.CharField(max_length=100, blank=True)
+    default_zip = models.CharField(max_length=20, blank=True)
+
+    # Showroom / colección (fase 2)
+    # Cuando se active el showroom, estos campos cobran vida.
+    is_collector = models.BooleanField(
+        default=False,
+        help_text="Habilita el acceso al showroom personal de cartas.",
+    )
+
+    USERNAME_FIELD = "email"
+    REQUIRED_FIELDS = ["username"]
+
+    class Meta:
+        verbose_name = "Usuario"
+        verbose_name_plural = "Usuarios"
+
+    def __str__(self):
+        return self.email
+
+
+class Wishlist(models.Model):
+    """
+    Lista de deseos del usuario.
+    Relación M2M con productos via WishlistItem para poder agregar notas, etc.
+    """
+
+    user = models.OneToOneField(User, on_delete=models.CASCADE, related_name="wishlist")
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        verbose_name = "Wishlist"
+        verbose_name_plural = "Wishlists"
+
+    def __str__(self):
+        return f"Wishlist de {self.user.email}"
+
+
+class WishlistItem(models.Model):
+    """Ítem individual dentro de una wishlist."""
+
+    wishlist = models.ForeignKey(Wishlist, on_delete=models.CASCADE, related_name="items")
+    # FK a products.Product — se define como string para evitar import circular
+    product = models.ForeignKey(
+        "products.Product",
+        on_delete=models.CASCADE,
+        related_name="wishlist_items",
+    )
+    added_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        unique_together = ("wishlist", "product")
+        verbose_name = "Ítem de Wishlist"
+        verbose_name_plural = "Ítems de Wishlist"
+
+    def __str__(self):
+        return f"{self.product} en wishlist de {self.wishlist.user.email}"

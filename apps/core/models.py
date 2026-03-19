@@ -1,0 +1,81 @@
+"""
+Core Models
+============
+Configuración general del sitio: banners, estado de la página, suscripciones de email.
+"""
+
+from django.db import models
+
+
+class SiteConfig(models.Model):
+    """
+    Configuración global del sitio. Solo debe existir un registro.
+    Usá el admin para editarlo.
+    """
+
+    is_active = models.BooleanField(
+        default=True,
+        help_text="Desactivar para mostrar página de mantenimiento.",
+    )
+    maintenance_message = models.CharField(
+        max_length=500,
+        blank=True,
+        default="Sitio en mantenimiento. Volvemos pronto.",
+    )
+
+    class Meta:
+        verbose_name = "Configuración del sitio"
+        verbose_name_plural = "Configuración del sitio"
+
+    def __str__(self):
+        return f"Config — {'Activo' if self.is_active else 'Mantenimiento'}"
+
+    def save(self, *args, **kwargs):
+        # Singleton: solo puede existir un registro
+        self.pk = 1
+        super().save(*args, **kwargs)
+
+    @classmethod
+    def get(cls):
+        obj, _ = cls.objects.get_or_create(pk=1)
+        return obj
+
+
+class Banner(models.Model):
+    """Banner de imagen para distintas secciones del sitio."""
+
+    SECTION_CHOICES = [
+        ("home", "Home"),
+        ("pokemon", "Pokémon"),
+        ("lorcana", "Lorcana"),
+        ("one_piece", "One Piece"),
+        ("yugioh", "Yu-Gi-Oh!"),
+        ("checkout", "Checkout"),
+        ("store", "Tienda"),
+    ]
+
+    section = models.CharField(max_length=50, choices=SECTION_CHOICES, unique=True)
+    image_url = models.URLField(max_length=600)
+    is_active = models.BooleanField(default=True)
+
+    class Meta:
+        verbose_name = "Banner"
+        verbose_name_plural = "Banners"
+
+    def __str__(self):
+        return f"Banner — {self.get_section_display()}"
+
+
+class EmailSubscription(models.Model):
+    """Suscripciones de email para campañas y newsletters."""
+
+    email = models.EmailField(unique=True)
+    is_active = models.BooleanField(default=True)
+    subscribed_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        verbose_name = "Suscripción de email"
+        verbose_name_plural = "Suscripciones de email"
+
+    def __str__(self):
+        return self.email
