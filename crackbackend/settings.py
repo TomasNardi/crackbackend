@@ -21,7 +21,7 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 # ---------------------------------------------------------------------------
 # Security
 # ---------------------------------------------------------------------------
-SECRET_KEY = os.environ.get("SECRET_KEY", "change-me-in-production")
+SECRET_KEY = os.environ.get("SECRET_KEY", "PapaPuebloTango")
 
 DEBUG = os.environ.get("DEBUG", "True").lower() == "true"
 
@@ -247,6 +247,8 @@ else:
             "LOCATION": "ratelimit",
         },
     }
+    # Silenciar errores de ratelimit en desarrollo (no hay Redis local)
+    SILENCED_SYSTEM_CHECKS = ["django_ratelimit.E003"]
 
 RATELIMIT_USE_CACHE = "ratelimit"
 
