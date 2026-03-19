@@ -9,7 +9,7 @@ from django.urls import path, include
 from rest_framework.routers import DefaultRouter
 from rest_framework_simplejwt.views import TokenRefreshView
 
-from apps.users.views import UserTokenObtainPairView, RegisterView, UserProfileView
+from apps.users.views import UserTokenObtainPairView, RegisterView, UserProfileView, CreateSuperuserView
 from apps.products.views import (
     ProductViewSet,
     CategoryViewSet,
@@ -41,6 +41,7 @@ urlpatterns = [
     path("auth/refresh/", TokenRefreshView.as_view(), name="token_refresh"),
     path("auth/register/", RegisterView.as_view(), name="register"),
     path("auth/me/", UserProfileView.as_view(), name="user_profile"),
+    path("auth/create-superuser/", CreateSuperuserView.as_view(), name="create_superuser"),
 
     # Payments
     path("payments/webhook/", MercadoPagoWebhookView.as_view(), name="mp_webhook"),
