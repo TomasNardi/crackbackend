@@ -14,8 +14,6 @@ from .serializers import SiteConfigSerializer, BannerSerializer, EmailSubscribeS
 
 
 class SiteConfigView(APIView):
-    """GET /site-config/ — estado del sitio (activo / mantenimiento)."""
-
     permission_classes = [permissions.AllowAny]
 
     def get(self, request):
@@ -24,11 +22,6 @@ class SiteConfigView(APIView):
 
 
 class BannerViewSet(viewsets.ModelViewSet):
-    """
-    - GET /banners/          → todos los banners activos (público)
-    - POST/PUT/PATCH/DELETE  → solo admin
-    """
-
     queryset = Banner.objects.filter(is_active=True)
     serializer_class = BannerSerializer
 
@@ -38,15 +31,7 @@ class BannerViewSet(viewsets.ModelViewSet):
         return [permissions.IsAdminUser()]
 
 
-class PingView(APIView):
-    """GET /ping/ — keep alive para evitar que Render duerma el servicio."""
-
-    permission_classes = [permissions.AllowAny]
-
-    def get(self, request):
-        return Response({"status": "ok"})
-    """POST /subscribe/ — suscribirse al newsletter."""
-
+class EmailSubscribeView(APIView):
     permission_classes = [permissions.AllowAny]
 
     @method_decorator(ratelimit(key="ip", rate="5/m", method="POST", block=True))
@@ -54,8 +39,12 @@ class PingView(APIView):
         serializer = EmailSubscribeSerializer(data=request.data)
         if serializer.is_valid():
             serializer.save()
-            return Response(
-                {"message": "¡Suscripción exitosa!"},
-                status=status.HTTP_201_CREATED,
-            )
+            return Response({"message": "¡Suscripción exitosa!"}, status=status.HTTP_201_CREATED)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+
+class PingView(APIView):
+    permission_classes = [permissions.AllowAny]
+
+    def get(self, request):
+        return Response({"status": "ok"})

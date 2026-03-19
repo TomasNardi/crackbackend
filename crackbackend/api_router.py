@@ -1,8 +1,6 @@
 """
 API Router - v1
 ================
-Centraliza el registro de todos los routers y endpoints de la API.
-Agregar nuevas apps acá a medida que crecen.
 """
 
 from django.urls import path, include
@@ -11,11 +9,12 @@ from rest_framework_simplejwt.views import TokenRefreshView
 
 from apps.users.views import UserTokenObtainPairView, RegisterView, UserProfileView, CreateSuperuserView
 from apps.products.views import (
-    ProductViewSet,
-    CategoryViewSet,
-    ExpansionViewSet,
-    ProductTypeViewSet,
+    TCGViewSet,
+    ProductCategoryViewSet,
     CardConditionViewSet,
+    CertificationEntityViewSet,
+    CertificationGradeViewSet,
+    ProductViewSet,
 )
 from apps.orders.views import OrderViewSet, MercadoPagoWebhookView, ValidateDiscountView
 from apps.core.views import BannerViewSet, SiteConfigView, EmailSubscribeView, PingView
@@ -24,10 +23,11 @@ router = DefaultRouter()
 
 # Products
 router.register(r"products", ProductViewSet, basename="product")
-router.register(r"categories", CategoryViewSet, basename="category")
-router.register(r"expansions", ExpansionViewSet, basename="expansion")
-router.register(r"product-types", ProductTypeViewSet, basename="product-type")
-router.register(r"card-conditions", CardConditionViewSet, basename="card-condition")
+router.register(r"tcgs", TCGViewSet, basename="tcg")
+router.register(r"categories", ProductCategoryViewSet, basename="category")
+router.register(r"conditions", CardConditionViewSet, basename="condition")
+router.register(r"certification-entities", CertificationEntityViewSet, basename="certification-entity")
+router.register(r"certification-grades", CertificationGradeViewSet, basename="certification-grade")
 
 # Orders
 router.register(r"orders", OrderViewSet, basename="order")

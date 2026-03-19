@@ -9,12 +9,13 @@ from rest_framework import viewsets, permissions
 from rest_framework.decorators import action
 from rest_framework.response import Response
 
-from .models import TCG, Expansion, ProductType, CardCondition, Product
+from .models import TCG, ProductCategory, CardCondition, CertificationEntity, CertificationGrade, Product
 from .serializers import (
     TCGSerializer,
-    ExpansionSerializer,
-    ProductTypeSerializer,
+    ProductCategorySerializer,
     CardConditionSerializer,
+    CertificationEntitySerializer,
+    CertificationGradeSerializer,
     ProductListSerializer,
     ProductDetailSerializer,
     ProductWriteSerializer,
@@ -22,34 +23,18 @@ from .serializers import (
 from .filters import ProductFilter
 
 
-class CategoryViewSet(viewsets.ReadOnlyModelViewSet):
-    """TCGs disponibles."""
-
+class TCGViewSet(viewsets.ReadOnlyModelViewSet):
     queryset = TCG.objects.all()
     serializer_class = TCGSerializer
     permission_classes = [permissions.AllowAny]
     lookup_field = "slug"
 
 
-class ExpansionViewSet(viewsets.ReadOnlyModelViewSet):
-    """Expansiones, filtrables por TCG."""
-
-    serializer_class = ExpansionSerializer
+class ProductCategoryViewSet(viewsets.ReadOnlyModelViewSet):
+    queryset = ProductCategory.objects.all()
+    serializer_class = ProductCategorySerializer
     permission_classes = [permissions.AllowAny]
     lookup_field = "slug"
-
-    def get_queryset(self):
-        qs = Expansion.objects.select_related("tcg")
-        tcg_slug = self.request.query_params.get("tcg")
-        if tcg_slug:
-            qs = qs.filter(tcg__slug=tcg_slug)
-        return qs
-
-
-class ProductTypeViewSet(viewsets.ReadOnlyModelViewSet):
-    queryset = ProductType.objects.all()
-    serializer_class = ProductTypeSerializer
-    permission_classes = [permissions.AllowAny]
 
 
 class CardConditionViewSet(viewsets.ReadOnlyModelViewSet):
@@ -58,17 +43,30 @@ class CardConditionViewSet(viewsets.ReadOnlyModelViewSet):
     permission_classes = [permissions.AllowAny]
 
 
+class CertificationEntityViewSet(viewsets.ReadOnlyModelViewSet):
+    queryset = CertificationEntity.objects.all()
+    serializer_class = CertificationEntitySerializer
+    permission_classes = [permissions.AllowAny]
+
+
+class CertificationGradeViewSet(viewsets.ReadOnlyModelViewSet):
+    queryset = CertificationGrade.objects.all()
+    serializer_class = CertificationGradeSerializer
+    permission_classes = [permissions.AllowAny]
+
+
 class ProductViewSet(viewsets.ModelViewSet):
     """
     Catálogo de productos.
 
-    - GET /products/          → listado paginado (público)
-    - GET /products/{slug}/   → detalle (público)
-    - POST/PUT/PATCH/DELETE   → solo admin
-
-    Filtros disponibles (query params):
-      tcg, expansion, product_type, condition,
-      min_price, max_price, in_stock, is_single, has_discount
+    Filtros disponibles:
+      ?tcg=pokemon
+      ?category=slab
+      ?condition=NM
+      ?certification_entity=PSA
+      ?min_price=10&max_price=500
+      ?in_stock=true
+      ?has_discount=true
 
     Búsqueda: ?search=pikachu
     Orden:    ?ordering=-price | ?ordering=created_at
@@ -76,15 +74,15 @@ class ProductViewSet(viewsets.ModelViewSet):
 
     lookup_field = "slug"
     filterset_class = ProductFilter
-    search_fields = ["name", "description", "expansion__name"]
+    search_fields = ["name", "description"]
     ordering_fields = ["price", "created_at", "name"]
     ordering = ["-created_at"]
 
     def get_queryset(self):
-        return (
-            Product.objects.select_related("tcg", "expansion", "product_type", "condition")
-            .filter(in_stock=True)
-        )
+        return Product.objects.select_related(
+            "tcg", "category", "condition",
+            "certification_entity", "certification_grade",
+        ).filter(in_stock=True)
 
     def get_serializer_class(self):
         if self.action == "retrieve":
@@ -94,7 +92,7 @@ class ProductViewSet(viewsets.ModelViewSet):
         return ProductListSerializer
 
     def get_permissions(self):
-        if self.action in ("list", "retrieve"):
+        if self.action in ("list", "retrieve", "featured", "new_arrivals"):
             return [permissions.AllowAny()]
         return [permissions.IsAdminUser()]
 
@@ -106,12 +104,10 @@ class ProductViewSet(viewsets.ModelViewSet):
     def featured(self, request):
         """GET /products/featured/ — productos con descuento activo."""
         qs = self.get_queryset().filter(discount_percent__gt=0).order_by("-created_at")[:12]
-        serializer = ProductListSerializer(qs, many=True)
-        return Response(serializer.data)
+        return Response(ProductListSerializer(qs, many=True).data)
 
     @action(detail=False, methods=["get"], url_path="new-arrivals")
     def new_arrivals(self, request):
         """GET /products/new-arrivals/ — últimos 8 productos."""
         qs = self.get_queryset().order_by("-created_at")[:8]
-        serializer = ProductListSerializer(qs, many=True)
-        return Response(serializer.data)
+        return Response(ProductListSerializer(qs, many=True).data)

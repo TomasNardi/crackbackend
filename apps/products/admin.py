@@ -1,5 +1,5 @@
 from django.contrib import admin
-from .models import TCG, Expansion, ProductType, CardCondition, Product
+from .models import TCG, ProductCategory, CardCondition, CertificationEntity, CertificationGrade, Product
 
 
 @admin.register(TCG)
@@ -8,17 +8,10 @@ class TCGAdmin(admin.ModelAdmin):
     prepopulated_fields = {"slug": ("name",)}
 
 
-@admin.register(Expansion)
-class ExpansionAdmin(admin.ModelAdmin):
-    list_display = ("name", "tcg", "slug")
-    list_filter = ("tcg",)
-    search_fields = ("name",)
+@admin.register(ProductCategory)
+class ProductCategoryAdmin(admin.ModelAdmin):
+    list_display = ("name", "slug")
     prepopulated_fields = {"slug": ("name",)}
-
-
-@admin.register(ProductType)
-class ProductTypeAdmin(admin.ModelAdmin):
-    list_display = ("name",)
 
 
 @admin.register(CardCondition)
@@ -26,14 +19,53 @@ class CardConditionAdmin(admin.ModelAdmin):
     list_display = ("name", "abbreviation")
 
 
+@admin.register(CertificationEntity)
+class CertificationEntityAdmin(admin.ModelAdmin):
+    list_display = ("name", "abbreviation")
+
+
+@admin.register(CertificationGrade)
+class CertificationGradeAdmin(admin.ModelAdmin):
+    list_display = ("grade",)
+
+
 @admin.register(Product)
 class ProductAdmin(admin.ModelAdmin):
     list_display = (
-        "name", "product_type", "tcg", "expansion",
-        "price", "discount_percent", "in_stock", "is_single", "created_at",
+        "name", "category", "tcg",
+        "price", "discount_percent", "in_stock", "created_at",
     )
-    list_filter = ("product_type", "tcg", "in_stock", "is_single")
-    search_fields = ("name", "expansion__name")
+    list_filter = ("category", "tcg", "in_stock", "certification_entity")
+    search_fields = ("name", "description")
     prepopulated_fields = {"slug": ("name",)}
     readonly_fields = ("created_at", "updated_at")
     list_editable = ("in_stock", "discount_percent")
+
+    fieldsets = (
+        ("Identificación", {
+            "fields": ("name", "slug", "description", "tcg", "category"),
+        }),
+        ("Precio y stock", {
+            "fields": ("price", "discount_percent", "stock_quantity", "in_stock"),
+        }),
+        ("Imágenes", {
+            "fields": ("image_url", "image_url_2", "image_url_3"),
+            "classes": ("collapse",),
+        }),
+        ("Singles — Condición", {
+            "fields": ("condition",),
+            "classes": ("collapse",),
+        }),
+        ("Slabs — Certificación", {
+            "fields": ("certification_entity", "certification_grade"),
+            "classes": ("collapse",),
+        }),
+        ("Referencias externas", {
+            "fields": ("pricecharting_url",),
+            "classes": ("collapse",),
+        }),
+        ("Timestamps", {
+            "fields": ("created_at", "updated_at"),
+            "classes": ("collapse",),
+        }),
+    )
