@@ -10,20 +10,12 @@ class UserAdmin(BaseUserAdmin):
     search_fields = ("email", "username")
     ordering = ("-date_joined",)
 
-    fieldsets = BaseUserAdmin.fieldsets + (
-        (
-            "Datos adicionales",
-            {
-                "fields": (
-                    "phone",
-                    "default_address",
-                    "default_city",
-                    "default_province",
-                    "default_zip",
-                    "is_collector",
-                )
-            },
-        ),
+    # El modelo usa email como USERNAME_FIELD
+    fieldsets = (
+        (None, {"fields": ("email", "username", "password")}),
+        ("Información personal", {"fields": ("first_name", "last_name", "phone", "default_address", "default_city", "default_province", "default_zip")}),
+        ("Permisos", {"fields": ("is_active", "is_staff", "is_superuser", "is_collector", "groups", "user_permissions")}),
+        ("Fechas", {"fields": ("last_login", "date_joined")}),
     )
 
 
