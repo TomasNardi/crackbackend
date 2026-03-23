@@ -45,6 +45,25 @@ class Migration(migrations.Migration):
                 "grade" numeric(4, 1) NOT NULL UNIQUE
             );
 
+            -- Si la tabla ya existe pero le faltan columnas/FKs, las agregamos
+            ALTER TABLE "products_product"
+                ADD COLUMN IF NOT EXISTS "price_usd" numeric(10, 2) NOT NULL DEFAULT 0,
+                ADD COLUMN IF NOT EXISTS "description" text NOT NULL DEFAULT '',
+                ADD COLUMN IF NOT EXISTS "image_url_2" varchar(600) NOT NULL DEFAULT '',
+                ADD COLUMN IF NOT EXISTS "image_url_3" varchar(600) NOT NULL DEFAULT '',
+                ADD COLUMN IF NOT EXISTS "pricecharting_url" varchar(600) NOT NULL DEFAULT '',
+                ADD COLUMN IF NOT EXISTS "tcg_id" bigint NULL REFERENCES "products_tcg" ("id"),
+                ADD COLUMN IF NOT EXISTS "category_id" bigint NULL REFERENCES "products_productcategory" ("id"),
+                ADD COLUMN IF NOT EXISTS "condition_id" bigint NULL REFERENCES "products_cardcondition" ("id"),
+                ADD COLUMN IF NOT EXISTS "certification_entity_id" bigint NULL REFERENCES "products_certificationentity" ("id"),
+                ADD COLUMN IF NOT EXISTS "certification_grade_id" bigint NULL REFERENCES "products_certificationgrade" ("id");
+
+            -- Quitar el DEFAULT temporal de price_usd (ya no lo necesitamos)
+            ALTER TABLE "products_product" ALTER COLUMN "price_usd" DROP DEFAULT;
+
+            -- Eliminar columna price si todavía existe
+            ALTER TABLE "products_product" DROP COLUMN IF EXISTS "price";
+
             CREATE TABLE IF NOT EXISTS "products_product" (
                 "id" bigserial NOT NULL PRIMARY KEY,
                 "name" varchar(255) NOT NULL,
@@ -60,7 +79,7 @@ class Migration(migrations.Migration):
                 "pricecharting_url" varchar(600) NOT NULL,
                 "created_at" timestamp with time zone NOT NULL,
                 "updated_at" timestamp with time zone NOT NULL,
-                "category_id" bigint NOT NULL REFERENCES "products_productcategory" ("id"),
+                "category_id" bigint NULL REFERENCES "products_productcategory" ("id"),
                 "tcg_id" bigint NULL REFERENCES "products_tcg" ("id"),
                 "condition_id" bigint NULL REFERENCES "products_cardcondition" ("id"),
                 "certification_entity_id" bigint NULL REFERENCES "products_certificationentity" ("id"),
