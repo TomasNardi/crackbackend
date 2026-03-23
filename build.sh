@@ -10,5 +10,10 @@ pip install --upgrade pip
 pip install -r requirements.txt
 pip install psycopg2-binary==2.9.10
 
+echo "==> Collecting static files..."
 python manage.py collectstatic --no-input
-python manage.py migrate
+
+echo "==> Running migrations..."
+python manage.py migrate --verbosity 2
+
+echo "==> Build complete."

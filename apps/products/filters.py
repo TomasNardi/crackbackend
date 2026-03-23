@@ -12,8 +12,8 @@ class ProductFilter(django_filters.FilterSet):
     category = django_filters.CharFilter(field_name="category__slug")
     condition = django_filters.CharFilter(field_name="condition__abbreviation", lookup_expr="iexact")
     certification_entity = django_filters.CharFilter(field_name="certification_entity__abbreviation", lookup_expr="iexact")
-    min_price = django_filters.NumberFilter(field_name="price", lookup_expr="gte")
-    max_price = django_filters.NumberFilter(field_name="price", lookup_expr="lte")
+    min_price = django_filters.NumberFilter(field_name="price_usd", lookup_expr="gte")
+    max_price = django_filters.NumberFilter(field_name="price_usd", lookup_expr="lte")
     in_stock = django_filters.BooleanFilter(field_name="in_stock")
     has_discount = django_filters.BooleanFilter(method="filter_has_discount")
 

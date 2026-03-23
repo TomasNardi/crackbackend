@@ -75,7 +75,7 @@ class ProductViewSet(viewsets.ModelViewSet):
     lookup_field = "slug"
     filterset_class = ProductFilter
     search_fields = ["name", "description"]
-    ordering_fields = ["price", "created_at", "name"]
+    ordering_fields = ["price_usd", "created_at", "name"]
     ordering = ["-created_at"]
 
     def get_queryset(self):
