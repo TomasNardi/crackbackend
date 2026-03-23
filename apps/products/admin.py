@@ -33,20 +33,24 @@ class CertificationGradeAdmin(admin.ModelAdmin):
 class ProductAdmin(admin.ModelAdmin):
     list_display = (
         "name", "category", "tcg",
-        "price", "discount_percent", "in_stock", "created_at",
+        "price_usd", "price_ars_display", "discount_percent", "in_stock", "created_at",
     )
     list_filter = ("category", "tcg", "in_stock", "certification_entity")
     search_fields = ("name", "description")
     prepopulated_fields = {"slug": ("name",)}
-    readonly_fields = ("created_at", "updated_at")
+    readonly_fields = ("slug", "price_ars_display", "created_at", "updated_at")
     list_editable = ("in_stock", "discount_percent")
+
+    def price_ars_display(self, obj):
+        return f"${obj.price_ars:,.0f}"
+    price_ars_display.short_description = "Precio ARS"
 
     fieldsets = (
         ("Identificación", {
             "fields": ("name", "slug", "description", "tcg", "category"),
         }),
         ("Precio y stock", {
-            "fields": ("price", "discount_percent", "stock_quantity", "in_stock"),
+            "fields": ("price_usd", "price_ars_display", "discount_percent", "stock_quantity", "in_stock"),
         }),
         ("Imágenes", {
             "fields": ("image_url", "image_url_2", "image_url_3"),

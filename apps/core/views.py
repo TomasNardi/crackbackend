@@ -9,8 +9,17 @@ from rest_framework import viewsets, permissions, status
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from .models import SiteConfig, Banner
-from .serializers import SiteConfigSerializer, BannerSerializer, EmailSubscribeSerializer
+from .models import SiteConfig, Banner, ExchangeRate
+from .serializers import SiteConfigSerializer, BannerSerializer, EmailSubscribeSerializer, ExchangeRateSerializer
+
+
+class ExchangeRateView(APIView):
+    """GET /exchange-rate/ — tipo de cambio USD→ARS actual."""
+
+    permission_classes = [permissions.AllowAny]
+
+    def get(self, request):
+        return Response(ExchangeRateSerializer(ExchangeRate.get()).data)
 
 
 class SiteConfigView(APIView):

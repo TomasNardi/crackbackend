@@ -7,6 +7,36 @@ Configuración general del sitio: banners, estado de la página, suscripciones d
 from django.db import models
 
 
+class ExchangeRate(models.Model):
+    """
+    Tipo de cambio USD → ARS.
+    Singleton — el admin lo actualiza manualmente.
+    El frontend recibe los precios ya convertidos a ARS.
+    """
+
+    usd_to_ars = models.DecimalField(
+        max_digits=10, decimal_places=2, default=1000,
+        help_text="Valor del dólar en pesos. Ej: 1450.00",
+    )
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name = "Tipo de cambio"
+        verbose_name_plural = "Tipo de cambio"
+
+    def __str__(self):
+        return f"USD → ARS: ${self.usd_to_ars}"
+
+    def save(self, *args, **kwargs):
+        self.pk = 1
+        super().save(*args, **kwargs)
+
+    @classmethod
+    def get(cls):
+        obj, _ = cls.objects.get_or_create(pk=1, defaults={"usd_to_ars": 1000})
+        return obj
+
+
 class SiteConfig(models.Model):
     """
     Configuración global del sitio. Solo debe existir un registro.

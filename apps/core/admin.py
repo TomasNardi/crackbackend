@@ -1,5 +1,17 @@
 from django.contrib import admin
-from .models import SiteConfig, Banner, EmailSubscription
+from .models import SiteConfig, Banner, EmailSubscription, ExchangeRate
+
+
+@admin.register(ExchangeRate)
+class ExchangeRateAdmin(admin.ModelAdmin):
+    list_display = ("usd_to_ars", "updated_at")
+    readonly_fields = ("updated_at",)
+
+    def has_add_permission(self, request):
+        return not ExchangeRate.objects.exists()
+
+    def has_delete_permission(self, request, obj=None):
+        return False
 
 
 @admin.register(SiteConfig)

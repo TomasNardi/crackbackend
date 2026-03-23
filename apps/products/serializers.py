@@ -43,6 +43,7 @@ class ProductListSerializer(serializers.ModelSerializer):
     condition = serializers.StringRelatedField()
     certification_entity = serializers.StringRelatedField()
     certification_grade = serializers.StringRelatedField()
+    price_ars = serializers.DecimalField(max_digits=12, decimal_places=2, read_only=True)
     final_price = serializers.DecimalField(max_digits=12, decimal_places=2, read_only=True)
 
     class Meta:
@@ -50,7 +51,7 @@ class ProductListSerializer(serializers.ModelSerializer):
         fields = (
             "id", "name", "slug", "tcg", "category",
             "condition", "certification_entity", "certification_grade",
-            "price", "discount_percent", "final_price",
+            "price_usd", "price_ars", "discount_percent", "final_price",
             "in_stock", "image_url", "created_at",
         )
 
@@ -61,6 +62,7 @@ class ProductDetailSerializer(serializers.ModelSerializer):
     condition = CardConditionSerializer(read_only=True)
     certification_entity = CertificationEntitySerializer(read_only=True)
     certification_grade = CertificationGradeSerializer(read_only=True)
+    price_ars = serializers.DecimalField(max_digits=12, decimal_places=2, read_only=True)
     final_price = serializers.DecimalField(max_digits=12, decimal_places=2, read_only=True)
 
     class Meta:
@@ -69,7 +71,7 @@ class ProductDetailSerializer(serializers.ModelSerializer):
             "id", "name", "slug", "description",
             "tcg", "category",
             "condition", "certification_entity", "certification_grade",
-            "price", "discount_percent", "final_price",
+            "price_usd", "price_ars", "discount_percent", "final_price",
             "stock_quantity", "in_stock",
             "image_url", "image_url_2", "image_url_3",
             "pricecharting_url", "created_at", "updated_at",
@@ -82,7 +84,7 @@ class ProductWriteSerializer(serializers.ModelSerializer):
         fields = (
             "name", "description", "tcg", "category",
             "condition", "certification_entity", "certification_grade",
-            "price", "discount_percent",
+            "price_usd", "discount_percent",
             "stock_quantity", "in_stock",
             "image_url", "image_url_2", "image_url_3",
             "pricecharting_url",

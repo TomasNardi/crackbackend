@@ -135,8 +135,11 @@ class Product(models.Model):
     slug = models.SlugField(max_length=280, unique=True, blank=True)
     description = models.TextField(blank=True)
 
-    # Precio
-    price = models.DecimalField(max_digits=12, decimal_places=2)
+    # Precio en USD (el admin lo carga en dólares)
+    price_usd = models.DecimalField(
+        max_digits=10, decimal_places=2,
+        help_text="Precio en dólares. El sistema convierte a ARS automáticamente.",
+    )
     discount_percent = models.PositiveSmallIntegerField(
         default=0,
         help_text="Porcentaje de descuento (0 = sin descuento).",
@@ -196,12 +199,22 @@ class Product(models.Model):
         super().save(*args, **kwargs)
 
     @property
+    def price_ars(self):
+        """Precio en ARS según el tipo de cambio actual."""
+        from apps.core.models import ExchangeRate
+        from decimal import Decimal
+        rate = ExchangeRate.get().usd_to_ars
+        return round(self.price_usd * rate, 2)
+
+    @property
     def final_price(self):
+        """Precio final en ARS aplicando descuento."""
+        from decimal import Decimal
+        price = self.price_ars
         if self.discount_percent:
-            from decimal import Decimal
             factor = (100 - self.discount_percent) / Decimal("100")
-            return round(self.price * factor, 2)
-        return self.price
+            return round(price * factor, 2)
+        return price
 
     def __str__(self):
         return self.name

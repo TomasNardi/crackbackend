@@ -4,7 +4,13 @@ Core Serializers
 """
 
 from rest_framework import serializers
-from .models import SiteConfig, Banner, EmailSubscription
+from .models import SiteConfig, Banner, EmailSubscription, ExchangeRate
+
+
+class ExchangeRateSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = ExchangeRate
+        fields = ("usd_to_ars", "updated_at")
 
 
 class SiteConfigSerializer(serializers.ModelSerializer):
