@@ -42,6 +42,8 @@ class ProductAdmin(admin.ModelAdmin):
     list_editable = ("in_stock", "discount_percent")
 
     def price_ars_display(self, obj):
+        if not obj.pk or not obj.price_usd:
+            return "—"
         return f"${obj.price_ars:,.0f}"
     price_ars_display.short_description = "Precio ARS"
 
