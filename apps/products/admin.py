@@ -38,7 +38,7 @@ class ProductAdmin(admin.ModelAdmin):
     list_filter = ("category", "tcg", "in_stock", "certification_entity")
     search_fields = ("name", "description")
     prepopulated_fields = {"slug": ("name",)}
-    readonly_fields = ("slug", "price_ars_display", "created_at", "updated_at")
+    readonly_fields = ("price_ars_display", "created_at", "updated_at")
     list_editable = ("in_stock", "discount_percent")
 
     def price_ars_display(self, obj):
