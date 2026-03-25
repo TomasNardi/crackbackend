@@ -1,21 +1,18 @@
 """
 Migración de seguridad: crea las tablas que pueden faltar en producción
 usando CREATE TABLE IF NOT EXISTS — idempotente, no rompe nada si ya existen.
+Solo corre en PostgreSQL.
 """
 
 from django.db import migrations, models
 import django.db.models.deletion
 
 
-class Migration(migrations.Migration):
+def ensure_tables(apps, schema_editor):
+    if schema_editor.connection.vendor != 'postgresql':
+        return
 
-    dependencies = [
-        ('products', '0002_remove_product_price_product_price_usd'),
-    ]
-
-    operations = [
-        migrations.RunSQL(
-            sql="""
+    schema_editor.execute("""
             CREATE TABLE IF NOT EXISTS "products_productcategory" (
                 "id" bigserial NOT NULL PRIMARY KEY,
                 "name" varchar(100) NOT NULL UNIQUE,
@@ -45,7 +42,6 @@ class Migration(migrations.Migration):
                 "grade" numeric(4, 1) NOT NULL UNIQUE
             );
 
-            -- Si la tabla ya existe pero le faltan columnas/FKs, las agregamos
             ALTER TABLE "products_product"
                 ADD COLUMN IF NOT EXISTS "price_usd" numeric(10, 2) NOT NULL DEFAULT 0,
                 ADD COLUMN IF NOT EXISTS "description" text NOT NULL DEFAULT '',
@@ -58,10 +54,8 @@ class Migration(migrations.Migration):
                 ADD COLUMN IF NOT EXISTS "certification_entity_id" bigint NULL REFERENCES "products_certificationentity" ("id"),
                 ADD COLUMN IF NOT EXISTS "certification_grade_id" bigint NULL REFERENCES "products_certificationgrade" ("id");
 
-            -- Quitar el DEFAULT temporal de price_usd (ya no lo necesitamos)
             ALTER TABLE "products_product" ALTER COLUMN "price_usd" DROP DEFAULT;
 
-            -- Eliminar columna price si todavía existe
             ALTER TABLE "products_product" DROP COLUMN IF EXISTS "price";
 
             CREATE TABLE IF NOT EXISTS "products_product" (
@@ -85,7 +79,15 @@ class Migration(migrations.Migration):
                 "certification_entity_id" bigint NULL REFERENCES "products_certificationentity" ("id"),
                 "certification_grade_id" bigint NULL REFERENCES "products_certificationgrade" ("id")
             );
-            """,
-            reverse_sql=migrations.RunSQL.noop,
-        ),
+    """)
+
+
+class Migration(migrations.Migration):
+
+    dependencies = [
+        ('products', '0002_remove_product_price_product_price_usd'),
+    ]
+
+    operations = [
+        migrations.RunPython(ensure_tables, migrations.RunPython.noop),
     ]

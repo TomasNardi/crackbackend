@@ -33,7 +33,8 @@ class CertificationGradeAdmin(admin.ModelAdmin):
 class ProductAdmin(admin.ModelAdmin):
     list_display = (
         "name", "category", "tcg",
-        "price_usd", "price_ars_display", "discount_percent", "in_stock", "created_at",
+        "price_usd", "price_ars_display", "discount_percent",
+        "rating", "rating_count", "in_stock", "created_at",
     )
     list_filter = ("category", "tcg", "in_stock", "certification_entity")
     search_fields = ("name", "description")
@@ -53,6 +54,9 @@ class ProductAdmin(admin.ModelAdmin):
         }),
         ("Precio y stock", {
             "fields": ("price_usd", "price_ars_display", "discount_percent", "stock_quantity", "in_stock"),
+        }),
+        ("Calificación", {
+            "fields": ("rating", "rating_count"),
         }),
         ("Imágenes", {
             "fields": ("image_url", "image_url_2", "image_url_3"),

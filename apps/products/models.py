@@ -157,6 +157,16 @@ class Product(models.Model):
     image_url_2 = models.URLField(max_length=600, blank=True)
     image_url_3 = models.URLField(max_length=600, blank=True)
 
+    # Calificación promedio (0.0 – 5.0)
+    rating = models.DecimalField(
+        max_digits=3, decimal_places=1, default=0,
+        help_text="Calificación promedio del producto (0.0 – 5.0).",
+    )
+    rating_count = models.PositiveIntegerField(
+        default=0,
+        help_text="Cantidad de calificaciones recibidas.",
+    )
+
     # Referencia externa
     pricecharting_url = models.URLField(max_length=600, blank=True)
 

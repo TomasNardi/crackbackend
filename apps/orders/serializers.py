@@ -95,7 +95,7 @@ class OrderCreateSerializer(serializers.Serializer):
 
         # Validar y aplicar código de descuento
         discount_code_str = validated_data.get("discount_code", "")
-        discount_type = Order.DISCOUNT_NONE
+        discount_type = ""
         discount_amount = Decimal("0")
 
         if discount_code_str:

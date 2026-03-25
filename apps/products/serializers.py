@@ -52,7 +52,7 @@ class ProductListSerializer(serializers.ModelSerializer):
             "id", "name", "slug", "tcg", "category",
             "condition", "certification_entity", "certification_grade",
             "price_usd", "price_ars", "discount_percent", "final_price",
-            "in_stock", "image_url", "created_at",
+            "in_stock", "image_url", "rating", "rating_count", "created_at",
         )
 
 
@@ -74,6 +74,7 @@ class ProductDetailSerializer(serializers.ModelSerializer):
             "price_usd", "price_ars", "discount_percent", "final_price",
             "stock_quantity", "in_stock",
             "image_url", "image_url_2", "image_url_3",
+            "rating", "rating_count",
             "pricecharting_url", "created_at", "updated_at",
         )
 
@@ -87,5 +88,6 @@ class ProductWriteSerializer(serializers.ModelSerializer):
             "price_usd", "discount_percent",
             "stock_quantity", "in_stock",
             "image_url", "image_url_2", "image_url_3",
+            "rating", "rating_count",
             "pricecharting_url",
         )

@@ -1,4 +1,5 @@
 from django.contrib import admin
+from django.utils import timezone
 from .models import Order, OrderItem, MercadoPagoPayment, DiscountCode
 
 
@@ -18,23 +19,59 @@ class MercadoPagoPaymentInline(admin.TabularInline):
 class OrderAdmin(admin.ModelAdmin):
     list_display = (
         "id", "customer_name", "customer_email",
-        "total", "status", "shipping_type", "created_at",
+        "total", "status", "shipping_type", "created_at_ar",
     )
     list_filter = ("status", "shipping_type")
     search_fields = ("customer_name", "customer_email", "discount_code")
     readonly_fields = ("created_at", "updated_at")
     inlines = [OrderItemInline, MercadoPagoPaymentInline]
 
+    @admin.display(description="Fecha (AR)", ordering="created_at")
+    def created_at_ar(self, obj):
+        local = timezone.localtime(obj.created_at)
+        return local.strftime("%d/%m/%Y %H:%M")
+
 
 @admin.register(DiscountCode)
 class DiscountCodeAdmin(admin.ModelAdmin):
     list_display = (
         "code", "discount_type", "discount_amount",
-        "expiration_type", "uses", "max_uses", "used",
+        "expiration_type", "valid_from_ar", "valid_until_ar",
+        "uses", "max_uses", "used",
     )
     list_filter = ("discount_type", "expiration_type", "used")
     search_fields = ("code",)
     readonly_fields = ("uses", "activated_at", "created_at")
+
+    # Campos visibles en el formulario — sin duration_seconds
+    fieldsets = (
+        ("Código", {
+            "fields": ("code", "discount_type", "discount_amount"),
+        }),
+        ("Expiración", {
+            "description": "Las fechas se interpretan en hora de Argentina (ART, UTC-3).",
+            "fields": ("expiration_type", "valid_from", "valid_until"),
+        }),
+        ("Uso", {
+            "fields": ("max_uses", "uses", "used"),
+        }),
+        ("Auditoría", {
+            "fields": ("activated_at", "created_at"),
+            "classes": ("collapse",),
+        }),
+    )
+
+    @admin.display(description="Válido desde (AR)", ordering="valid_from")
+    def valid_from_ar(self, obj):
+        if not obj.valid_from:
+            return "—"
+        return timezone.localtime(obj.valid_from).strftime("%d/%m/%Y %H:%M")
+
+    @admin.display(description="Válido hasta (AR)", ordering="valid_until")
+    def valid_until_ar(self, obj):
+        if not obj.valid_until:
+            return "—"
+        return timezone.localtime(obj.valid_until).strftime("%d/%m/%Y %H:%M")
 
 
 @admin.register(MercadoPagoPayment)
