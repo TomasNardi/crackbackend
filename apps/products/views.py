@@ -19,6 +19,7 @@ from .serializers import (
     ProductListSerializer,
     ProductDetailSerializer,
     ProductWriteSerializer,
+    ProductSearchSerializer,
 )
 from .filters import ProductFilter
 
@@ -99,6 +100,24 @@ class ProductViewSet(viewsets.ModelViewSet):
     @method_decorator(ratelimit(key="ip", rate="200/h", method="GET", block=True))
     def list(self, request, *args, **kwargs):
         return super().list(request, *args, **kwargs)
+
+    @action(detail=False, methods=["get"], url_path="search")
+    def search(self, request):
+        """
+        GET /products/search/?q=pikachu
+        Autocomplete rápido — máx 8 resultados.
+        Solo devuelve campos esenciales para el dropdown.
+        """
+        q = (request.query_params.get("q") or "").strip()
+        if len(q) < 2:
+            return Response([])
+
+        qs = (
+            self.get_queryset()
+            .filter(name__icontains=q)
+            .order_by("-created_at")[:8]
+        )
+        return Response(ProductSearchSerializer(qs, many=True).data)
 
     @action(detail=False, methods=["get"], url_path="featured")
     def featured(self, request):

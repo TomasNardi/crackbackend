@@ -37,6 +37,18 @@ class CertificationGradeSerializer(serializers.ModelSerializer):
         fields = ("id", "grade")
 
 
+class ProductSearchSerializer(serializers.ModelSerializer):
+    """Serializer liviano para autocomplete — solo campos esenciales."""
+    category = serializers.StringRelatedField()
+    tcg = serializers.StringRelatedField()
+    price_ars = serializers.DecimalField(max_digits=12, decimal_places=2, read_only=True)
+    final_price = serializers.DecimalField(max_digits=12, decimal_places=2, read_only=True)
+
+    class Meta:
+        model = Product
+        fields = ("id", "name", "slug", "tcg", "category", "image_url", "price_ars", "final_price", "discount_percent")
+
+
 class ProductListSerializer(serializers.ModelSerializer):
     tcg = TCGSerializer(read_only=True)
     category = serializers.StringRelatedField()
