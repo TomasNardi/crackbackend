@@ -66,7 +66,10 @@ class OrderCreateSerializer(serializers.Serializer):
             product = products.get(pid)
 
             if not product:
-                errors.append(f"Producto {pid} no encontrado o sin stock.")
+                # Buscar el nombre aunque esté sin stock, para mejor mensaje
+                p_any = Product.objects.filter(id=pid).first()
+                name = f"'{p_any.name}'" if p_any else f"ID {pid}"
+                errors.append(f"{name} fue comprado recientemente y ya no está disponible.")
                 continue
 
             category_name = product.category.name if product.category else ""
