@@ -4,7 +4,7 @@ Core Serializers
 """
 
 from rest_framework import serializers
-from .models import SiteConfig, Banner, EmailSubscription, ExchangeRate
+from .models import SiteConfig, Banner, EmailSubscription, ExchangeRate, ContactMessage
 
 
 class ExchangeRateSerializer(serializers.ModelSerializer):
@@ -34,3 +34,9 @@ class EmailSubscribeSerializer(serializers.ModelSerializer):
         if EmailSubscription.objects.filter(email=value, is_active=True).exists():
             raise serializers.ValidationError("Este email ya está suscripto.")
         return value.lower()
+
+
+class ContactMessageSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = ContactMessage
+        fields = ("name", "email", "message")

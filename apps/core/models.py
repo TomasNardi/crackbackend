@@ -109,3 +109,21 @@ class EmailSubscription(models.Model):
 
     def __str__(self):
         return self.email
+
+
+class ContactMessage(models.Model):
+    """Mensajes recibidos desde el formulario de contacto."""
+
+    name = models.CharField(max_length=255)
+    email = models.EmailField()
+    message = models.TextField()
+    read = models.BooleanField(default=False)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        verbose_name = "Mensaje de contacto"
+        verbose_name_plural = "Mensajes de contacto"
+        ordering = ["-created_at"]
+
+    def __str__(self):
+        return f"{self.name} <{self.email}> — {self.created_at:%d/%m/%Y}"

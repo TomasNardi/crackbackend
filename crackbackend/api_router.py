@@ -17,7 +17,7 @@ from apps.products.views import (
     ProductViewSet,
 )
 from apps.orders.views import OrderViewSet, MercadoPagoWebhookView, ValidateDiscountView
-from apps.core.views import BannerViewSet, SiteConfigView, EmailSubscribeView, PingView, ExchangeRateView
+from apps.core.views import BannerViewSet, SiteConfigView, EmailSubscribeView, PingView, ExchangeRateView, ContactView
 
 router = DefaultRouter()
 
@@ -51,6 +51,7 @@ urlpatterns = [
     path("site-config/", SiteConfigView.as_view(), name="site_config"),
     path("exchange-rate/", ExchangeRateView.as_view(), name="exchange_rate"),
     path("subscribe/", EmailSubscribeView.as_view(), name="email_subscribe"),
+    path("contact/", ContactView.as_view(), name="contact"),
     path("ping/", PingView.as_view(), name="ping"),
 
     # Router URLs
