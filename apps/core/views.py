@@ -49,6 +49,10 @@ class EmailSubscribeView(APIView):
         if serializer.is_valid():
             serializer.save()
             return Response({"message": "¡Suscripción exitosa!"}, status=status.HTTP_201_CREATED)
+        # Si el email ya existe, responder amigablemente
+        email_errors = serializer.errors.get("email", [])
+        if any("unique" in str(e).lower() or "already" in str(e).lower() or "existe" in str(e).lower() for e in email_errors):
+            return Response({"message": "¡Ya estás suscripto!"}, status=status.HTTP_200_OK)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 
