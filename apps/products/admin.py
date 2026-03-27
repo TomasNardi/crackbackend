@@ -4,14 +4,16 @@ from .models import TCG, ProductCategory, CardCondition, CertificationEntity, Ce
 
 @admin.register(TCG)
 class TCGAdmin(admin.ModelAdmin):
-    list_display = ("name", "slug")
-    prepopulated_fields = {"slug": ("name",)}
+    list_display = ("name",)
+    readonly_fields = ("slug",)
+    exclude = ("slug",)
 
 
 @admin.register(ProductCategory)
 class ProductCategoryAdmin(admin.ModelAdmin):
-    list_display = ("name", "slug")
-    prepopulated_fields = {"slug": ("name",)}
+    list_display = ("name",)
+    readonly_fields = ("slug",)
+    exclude = ("slug",)
 
 
 @admin.register(CardCondition)
@@ -38,8 +40,7 @@ class ProductAdmin(admin.ModelAdmin):
     )
     list_filter = ("category", "tcg", "in_stock", "certification_entity")
     search_fields = ("name", "description")
-    prepopulated_fields = {"slug": ("name",)}
-    readonly_fields = ("price_ars_display", "created_at", "updated_at")
+    readonly_fields = ("slug", "price_ars_display", "created_at", "updated_at")
     list_editable = ("in_stock", "discount_percent")
 
     def price_ars_display(self, obj):
@@ -50,7 +51,7 @@ class ProductAdmin(admin.ModelAdmin):
 
     fieldsets = (
         ("Identificación", {
-            "fields": ("name", "slug", "description", "tcg", "category"),
+            "fields": ("name", "description", "tcg", "category"),
         }),
         ("Precio y stock", {
             "fields": ("price_usd", "price_ars_display", "discount_percent", "stock_quantity", "in_stock"),
