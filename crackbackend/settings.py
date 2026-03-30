@@ -43,6 +43,15 @@ DJANGO_APPS = [
     "django.contrib.staticfiles",
 ]
 
+DJANGO_APPS = [
+    "django.contrib.admin",
+    "django.contrib.auth",
+    "django.contrib.contenttypes",
+    "django.contrib.sessions",
+    "django.contrib.messages",
+    "django.contrib.staticfiles",
+]
+
 THIRD_PARTY_APPS = [
     "rest_framework",
     "rest_framework_simplejwt",
@@ -51,6 +60,7 @@ THIRD_PARTY_APPS = [
     "whitenoise.runserver_nostatic",
     "django_filters",
     "django_ratelimit",
+    "django_q",
 ]
 
 LOCAL_APPS = [
@@ -259,15 +269,12 @@ RATELIMIT_USE_CACHE = "ratelimit"
 # ---------------------------------------------------------------------------
 # Email (Resend)
 # ---------------------------------------------------------------------------
-RESEND_API_KEY = os.environ.get("RESEND_API_KEY", "")
-DEFAULT_FROM_EMAIL = os.environ.get("DEFAULT_FROM_EMAIL", "no-reply@tudominio.com")
+RESEND_API_KEY = os.environ.get("RESEND_API_KEY", "re_CxmvtHTJ_KgFEShHS1WSfm34AK8RGgoWB")
 
-# Usamos Resend directamente via su SDK, no el backend SMTP de Django.
-# En desarrollo sin API key, los emails se loguean en consola.
-if RESEND_API_KEY:
-    EMAIL_BACKEND = "django.core.mail.backends.console.EmailBackend"
-else:
-    EMAIL_BACKEND = "django.core.mail.backends.console.EmailBackend"
+# Mientras no tengas dominio verificado en Resend, usá el sandbox:
+#   RESEND_FROM_EMAIL = "onboarding@resend.dev"
+# Cuando tengas tu dominio (ej: noreply@cracktcg.com), cambialo acá o en .env
+RESEND_FROM_EMAIL = os.environ.get("RESEND_FROM_EMAIL", "onboarding@resend.dev")
 
 # ---------------------------------------------------------------------------
 # MercadoPago
@@ -283,6 +290,22 @@ LANGUAGE_CODE = "es-ar"
 TIME_ZONE = "America/Argentina/Buenos_Aires"
 USE_I18N = True
 USE_TZ = True
+
+# ---------------------------------------------------------------------------
+# Django Q — Task queue (async emails, background jobs)
+# Usa la misma DB (ORM backend), sin Redis extra.
+# El worker se levanta con: python manage.py qcluster
+# ---------------------------------------------------------------------------
+Q_CLUSTER = {
+    "name": "CrackBackend",
+    "workers": 1,
+    "timeout": 120,       # segundos máx por tarea
+    "retry": 180,         # reintentar tareas fallidas después de 3 min
+    "queue_limit": 500,
+    "bulk": 5,
+    "orm": "default",     # usa la misma PostgreSQL
+    "catch_up": False,    # no acumular tareas perdidas al reiniciar
+}
 
 # ---------------------------------------------------------------------------
 # Misc

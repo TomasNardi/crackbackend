@@ -9,6 +9,7 @@ from django.conf import settings
 from django.utils import timezone
 from django.utils.decorators import method_decorator
 from django_ratelimit.decorators import ratelimit
+from django_q.tasks import async_task
 from rest_framework import viewsets, permissions, status
 from rest_framework.response import Response
 from rest_framework.views import APIView
@@ -51,6 +52,10 @@ class OrderViewSet(viewsets.ModelViewSet):
             dc = DiscountCode.objects.filter(code__iexact=discount_code).first()
             if dc:
                 dc.activate()
+
+        # Enviar emails de forma asíncrona (no bloquea la respuesta)
+        async_task('apps.orders.emails.send_order_confirmation', order.id)
+        async_task('apps.orders.emails.send_new_order_notification', order.id)
 
         return Response(
             OrderReadSerializer(order).data,
