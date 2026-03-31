@@ -309,6 +309,25 @@ Q_CLUSTER = {
 }
 
 # ---------------------------------------------------------------------------
+# CKEditor
+# ---------------------------------------------------------------------------
+CKEDITOR_CONFIGS = {
+    "default": {
+        "toolbar": "Custom",
+        "toolbar_Custom": [
+            ["Bold", "Italic", "Underline", "Strike"],
+            ["NumberedList", "BulletedList", "-", "Outdent", "Indent"],
+            ["Link", "Unlink"],
+            ["RemoveFormat", "Source"],
+        ],
+        "height": 300,
+        "width": "100%",
+        "removePlugins": "elementspath",
+        "extraPlugins": ",".join(["list"]),
+    },
+}
+
+# ---------------------------------------------------------------------------
 # Misc
 # ---------------------------------------------------------------------------
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
