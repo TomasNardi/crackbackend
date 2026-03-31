@@ -13,6 +13,7 @@ Categorías soportadas:
 
 from django.db import models
 from django.utils.text import slugify
+from ckeditor.fields import RichTextField
 
 
 class TCG(models.Model):
@@ -133,7 +134,7 @@ class Product(models.Model):
     # Identificación
     name = models.CharField(max_length=255)
     slug = models.SlugField(max_length=280, unique=True, blank=True)
-    description = models.TextField(blank=True)
+    description = RichTextField(blank=True)
 
     # Precio en USD (el admin lo carga en dólares)
     price_usd = models.DecimalField(

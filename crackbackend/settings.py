@@ -61,6 +61,7 @@ THIRD_PARTY_APPS = [
     "django_filters",
     "django_ratelimit",
     "django_q",
+    "ckeditor",
 ]
 
 LOCAL_APPS = [
