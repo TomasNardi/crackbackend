@@ -32,6 +32,9 @@ resend==2.7.0
 # Task queue (async emails, background jobs)
 django-q2==1.7.4
 
+# Rich text editor
+django-ckeditor==6.7.3
+
 # Utils
 Pillow==11.3.0
 requests==2.32.3
