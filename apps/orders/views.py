@@ -46,13 +46,6 @@ class OrderViewSet(viewsets.ModelViewSet):
         serializer.is_valid(raise_exception=True)
         order = serializer.save()
 
-        # Activar código de descuento si se usó uno
-        discount_code = order.discount_code
-        if discount_code:
-            dc = DiscountCode.objects.filter(code__iexact=discount_code).first()
-            if dc:
-                dc.activate()
-
         # Enviar emails de forma asíncrona (no bloquea la respuesta)
         async_task('apps.orders.emails.send_order_confirmation', order.id)
         async_task('apps.orders.emails.send_new_order_notification', order.id)

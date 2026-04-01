@@ -3,7 +3,9 @@ Orders Serializers
 ===================
 """
 
+from collections import OrderedDict
 from decimal import Decimal
+from django.db import transaction
 from rest_framework import serializers
 from apps.products.models import Product
 from .models import Order, OrderItem, MercadoPagoPayment, DiscountCode
@@ -38,7 +40,6 @@ class OrderCreateSerializer(serializers.Serializer):
     shipping_province = serializers.CharField(max_length=100, required=False, allow_blank=True)
     shipping_zip = serializers.CharField(max_length=20, required=False, allow_blank=True)
     shipping_branch = serializers.CharField(max_length=255, required=False, allow_blank=True)
-    shipping_cost = serializers.DecimalField(max_digits=10, decimal_places=2, default=0)
     discount_code = serializers.CharField(max_length=20, required=False, allow_blank=True)
     items = OrderItemInputSerializer(many=True)
 
@@ -47,123 +48,175 @@ class OrderCreateSerializer(serializers.Serializer):
             raise serializers.ValidationError("La orden debe tener al menos un ítem.")
         return items
 
-    def validate(self, data):
-        """Valida stock y resuelve productos."""
-        items_input = data["items"]
-        product_ids = [i["product_id"] for i in items_input]
-
-        # Fetch todos los productos de una sola query
-        products = {
-            p.id: p for p in Product.objects.select_related(
-                "category", "certification_grade"
-            ).filter(id__in=product_ids, in_stock=True)
-        }
-
-        errors = []
+    def _normalize_items(self, items_input):
+        normalized = OrderedDict()
         for item in items_input:
-            pid = item["product_id"]
-            qty = item["quantity"]
-            product = products.get(pid)
+            product_id = item["product_id"]
+            if product_id not in normalized:
+                normalized[product_id] = {"product_id": product_id, "quantity": 0}
+            normalized[product_id]["quantity"] += item["quantity"]
+        return list(normalized.values())
+
+    def _get_products_map(self, product_ids, for_update=False):
+        queryset = Product.objects.select_related("category", "certification_grade")
+        if for_update:
+            queryset = queryset.select_for_update()
+        return {product.id: product for product in queryset.filter(id__in=product_ids)}
+
+    def _get_availability_errors(self, items_input, products):
+        errors = []
+
+        for item in items_input:
+            product_id = item["product_id"]
+            quantity = item["quantity"]
+            product = products.get(product_id)
 
             if not product:
-                # Buscar el nombre aunque esté sin stock, para mejor mensaje
-                p_any = Product.objects.filter(id=pid).first()
-                name = f"'{p_any.name}'" if p_any else f"ID {pid}"
-                errors.append(f"{name} fue comprado recientemente y ya no está disponible.")
+                errors.append(f"Producto ID {product_id} no existe o ya no está disponible.")
+                continue
+
+            if not product.in_stock:
+                errors.append(f"'{product.name}' fue comprado recientemente y ya no está disponible.")
                 continue
 
             category_name = product.category.name if product.category else ""
             is_unique = category_name in ("Slab", "Single")
 
-            if is_unique and qty > 1:
-                errors.append(f"'{product.name}' es único — solo se puede comprar 1 unidad.")
+            if is_unique and quantity > 1:
+                errors.append(f"'{product.name}' es único y solo permite 1 unidad.")
                 continue
 
-            if not is_unique and product.stock_quantity is not None:
-                if qty > product.stock_quantity:
-                    errors.append(
-                        f"'{product.name}' solo tiene {product.stock_quantity} unidades disponibles."
-                    )
-                    continue
+            if not is_unique and product.stock_quantity is not None and quantity > product.stock_quantity:
+                errors.append(
+                    f"'{product.name}' solo tiene {product.stock_quantity} unidades disponibles."
+                )
+
+        return errors
+
+    def _validate_shipping(self, data):
+        shipping_type = data.get("shipping_type", Order.SHIPPING_HOME)
+
+        if shipping_type == Order.SHIPPING_HOME:
+            required_fields = {
+                "shipping_address": "La dirección es obligatoria para envío a domicilio.",
+                "shipping_city": "La ciudad es obligatoria para envío a domicilio.",
+                "shipping_province": "La provincia es obligatoria para envío a domicilio.",
+                "shipping_zip": "El código postal es obligatorio para envío a domicilio.",
+            }
+        else:
+            required_fields = {
+                "shipping_branch": "La sucursal es obligatoria para retiro en punto.",
+            }
+
+        shipping_errors = {
+            field: message
+            for field, message in required_fields.items()
+            if not (data.get(field) or "").strip()
+        }
+        if shipping_errors:
+            raise serializers.ValidationError(shipping_errors)
+
+    def validate(self, data):
+        """Valida stock y resuelve productos."""
+        self._validate_shipping(data)
+
+        normalized_items = self._normalize_items(data["items"])
+        products = self._get_products_map([item["product_id"] for item in normalized_items])
+        errors = self._get_availability_errors(normalized_items, products)
 
         if errors:
-            raise serializers.ValidationError(errors)
+            raise serializers.ValidationError({"items": errors})
 
-        data["_products"] = products
+        data["_normalized_items"] = normalized_items
         return data
 
     def create(self, validated_data):
-        items_input = validated_data.pop("items")
-        products = validated_data.pop("_products")
+        items_input = validated_data.pop("_normalized_items", validated_data.pop("items"))
 
-        # Validar y aplicar código de descuento
-        discount_code_str = validated_data.get("discount_code", "")
-        discount_type = ""
-        discount_amount = Decimal("0")
+        with transaction.atomic():
+            products = self._get_products_map(
+                [item["product_id"] for item in items_input],
+                for_update=True,
+            )
+            errors = self._get_availability_errors(items_input, products)
+            if errors:
+                raise serializers.ValidationError({"items": errors})
 
-        if discount_code_str:
-            dc = DiscountCode.objects.filter(code__iexact=discount_code_str).first()
-            if dc and dc.is_valid():
-                discount_type = dc.discount_type
-                discount_amount = dc.discount_amount
-                dc.activate()
+            discount_code_str = (validated_data.get("discount_code") or "").strip()
+            discount_type = ""
+            discount_amount = Decimal("0")
+            discount_code = None
 
-        # Calcular subtotal con precios del servidor
-        subtotal = Decimal("0")
-        items_to_create = []
-        for item in items_input:
-            product = products[item["product_id"]]
-            unit_price = product.final_price
-            qty = item["quantity"]
-            subtotal += unit_price * qty
-            items_to_create.append({
-                "product": product,
-                "product_name": product.name,
-                "unit_price": unit_price,
-                "quantity": qty,
-            })
+            if discount_code_str:
+                discount_code = DiscountCode.objects.select_for_update().filter(
+                    code__iexact=discount_code_str
+                ).first()
+                if discount_code and discount_code.is_valid():
+                    discount_type = discount_code.discount_type
+                    discount_amount = discount_code.discount_amount
 
-        # Calcular descuento
-        if discount_type == DiscountCode.DISCOUNT_PERCENT:
-            discount_value = subtotal * discount_amount / Decimal("100")
-        elif discount_type == DiscountCode.DISCOUNT_FIXED:
-            discount_value = min(discount_amount, subtotal)
-        else:
-            discount_value = Decimal("0")
+            subtotal = Decimal("0")
+            items_to_create = []
+            for item in items_input:
+                product = products[item["product_id"]]
+                unit_price = product.final_price
+                quantity = item["quantity"]
+                subtotal += unit_price * quantity
+                items_to_create.append({
+                    "product": product,
+                    "product_name": product.name,
+                    "unit_price": unit_price,
+                    "quantity": quantity,
+                })
 
-        shipping_cost = validated_data.get("shipping_cost", Decimal("0"))
-        total = subtotal - discount_value + shipping_cost
+            if discount_type == DiscountCode.DISCOUNT_PERCENT:
+                discount_value = subtotal * discount_amount / Decimal("100")
+            elif discount_type == DiscountCode.DISCOUNT_FIXED:
+                discount_value = min(discount_amount, subtotal)
+            else:
+                discount_value = Decimal("0")
 
-        order = Order.objects.create(
-            customer_name=validated_data["customer_name"],
-            customer_email=validated_data["customer_email"],
-            customer_phone=validated_data.get("customer_phone", ""),
-            shipping_type=validated_data.get("shipping_type", Order.SHIPPING_HOME),
-            shipping_address=validated_data.get("shipping_address", ""),
-            shipping_city=validated_data.get("shipping_city", ""),
-            shipping_province=validated_data.get("shipping_province", ""),
-            shipping_zip=validated_data.get("shipping_zip", ""),
-            shipping_branch=validated_data.get("shipping_branch", ""),
-            shipping_cost=shipping_cost,
-            discount_code=discount_code_str.upper() if discount_code_str else "",
-            discount_type=discount_type,
-            discount_amount=discount_value,
-            subtotal=subtotal,
-            total=total,
-        )
+            shipping_cost = Decimal("0")
+            total = subtotal - discount_value + shipping_cost
 
-        for item in items_to_create:
-            OrderItem.objects.create(order=order, **item)
+            order = Order.objects.create(
+                customer_name=validated_data["customer_name"],
+                customer_email=validated_data["customer_email"],
+                customer_phone=validated_data.get("customer_phone", ""),
+                shipping_type=validated_data.get("shipping_type", Order.SHIPPING_HOME),
+                shipping_address=validated_data.get("shipping_address", ""),
+                shipping_city=validated_data.get("shipping_city", ""),
+                shipping_province=validated_data.get("shipping_province", ""),
+                shipping_zip=validated_data.get("shipping_zip", ""),
+                shipping_branch=validated_data.get("shipping_branch", ""),
+                shipping_cost=shipping_cost,
+                discount_code=discount_code.code.upper() if discount_code else "",
+                discount_type=discount_type,
+                discount_amount=discount_value,
+                subtotal=subtotal,
+                total=total,
+            )
 
-        # Decrementar stock para productos no únicos
-        for item in items_to_create:
-            product = item["product"]
-            category_name = product.category.name if product.category else ""
-            if category_name not in ("Slab", "Single") and product.stock_quantity is not None:
-                product.stock_quantity = max(0, product.stock_quantity - item["quantity"])
-                if product.stock_quantity == 0:
+            for item in items_to_create:
+                OrderItem.objects.create(order=order, **item)
+
+            for item in items_to_create:
+                product = item["product"]
+                category_name = product.category.name if product.category else ""
+                is_unique = category_name in ("Slab", "Single")
+
+                if is_unique:
                     product.in_stock = False
-                product.save(update_fields=["stock_quantity", "in_stock"])
+                    product.save(update_fields=["in_stock", "updated_at"])
+                    continue
+
+                if product.stock_quantity is not None:
+                    product.stock_quantity = max(0, product.stock_quantity - item["quantity"])
+                    product.in_stock = product.stock_quantity > 0
+                    product.save(update_fields=["stock_quantity", "in_stock", "updated_at"])
+
+            if discount_code:
+                discount_code.activate()
 
         return order
 

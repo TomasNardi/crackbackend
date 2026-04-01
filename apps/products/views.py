@@ -79,11 +79,14 @@ class ProductViewSet(viewsets.ModelViewSet):
     ordering_fields = ["price_usd", "created_at", "name"]
     ordering = ["-created_at"]
 
-    def get_queryset(self):
+    def get_base_queryset(self):
         return Product.objects.select_related(
             "tcg", "category", "condition",
             "certification_entity", "certification_grade",
-        ).filter(in_stock=True)
+        )
+
+    def get_queryset(self):
+        return self.get_base_queryset().filter(in_stock=True)
 
     def get_serializer_class(self):
         if self.action == "retrieve":
@@ -130,3 +133,30 @@ class ProductViewSet(viewsets.ModelViewSet):
         """GET /products/new-arrivals/ — últimos 8 productos."""
         qs = self.get_queryset().order_by("-created_at")[:8]
         return Response(ProductListSerializer(qs, many=True).data)
+
+    @action(detail=False, methods=["get"], url_path="by-ids")
+    def by_ids(self, request):
+        """GET /products/by-ids/?ids=1,2,3 — devuelve disponibilidad actual para sincronizar el carrito."""
+        raw_ids = (request.query_params.get("ids") or "").split(",")
+        ids = []
+
+        for raw_id in raw_ids:
+            raw_id = raw_id.strip()
+            if not raw_id:
+                continue
+            try:
+                product_id = int(raw_id)
+            except ValueError:
+                continue
+            if product_id > 0 and product_id not in ids:
+                ids.append(product_id)
+
+        if not ids:
+            return Response([])
+
+        products = {
+            product.id: product
+            for product in self.get_base_queryset().filter(id__in=ids)
+        }
+        ordered_products = [products[product_id] for product_id in ids if product_id in products]
+        return Response(ProductListSerializer(ordered_products, many=True).data)

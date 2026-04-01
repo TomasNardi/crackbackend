@@ -46,7 +46,11 @@ class ProductSearchSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Product
-        fields = ("id", "name", "slug", "tcg", "category", "image_url", "price_ars", "final_price", "discount_percent")
+        fields = (
+            "id", "name", "slug", "tcg", "category",
+            "image_url", "price_ars", "final_price", "discount_percent",
+            "stock_quantity", "in_stock",
+        )
 
 
 class ProductListSerializer(serializers.ModelSerializer):
@@ -64,7 +68,7 @@ class ProductListSerializer(serializers.ModelSerializer):
             "id", "name", "slug", "tcg", "category",
             "condition", "certification_entity", "certification_grade",
             "price_usd", "price_ars", "discount_percent", "final_price",
-            "in_stock", "image_url", "rating", "rating_count", "created_at",
+            "stock_quantity", "in_stock", "image_url", "rating", "rating_count", "created_at",
         )
 
 
