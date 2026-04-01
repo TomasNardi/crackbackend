@@ -80,3 +80,6 @@ class ProductAdmin(admin.ModelAdmin):
             "classes": ("collapse",),
         }),
     )
+
+    class Media:
+        js = ("admin/js/product_admin.js",)

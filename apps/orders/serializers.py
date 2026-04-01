@@ -11,6 +11,9 @@ from apps.products.models import Product
 from .models import Order, OrderItem, MercadoPagoPayment, DiscountCode
 
 
+UNIQUE_ORDER_CATEGORIES = {"single", "singles", "slab", "slabs"}
+
+
 class OrderItemInputSerializer(serializers.Serializer):
     """Input para cada ítem al crear una orden."""
     product_id = serializers.IntegerField()
@@ -80,7 +83,7 @@ class OrderCreateSerializer(serializers.Serializer):
                 continue
 
             category_name = product.category.name if product.category else ""
-            is_unique = category_name in ("Slab", "Single")
+            is_unique = category_name.strip().lower() in UNIQUE_ORDER_CATEGORIES
 
             if is_unique and quantity > 1:
                 errors.append(f"'{product.name}' es único y solo permite 1 unidad.")
@@ -203,7 +206,7 @@ class OrderCreateSerializer(serializers.Serializer):
             for item in items_to_create:
                 product = item["product"]
                 category_name = product.category.name if product.category else ""
-                is_unique = category_name in ("Slab", "Single")
+                is_unique = category_name.strip().lower() in UNIQUE_ORDER_CATEGORIES
 
                 if is_unique:
                     product.in_stock = False

@@ -16,6 +16,9 @@ from django.utils.text import slugify
 from ckeditor.fields import RichTextField
 
 
+UNIQUE_PRODUCT_CATEGORIES = {"single", "singles", "slab", "slabs"}
+
+
 def _build_unique_slug(model_class, raw_name, current_pk=None, max_length=280):
     """Genera un slug único y lo recalcula cuando cambia el nombre."""
     base = slugify(raw_name)[:max_length].strip("-")
@@ -164,7 +167,7 @@ class Product(models.Model):
     # Stock
     stock_quantity = models.PositiveIntegerField(
         null=True, blank=True,
-        help_text="Dejar vacío si es un producto único (slab, single).",
+        help_text="Dejar vacío si es un producto único (slab, single). Para Singles y Slabs, el sistema fuerza automáticamente stock = 1 si el producto está en stock.",
     )
     in_stock = models.BooleanField(default=True)
 
@@ -214,7 +217,20 @@ class Product(models.Model):
         verbose_name_plural = "Productos"
         ordering = ["-created_at"]
 
+    def is_unique_product(self):
+        category_name = self.category.name if self.category_id and self.category else ""
+        return category_name.strip().lower() in UNIQUE_PRODUCT_CATEGORIES
+
+    def normalize_stock(self):
+        if self.is_unique_product():
+            self.stock_quantity = 1 if self.in_stock else 0
+            return
+
+        if self.stock_quantity is not None:
+            self.in_stock = self.stock_quantity > 0
+
     def save(self, *args, **kwargs):
+        self.normalize_stock()
         self.slug = _build_unique_slug(Product, self.name, self.pk, max_length=280)
         super().save(*args, **kwargs)
 
