@@ -4,7 +4,7 @@ Core Serializers
 """
 
 from rest_framework import serializers
-from .models import SiteConfig, Banner, EmailSubscription, ExchangeRate, ContactMessage
+from .models import SiteConfig, EmailSubscription, ExchangeRate, ContactMessage
 
 
 class ExchangeRateSerializer(serializers.ModelSerializer):
@@ -17,12 +17,6 @@ class SiteConfigSerializer(serializers.ModelSerializer):
     class Meta:
         model = SiteConfig
         fields = ("is_active", "maintenance_message")
-
-
-class BannerSerializer(serializers.ModelSerializer):
-    class Meta:
-        model = Banner
-        fields = ("id", "section", "image_url", "is_active")
 
 
 class EmailSubscribeSerializer(serializers.ModelSerializer):

@@ -1,7 +1,7 @@
 """
 Core Models
 ============
-Configuración general del sitio: banners, estado de la página, suscripciones de email.
+Configuración general del sitio: estado de la página, tipo de cambio y suscripciones de email.
 """
 
 from django.db import models
@@ -69,31 +69,6 @@ class SiteConfig(models.Model):
     def get(cls):
         obj, _ = cls.objects.get_or_create(pk=1)
         return obj
-
-
-class Banner(models.Model):
-    """Banner de imagen para distintas secciones del sitio."""
-
-    SECTION_CHOICES = [
-        ("home", "Home"),
-        ("pokemon", "Pokémon"),
-        ("lorcana", "Lorcana"),
-        ("one_piece", "One Piece"),
-        ("yugioh", "Yu-Gi-Oh!"),
-        ("checkout", "Checkout"),
-        ("store", "Tienda"),
-    ]
-
-    section = models.CharField(max_length=50, choices=SECTION_CHOICES, unique=True)
-    image_url = models.URLField(max_length=600)
-    is_active = models.BooleanField(default=True)
-
-    class Meta:
-        verbose_name = "Banner"
-        verbose_name_plural = "Banners"
-
-    def __str__(self):
-        return f"Banner — {self.get_section_display()}"
 
 
 class EmailSubscription(models.Model):

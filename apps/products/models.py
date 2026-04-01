@@ -16,6 +16,23 @@ from django.utils.text import slugify
 from ckeditor.fields import RichTextField
 
 
+def _build_unique_slug(model_class, raw_name, current_pk=None, max_length=280):
+    """Genera un slug único y lo recalcula cuando cambia el nombre."""
+    base = slugify(raw_name)[:max_length].strip("-")
+    if not base:
+        base = "item"
+
+    slug = base
+    counter = 1
+    while model_class.objects.filter(slug=slug).exclude(pk=current_pk).exists():
+        suffix = f"-{counter}"
+        allowed = max_length - len(suffix)
+        slug = f"{base[:allowed].rstrip('-')}{suffix}"
+        counter += 1
+
+    return slug
+
+
 class TCG(models.Model):
     """Juego de cartas: Pokémon, Lorcana, One Piece, Yu-Gi-Oh!, etc."""
 
@@ -28,8 +45,7 @@ class TCG(models.Model):
         ordering = ["name"]
 
     def save(self, *args, **kwargs):
-        if not self.slug:
-            self.slug = slugify(self.name)
+        self.slug = _build_unique_slug(TCG, self.name, self.pk, max_length=120)
         super().save(*args, **kwargs)
 
     def __str__(self):
@@ -51,8 +67,7 @@ class ProductCategory(models.Model):
         ordering = ["name"]
 
     def save(self, *args, **kwargs):
-        if not self.slug:
-            self.slug = slugify(self.name)
+        self.slug = _build_unique_slug(ProductCategory, self.name, self.pk, max_length=120)
         super().save(*args, **kwargs)
 
     def __str__(self):
@@ -200,13 +215,7 @@ class Product(models.Model):
         ordering = ["-created_at"]
 
     def save(self, *args, **kwargs):
-        if not self.slug:
-            base = slugify(self.name)[:260]
-            slug, counter = base, 1
-            while Product.objects.filter(slug=slug).exclude(pk=self.pk).exists():
-                slug = f"{base}-{counter}"
-                counter += 1
-            self.slug = slug
+        self.slug = _build_unique_slug(Product, self.name, self.pk, max_length=280)
         super().save(*args, **kwargs)
 
     @property

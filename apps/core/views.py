@@ -5,12 +5,12 @@ Core Views
 
 from django.utils.decorators import method_decorator
 from django_ratelimit.decorators import ratelimit
-from rest_framework import viewsets, permissions, status
+from rest_framework import permissions, status
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from .models import SiteConfig, Banner, ExchangeRate, ContactMessage
-from .serializers import SiteConfigSerializer, BannerSerializer, EmailSubscribeSerializer, ExchangeRateSerializer, ContactMessageSerializer
+from .models import SiteConfig, ExchangeRate, ContactMessage
+from .serializers import SiteConfigSerializer, EmailSubscribeSerializer, ExchangeRateSerializer, ContactMessageSerializer
 
 
 class ExchangeRateView(APIView):
@@ -28,16 +28,6 @@ class SiteConfigView(APIView):
     def get(self, request):
         config = SiteConfig.get()
         return Response(SiteConfigSerializer(config).data)
-
-
-class BannerViewSet(viewsets.ModelViewSet):
-    queryset = Banner.objects.filter(is_active=True)
-    serializer_class = BannerSerializer
-
-    def get_permissions(self):
-        if self.action in ("list", "retrieve"):
-            return [permissions.AllowAny()]
-        return [permissions.IsAdminUser()]
 
 
 class EmailSubscribeView(APIView):

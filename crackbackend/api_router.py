@@ -17,7 +17,7 @@ from apps.products.views import (
     ProductViewSet,
 )
 from apps.orders.views import OrderViewSet, MercadoPagoWebhookView, ValidateDiscountView
-from apps.core.views import BannerViewSet, SiteConfigView, EmailSubscribeView, PingView, ExchangeRateView, ContactView
+from apps.core.views import SiteConfigView, EmailSubscribeView, PingView, ExchangeRateView, ContactView
 
 router = DefaultRouter()
 
@@ -31,9 +31,6 @@ router.register(r"certification-grades", CertificationGradeViewSet, basename="ce
 
 # Orders
 router.register(r"orders", OrderViewSet, basename="order")
-
-# Core
-router.register(r"banners", BannerViewSet, basename="banner")
 
 urlpatterns = [
     # Auth

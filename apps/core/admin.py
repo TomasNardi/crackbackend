@@ -1,5 +1,5 @@
 from django.contrib import admin
-from .models import SiteConfig, Banner, EmailSubscription, ExchangeRate, ContactMessage
+from .models import SiteConfig, EmailSubscription, ExchangeRate, ContactMessage
 
 
 @admin.register(ExchangeRate)
@@ -24,12 +24,6 @@ class SiteConfigAdmin(admin.ModelAdmin):
 
     def has_delete_permission(self, request, obj=None):
         return False
-
-
-@admin.register(Banner)
-class BannerAdmin(admin.ModelAdmin):
-    list_display = ("section", "image_url", "is_active")
-    list_editable = ("is_active",)
 
 
 @admin.register(EmailSubscription)
