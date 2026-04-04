@@ -20,7 +20,7 @@
 {% block breadcrumbs %}{% endblock %}
 
 {% block title %}
-    {{ title }} | {{ site_title }}
+    Iniciar sesión | {{ site_title }}
 {% endblock %}
 
 {% block base %}
@@ -41,12 +41,9 @@
                         {% include "unfold/helpers/messages/error.html" with errors=form.non_field_errors %}
 
                         {% if user.is_authenticated %}
-                            {% blocktranslate trimmed asvar message %}
-                                You are authenticated as {{ username }}, but are not authorized to
-                                access this page. Would you like to login to a different account?
-                            {% endblocktranslate %}
-
-                            {% include "unfold/helpers/messages/error.html" with error=message %}
+                            {% with username=user.get_username %}
+                                {% include "unfold/helpers/messages/error.html" with error="Estás autenticado como "|add:username|add:", pero no tenés autorización para acceder a esta página. ¿Querés iniciar sesión con otra cuenta?" %}
+                            {% endwith %}
                         {% endif %}
                     </div>
                 {% endif %}
@@ -64,7 +61,7 @@
 
                     <div class="submit-row">
                         <button type="submit" class="bg-primary-600 border border-transparent flex flex-row font-semibold group items-center justify-center py-2 rounded text-sm text-white w-full">
-                            {% translate 'Log in' %}
+                            Iniciar sesión
 
                             <i class="material-symbols-outlined ml-2 relative right-0 text-lg transition-all group-hover:-right-1">arrow_forward</i>
                         </button>
@@ -73,7 +70,7 @@
                     {% if password_reset_url %}
                         <div class="password-reset-link">
                             <a href="{{ password_reset_url }}" class="border border-base-200 font-medium hidden mt-4 px-3 py-2 rounded text-center text-sm text-base-500 transition-all w-full hover:bg-base-50 lg:block lg:w-auto dark:border-base-700 dark:text-font-default-dark dark:hover:text-base-200 dark:hover:bg-base-900">
-                                {% translate 'Forgotten your password or username?' %}
+                                ¿Olvidaste tu contraseña o usuario?
                             </a>
                         </div>
                     {% endif %}
@@ -85,7 +82,7 @@
             <div class="absolute flex flex-row items-center justify-between left-0 m-4 right-0 top-0">
                 {% if site_url %}
                     <a href="{{ site_url }}" class="flex font-medium items-center text-sm text-primary-600 dark:text-primary-500">
-                        <span class="material-symbols-outlined mr-2">arrow_back</span> {% trans 'Return to site' %}
+                        <span class="material-symbols-outlined mr-2">arrow_back</span> Volver al sitio
                     </a>
                 {% endif %}
 
