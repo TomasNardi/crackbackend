@@ -1,22 +1,23 @@
 from django.contrib import admin
 from django.utils import timezone
+from unfold.admin import ModelAdmin, TabularInline
 from .models import Order, OrderItem, MercadoPagoPayment, DiscountCode
 
 
-class OrderItemInline(admin.TabularInline):
+class OrderItemInline(TabularInline):
     model = OrderItem
     extra = 0
     readonly_fields = ("subtotal",)
 
 
-class MercadoPagoPaymentInline(admin.TabularInline):
+class MercadoPagoPaymentInline(TabularInline):
     model = MercadoPagoPayment
     extra = 0
     readonly_fields = ("preference_id", "payment_id", "status", "is_paid", "created_at")
 
 
 @admin.register(Order)
-class OrderAdmin(admin.ModelAdmin):
+class OrderAdmin(ModelAdmin):
     list_display = (
         "id", "customer_name", "customer_email",
         "total", "status", "shipping_type", "created_at_ar",
@@ -33,7 +34,7 @@ class OrderAdmin(admin.ModelAdmin):
 
 
 @admin.register(DiscountCode)
-class DiscountCodeAdmin(admin.ModelAdmin):
+class DiscountCodeAdmin(ModelAdmin):
     list_display = (
         "code", "discount_type", "discount_amount",
         "expiration_type", "valid_from_ar", "valid_until_ar",
@@ -43,7 +44,6 @@ class DiscountCodeAdmin(admin.ModelAdmin):
     search_fields = ("code",)
     readonly_fields = ("uses", "activated_at", "created_at")
 
-    # Campos visibles en el formulario — sin duration_seconds
     fieldsets = (
         ("Código", {
             "fields": ("code", "discount_type", "discount_amount"),
@@ -75,7 +75,7 @@ class DiscountCodeAdmin(admin.ModelAdmin):
 
 
 @admin.register(MercadoPagoPayment)
-class MercadoPagoPaymentAdmin(admin.ModelAdmin):
+class MercadoPagoPaymentAdmin(ModelAdmin):
     list_display = ("preference_id", "order", "status", "is_paid", "created_at")
     list_filter = ("is_paid", "status")
     readonly_fields = ("created_at", "updated_at", "raw_response")

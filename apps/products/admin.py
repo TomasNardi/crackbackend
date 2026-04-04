@@ -1,38 +1,39 @@
 from django.contrib import admin
+from unfold.admin import ModelAdmin
 from .models import TCG, ProductCategory, CardCondition, CertificationEntity, CertificationGrade, Product
 
 
 @admin.register(TCG)
-class TCGAdmin(admin.ModelAdmin):
+class TCGAdmin(ModelAdmin):
     list_display = ("name",)
     readonly_fields = ("slug",)
     exclude = ("slug",)
 
 
 @admin.register(ProductCategory)
-class ProductCategoryAdmin(admin.ModelAdmin):
+class ProductCategoryAdmin(ModelAdmin):
     list_display = ("name",)
     readonly_fields = ("slug",)
     exclude = ("slug",)
 
 
 @admin.register(CardCondition)
-class CardConditionAdmin(admin.ModelAdmin):
+class CardConditionAdmin(ModelAdmin):
     list_display = ("name", "abbreviation")
 
 
 @admin.register(CertificationEntity)
-class CertificationEntityAdmin(admin.ModelAdmin):
+class CertificationEntityAdmin(ModelAdmin):
     list_display = ("name", "abbreviation")
 
 
 @admin.register(CertificationGrade)
-class CertificationGradeAdmin(admin.ModelAdmin):
+class CertificationGradeAdmin(ModelAdmin):
     list_display = ("grade",)
 
 
 @admin.register(Product)
-class ProductAdmin(admin.ModelAdmin):
+class ProductAdmin(ModelAdmin):
     list_display = (
         "name", "category", "tcg",
         "price_usd", "price_ars_display", "discount_percent",

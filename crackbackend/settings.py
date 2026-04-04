@@ -35,15 +35,7 @@ if RENDER_EXTERNAL_HOSTNAME:
 # Application definition
 # ---------------------------------------------------------------------------
 DJANGO_APPS = [
-    "django.contrib.admin",
-    "django.contrib.auth",
-    "django.contrib.contenttypes",
-    "django.contrib.sessions",
-    "django.contrib.messages",
-    "django.contrib.staticfiles",
-]
-
-DJANGO_APPS = [
+    "unfold",
     "django.contrib.admin",
     "django.contrib.auth",
     "django.contrib.contenttypes",
@@ -324,6 +316,149 @@ CKEDITOR_CONFIGS = {
         "width": "100%",
         "removePlugins": "elementspath",
         "extraPlugins": ",".join(["list"]),
+    },
+}
+
+# ---------------------------------------------------------------------------
+# Unfold Admin — Theme
+# ---------------------------------------------------------------------------
+UNFOLD = {
+    "SITE_TITLE": "CRACK",
+    "SITE_HEADER": "CRACK",
+    "SITE_SYMBOL": "style",  # Material Symbols icon
+    "SHOW_HISTORY": True,
+    "SHOW_VIEW_ON_SITE": False,
+    "COLORS": {
+        "font": {
+            "subtle-light": "107 101 96",        # #6B6560
+            "subtle-dark": "163 163 163",
+            "default-light": "26 26 26",          # #1A1A1A
+            "default-dark": "212 207 198",        # #D4CFC6
+            "important-light": "26 26 26",        # #1A1A1A
+            "important-dark": "250 250 247",      # #FAFAF7
+        },
+        "primary": {
+            "50": "254 249 238",
+            "100": "252 239 207",
+            "200": "250 222 158",
+            "300": "246 200 100",
+            "400": "240 175 55",
+            "500": "200 151 46",                  # #C8972E
+            "600": "184 133 31",                  # #B8851F
+            "700": "153 105 22",
+            "800": "126 84 22",
+            "900": "104 69 22",
+            "950": "60 37 7",
+        },
+    },
+    "SIDEBAR": {
+        "show_search": True,
+        "show_all_applications": True,
+        "navigation": [
+            {
+                "title": "Tienda",
+                "separator": True,
+                "collapsible": False,
+                "items": [
+                    {
+                        "title": "Productos",
+                        "icon": "inventory_2",
+                        "link": "/admin/products/product/",
+                    },
+                    {
+                        "title": "TCGs",
+                        "icon": "playing_cards",
+                        "link": "/admin/products/tcg/",
+                    },
+                    {
+                        "title": "Categorías",
+                        "icon": "category",
+                        "link": "/admin/products/productcategory/",
+                    },
+                    {
+                        "title": "Condiciones",
+                        "icon": "grade",
+                        "link": "/admin/products/cardcondition/",
+                    },
+                    {
+                        "title": "Certificadoras",
+                        "icon": "verified",
+                        "link": "/admin/products/certificationentity/",
+                    },
+                    {
+                        "title": "Notas de certificación",
+                        "icon": "scoreboard",
+                        "link": "/admin/products/certificationgrade/",
+                    },
+                ],
+            },
+            {
+                "title": "Ventas",
+                "separator": True,
+                "collapsible": False,
+                "items": [
+                    {
+                        "title": "Órdenes",
+                        "icon": "receipt_long",
+                        "link": "/admin/orders/order/",
+                    },
+                    {
+                        "title": "Pagos MercadoPago",
+                        "icon": "payments",
+                        "link": "/admin/orders/mercadopagopayment/",
+                    },
+                    {
+                        "title": "Códigos de descuento",
+                        "icon": "sell",
+                        "link": "/admin/orders/discountcode/",
+                    },
+                ],
+            },
+            {
+                "title": "Configuración",
+                "separator": True,
+                "collapsible": False,
+                "items": [
+                    {
+                        "title": "Estado del sitio",
+                        "icon": "settings",
+                        "link": "/admin/core/siteconfig/",
+                    },
+                    {
+                        "title": "Tipo de cambio",
+                        "icon": "currency_exchange",
+                        "link": "/admin/core/exchangerate/",
+                    },
+                    {
+                        "title": "Suscripciones",
+                        "icon": "mail",
+                        "link": "/admin/core/emailsubscription/",
+                    },
+                    {
+                        "title": "Mensajes de contacto",
+                        "icon": "forum",
+                        "link": "/admin/core/contactmessage/",
+                    },
+                ],
+            },
+            {
+                "title": "Usuarios",
+                "separator": True,
+                "collapsible": False,
+                "items": [
+                    {
+                        "title": "Usuarios",
+                        "icon": "people",
+                        "link": "/admin/users/user/",
+                    },
+                    {
+                        "title": "Grupos",
+                        "icon": "group",
+                        "link": "/admin/auth/group/",
+                    },
+                ],
+            },
+        ],
     },
 }
 
