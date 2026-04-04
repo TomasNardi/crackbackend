@@ -39,7 +39,7 @@ def _build_unique_slug(model_class, raw_name, current_pk=None, max_length=280):
 class TCG(models.Model):
     """Juego de cartas: Pokémon, Lorcana, One Piece, Yu-Gi-Oh!, etc."""
 
-    name = models.CharField(max_length=100, unique=True)
+    name = models.CharField("Nombre", max_length=100, unique=True)
     slug = models.SlugField(max_length=120, unique=True, blank=True)
 
     class Meta:
@@ -61,7 +61,7 @@ class ProductCategory(models.Model):
     Valores base: Single, Slab, Sellado, Accesorio, Mystery Pack.
     """
 
-    name = models.CharField(max_length=100, unique=True)
+    name = models.CharField("Nombre", max_length=100, unique=True)
     slug = models.SlugField(max_length=120, unique=True, blank=True)
 
     class Meta:
@@ -83,8 +83,8 @@ class CardCondition(models.Model):
     Ej: NM (Near Mint), LP (Lightly Played), MP, HP, DMG.
     """
 
-    name = models.CharField(max_length=100, unique=True)
-    abbreviation = models.CharField(max_length=20, blank=True)
+    name = models.CharField("Nombre", max_length=100, unique=True)
+    abbreviation = models.CharField("Abreviatura", max_length=20, blank=True)
 
     class Meta:
         verbose_name = "Condición"
@@ -101,8 +101,8 @@ class CertificationEntity(models.Model):
     Ej: PSA, BGS (Beckett), CGC, SGC.
     """
 
-    name = models.CharField(max_length=100, unique=True)
-    abbreviation = models.CharField(max_length=20, unique=True)
+    name = models.CharField("Nombre", max_length=100, unique=True)
+    abbreviation = models.CharField("Abreviatura", max_length=20, unique=True)
 
     class Meta:
         verbose_name = "Entidad certificadora"
@@ -119,7 +119,7 @@ class CertificationGrade(models.Model):
     Se carga una vez desde el admin y se reutiliza en todos los slabs.
     """
 
-    grade = models.DecimalField(max_digits=4, decimal_places=1, unique=True)
+    grade = models.DecimalField("Nota", max_digits=4, decimal_places=1, unique=True)
 
     class Meta:
         verbose_name = "Nota de certificación"
@@ -143,56 +143,59 @@ class Product(models.Model):
     # Clasificación
     tcg = models.ForeignKey(
         TCG, on_delete=models.SET_NULL, null=True, blank=True, related_name="products",
+        verbose_name="TCG",
         help_text="Obligatorio para Singles, Slabs y Sellados. Opcional para Accesorios.",
     )
     category = models.ForeignKey(
         ProductCategory, on_delete=models.PROTECT, related_name="products",
+        verbose_name="Categoría",
     )
 
     # Identificación
-    name = models.CharField(max_length=255)
+    name = models.CharField("Nombre", max_length=255)
     slug = models.SlugField(max_length=280, unique=True, blank=True)
-    description = RichTextField(blank=True)
+    description = RichTextField("Descripción", blank=True)
 
     # Precio en USD (el admin lo carga en dólares)
     price_usd = models.DecimalField(
-        max_digits=10, decimal_places=2,
+        "Precio USD", max_digits=10, decimal_places=2,
         help_text="Precio en dólares. El sistema convierte a ARS automáticamente.",
     )
     discount_percent = models.PositiveSmallIntegerField(
-        default=0,
+        "% Descuento", default=0,
         help_text="Porcentaje de descuento (0 = sin descuento).",
     )
 
     # Stock
     stock_quantity = models.PositiveIntegerField(
-        null=True, blank=True,
+        "Cantidad en stock", null=True, blank=True,
         help_text="Dejar vacío si es un producto único (slab, single). Para Singles y Slabs, el sistema fuerza automáticamente stock = 1 si el producto está en stock.",
     )
-    in_stock = models.BooleanField(default=True)
+    in_stock = models.BooleanField("En stock", default=True)
 
     # Imágenes (URLs externas — Cloudinary, S3, etc.)
-    image_url = models.URLField(max_length=600, blank=True)
-    image_url_2 = models.URLField(max_length=600, blank=True)
-    image_url_3 = models.URLField(max_length=600, blank=True)
+    image_url = models.URLField("Imagen principal", max_length=600, blank=True)
+    image_url_2 = models.URLField("Imagen 2", max_length=600, blank=True)
+    image_url_3 = models.URLField("Imagen 3", max_length=600, blank=True)
 
     # Calificación promedio (0.0 – 5.0)
     rating = models.DecimalField(
-        max_digits=3, decimal_places=1, default=0,
+        "Calificación", max_digits=3, decimal_places=1, default=0,
         help_text="Calificación promedio del producto (0.0 – 5.0).",
     )
     rating_count = models.PositiveIntegerField(
-        default=0,
+        "Cant. calificaciones", default=0,
         help_text="Cantidad de calificaciones recibidas.",
     )
 
     # Referencia externa
-    pricecharting_url = models.URLField(max_length=600, blank=True)
+    pricecharting_url = models.URLField("URL PriceCharting", max_length=600, blank=True)
 
     # --- Campos exclusivos de Singles ---
     condition = models.ForeignKey(
         CardCondition, on_delete=models.SET_NULL, null=True, blank=True,
         related_name="products",
+        verbose_name="Condición",
         help_text="Solo para Singles.",
     )
 
@@ -200,17 +203,19 @@ class Product(models.Model):
     certification_entity = models.ForeignKey(
         CertificationEntity, on_delete=models.SET_NULL, null=True, blank=True,
         related_name="products",
+        verbose_name="Certificadora",
         help_text="Solo para Slabs.",
     )
     certification_grade = models.ForeignKey(
         CertificationGrade, on_delete=models.SET_NULL, null=True, blank=True,
         related_name="products",
+        verbose_name="Nota certificación",
         help_text="Solo para Slabs.",
     )
 
     # Timestamps (auto)
-    created_at = models.DateTimeField(auto_now_add=True)
-    updated_at = models.DateTimeField(auto_now=True)
+    created_at = models.DateTimeField("Creado", auto_now_add=True)
+    updated_at = models.DateTimeField("Actualizado", auto_now=True)
 
     class Meta:
         verbose_name = "Producto"

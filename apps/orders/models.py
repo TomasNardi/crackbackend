@@ -37,25 +37,25 @@ class DiscountCode(models.Model):
         (DISCOUNT_FIXED, "Monto fijo"),
     ]
 
-    code = models.CharField(max_length=20, unique=True, verbose_name="Código")
+    code = models.CharField("Código", max_length=20, unique=True)
     discount_type = models.CharField(
-        max_length=20, choices=DISCOUNT_TYPE_CHOICES, default=DISCOUNT_PERCENT
+        "Tipo de descuento", max_length=20, choices=DISCOUNT_TYPE_CHOICES, default=DISCOUNT_PERCENT
     )
-    discount_amount = models.DecimalField(max_digits=10, decimal_places=2, default=0)
+    discount_amount = models.DecimalField("Monto descuento", max_digits=10, decimal_places=2, default=0)
 
     expiration_type = models.CharField(
-        max_length=20, choices=EXPIRATION_CHOICES, default=EXPIRATION_NONE
+        "Tipo de expiración", max_length=20, choices=EXPIRATION_CHOICES, default=EXPIRATION_NONE
     )
-    valid_from = models.DateTimeField(null=True, blank=True)
-    valid_until = models.DateTimeField(null=True, blank=True)
-    duration_seconds = models.PositiveIntegerField(null=True, blank=True)
-    activated_at = models.DateTimeField(null=True, blank=True)
+    valid_from = models.DateTimeField("Válido desde", null=True, blank=True)
+    valid_until = models.DateTimeField("Válido hasta", null=True, blank=True)
+    duration_seconds = models.PositiveIntegerField("Duración (segundos)", null=True, blank=True)
+    activated_at = models.DateTimeField("Activado el", null=True, blank=True)
 
-    max_uses = models.PositiveIntegerField(null=True, blank=True, help_text="Vacío = ilimitado")
-    uses = models.PositiveIntegerField(default=0)
-    used = models.BooleanField(default=False, help_text="Marcar para invalidar manualmente")
+    max_uses = models.PositiveIntegerField("Máx. usos", null=True, blank=True, help_text="Vacío = ilimitado")
+    uses = models.PositiveIntegerField("Usos", default=0)
+    used = models.BooleanField("Usado", default=False, help_text="Marcar para invalidar manualmente")
 
-    created_at = models.DateTimeField(auto_now_add=True)
+    created_at = models.DateTimeField("Creado", auto_now_add=True)
 
     class Meta:
         verbose_name = "Código de descuento"
@@ -126,41 +126,40 @@ class Order(models.Model):
     ]
 
     # Datos del comprador
-    customer_name = models.CharField(max_length=255)
-    customer_email = models.EmailField()
-    customer_phone = models.CharField(max_length=30, blank=True)
+    customer_name = models.CharField("Nombre cliente", max_length=255)
+    customer_email = models.EmailField("Email cliente")
+    customer_phone = models.CharField("Teléfono", max_length=30, blank=True)
 
     # Envío
     shipping_type = models.CharField(
-        max_length=20, choices=SHIPPING_CHOICES, default=SHIPPING_HOME
+        "Tipo de envío", max_length=20, choices=SHIPPING_CHOICES, default=SHIPPING_HOME
     )
-    shipping_address = models.TextField(blank=True)
-    shipping_city = models.CharField(max_length=100, blank=True)
-    shipping_province = models.CharField(max_length=100, blank=True)
-    shipping_zip = models.CharField(max_length=20, blank=True)
+    shipping_address = models.TextField("Dirección", blank=True)
+    shipping_city = models.CharField("Ciudad", max_length=100, blank=True)
+    shipping_province = models.CharField("Provincia", max_length=100, blank=True)
+    shipping_zip = models.CharField("Código postal", max_length=20, blank=True)
     shipping_branch = models.CharField(
-        max_length=255, blank=True, help_text="Sucursal de correo si aplica"
+        "Sucursal", max_length=255, blank=True, help_text="Sucursal de correo si aplica"
     )
-    shipping_cost = models.DecimalField(max_digits=10, decimal_places=2, default=0)
+    shipping_cost = models.DecimalField("Costo envío", max_digits=10, decimal_places=2, default=0)
 
     # Descuento aplicado
-    discount_code = models.CharField(max_length=20, blank=True)
+    discount_code = models.CharField("Código descuento", max_length=20, blank=True)
     discount_type = models.CharField(
-        max_length=20,
-        blank=True,
+        "Tipo descuento", max_length=20, blank=True,
         choices=DiscountCode.DISCOUNT_TYPE_CHOICES,
     )
-    discount_amount = models.DecimalField(max_digits=10, decimal_places=2, default=0)
+    discount_amount = models.DecimalField("Monto descuento", max_digits=10, decimal_places=2, default=0)
 
     # Totales
-    subtotal = models.DecimalField(max_digits=12, decimal_places=2, default=0)
-    total = models.DecimalField(max_digits=12, decimal_places=2)
+    subtotal = models.DecimalField("Subtotal", max_digits=12, decimal_places=2, default=0)
+    total = models.DecimalField("Total", max_digits=12, decimal_places=2)
 
     # Estado
-    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default=STATUS_PENDING)
+    status = models.CharField("Estado", max_length=20, choices=STATUS_CHOICES, default=STATUS_PENDING)
 
-    created_at = models.DateTimeField(auto_now_add=True)
-    updated_at = models.DateTimeField(auto_now=True)
+    created_at = models.DateTimeField("Creado", auto_now_add=True)
+    updated_at = models.DateTimeField("Actualizado", auto_now=True)
 
     class Meta:
         verbose_name = "Orden"
@@ -174,14 +173,15 @@ class Order(models.Model):
 class OrderItem(models.Model):
     """Ítem de una orden."""
 
-    order = models.ForeignKey(Order, on_delete=models.CASCADE, related_name="items")
+    order = models.ForeignKey(Order, on_delete=models.CASCADE, related_name="items", verbose_name="Orden")
     product = models.ForeignKey(
-        "products.Product", on_delete=models.SET_NULL, null=True, related_name="order_items"
+        "products.Product", on_delete=models.SET_NULL, null=True, related_name="order_items",
+        verbose_name="Producto",
     )
     # Snapshot del producto al momento de la compra
-    product_name = models.CharField(max_length=255)
-    unit_price = models.DecimalField(max_digits=12, decimal_places=2)
-    quantity = models.PositiveIntegerField(default=1)
+    product_name = models.CharField("Nombre producto", max_length=255)
+    unit_price = models.DecimalField("Precio unitario", max_digits=12, decimal_places=2)
+    quantity = models.PositiveIntegerField("Cantidad", default=1)
 
     class Meta:
         verbose_name = "Ítem de orden"
@@ -198,16 +198,16 @@ class OrderItem(models.Model):
 class MercadoPagoPayment(models.Model):
     """Registro de pagos de MercadoPago asociados a una orden."""
 
-    order = models.ForeignKey(Order, on_delete=models.CASCADE, related_name="mp_payments")
-    preference_id = models.CharField(max_length=150, unique=True)
-    payment_id = models.CharField(max_length=150, blank=True)
-    status = models.CharField(max_length=50, blank=True)
-    is_paid = models.BooleanField(default=False)
-    payment_method = models.CharField(max_length=50, blank=True)
-    payment_type = models.CharField(max_length=50, blank=True)
-    raw_response = models.JSONField(null=True, blank=True, help_text="Respuesta completa de MP")
-    created_at = models.DateTimeField(auto_now_add=True)
-    updated_at = models.DateTimeField(auto_now=True)
+    order = models.ForeignKey(Order, on_delete=models.CASCADE, related_name="mp_payments", verbose_name="Orden")
+    preference_id = models.CharField("ID preferencia", max_length=150, unique=True)
+    payment_id = models.CharField("ID pago", max_length=150, blank=True)
+    status = models.CharField("Estado", max_length=50, blank=True)
+    is_paid = models.BooleanField("Pagado", default=False)
+    payment_method = models.CharField("Método de pago", max_length=50, blank=True)
+    payment_type = models.CharField("Tipo de pago", max_length=50, blank=True)
+    raw_response = models.JSONField("Respuesta cruda", null=True, blank=True, help_text="Respuesta completa de MP")
+    created_at = models.DateTimeField("Creado", auto_now_add=True)
+    updated_at = models.DateTimeField("Actualizado", auto_now=True)
 
     class Meta:
         verbose_name = "Pago MercadoPago"

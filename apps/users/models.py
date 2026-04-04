@@ -15,21 +15,20 @@ class User(AbstractUser):
     y agrega campos propios del negocio.
     """
 
-    email = models.EmailField(unique=True)
+    email = models.EmailField("Email", unique=True)
 
     # Datos de contacto
-    phone = models.CharField(max_length=30, blank=True)
+    phone = models.CharField("Teléfono", max_length=30, blank=True)
 
     # Dirección de envío por defecto (para agilizar el checkout)
-    default_address = models.TextField(blank=True)
-    default_city = models.CharField(max_length=100, blank=True)
-    default_province = models.CharField(max_length=100, blank=True)
-    default_zip = models.CharField(max_length=20, blank=True)
+    default_address = models.TextField("Dirección", blank=True)
+    default_city = models.CharField("Ciudad", max_length=100, blank=True)
+    default_province = models.CharField("Provincia", max_length=100, blank=True)
+    default_zip = models.CharField("Código postal", max_length=20, blank=True)
 
     # Showroom / colección (fase 2)
-    # Cuando se active el showroom, estos campos cobran vida.
     is_collector = models.BooleanField(
-        default=False,
+        "Es coleccionista", default=False,
         help_text="Habilita el acceso al showroom personal de cartas.",
     )
 

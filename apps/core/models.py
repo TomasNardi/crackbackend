@@ -15,10 +15,10 @@ class ExchangeRate(models.Model):
     """
 
     usd_to_ars = models.DecimalField(
-        max_digits=10, decimal_places=2, default=1000,
+        "USD a ARS", max_digits=10, decimal_places=2, default=1000,
         help_text="Valor del dólar en pesos. Ej: 1450.00",
     )
-    updated_at = models.DateTimeField(auto_now=True)
+    updated_at = models.DateTimeField("Actualizado", auto_now=True)
 
     class Meta:
         verbose_name = "Tipo de cambio"
@@ -44,11 +44,11 @@ class SiteConfig(models.Model):
     """
 
     is_active = models.BooleanField(
-        default=True,
+        "Activo", default=True,
         help_text="Desactivar para mostrar página de mantenimiento.",
     )
     maintenance_message = models.CharField(
-        max_length=500,
+        "Mensaje de mantenimiento", max_length=500,
         blank=True,
         default="Sitio en mantenimiento. Volvemos pronto.",
     )
@@ -74,9 +74,9 @@ class SiteConfig(models.Model):
 class EmailSubscription(models.Model):
     """Suscripciones de email para campañas y newsletters."""
 
-    email = models.EmailField(unique=True)
-    is_active = models.BooleanField(default=True)
-    subscribed_at = models.DateTimeField(auto_now_add=True)
+    email = models.EmailField("Email", unique=True)
+    is_active = models.BooleanField("Activo", default=True)
+    subscribed_at = models.DateTimeField("Suscripto el", auto_now_add=True)
 
     class Meta:
         verbose_name = "Suscripción de email"
@@ -89,11 +89,11 @@ class EmailSubscription(models.Model):
 class ContactMessage(models.Model):
     """Mensajes recibidos desde el formulario de contacto."""
 
-    name = models.CharField(max_length=255)
-    email = models.EmailField()
-    message = models.TextField()
-    read = models.BooleanField(default=False)
-    created_at = models.DateTimeField(auto_now_add=True)
+    name = models.CharField("Nombre", max_length=255)
+    email = models.EmailField("Email")
+    message = models.TextField("Mensaje")
+    read = models.BooleanField("Leído", default=False)
+    created_at = models.DateTimeField("Creado", auto_now_add=True)
 
     class Meta:
         verbose_name = "Mensaje de contacto"
