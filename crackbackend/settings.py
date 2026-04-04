@@ -205,6 +205,7 @@ CORS_ALLOW_CREDENTIALS = True
 # ---------------------------------------------------------------------------
 STATIC_URL = "/static/"
 STATIC_ROOT = BASE_DIR / "staticfiles"
+STATICFILES_DIRS = [BASE_DIR / "static"]
 STATICFILES_STORAGE = "whitenoise.storage.CompressedManifestStaticFilesStorage"
 
 # ---------------------------------------------------------------------------
@@ -323,11 +324,16 @@ CKEDITOR_CONFIGS = {
 # Unfold Admin — Theme
 # ---------------------------------------------------------------------------
 UNFOLD = {
-    "SITE_TITLE": "CRACK",
-    "SITE_HEADER": "CRACK",
+    "SITE_TITLE": "CRACK TCG — Admin",
+    "SITE_HEADER": "CRACK TCG",
+    "SITE_SUBHEADER": "Panel de administración",
     "SITE_SYMBOL": "style",  # Material Symbols icon
     "SHOW_HISTORY": True,
     "SHOW_VIEW_ON_SITE": False,
+    "THEME": "light",
+    "STYLES": [
+        lambda request: "admin/css/crack_admin.css",
+    ],
     "COLORS": {
         "font": {
             "subtle-light": "107 101 96",        # #6B6560

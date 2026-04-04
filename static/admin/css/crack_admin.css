@@ -1,0 +1,142 @@
+/*
+ * CRACK Admin — Custom theme overrides for django-unfold
+ * Palette: cremita #FAFAF7, dorado #C8972E / #B8851F, texto #1A1A1A, bordes #E8E4DD
+ */
+
+/* ── Force light mode ── */
+html, :root {
+  color-scheme: light !important;
+}
+
+/* ── Main background: cremita ── */
+body,
+.bg-gray-50,
+[class*="bg-gray-50"] {
+  background-color: #FAFAF7 !important;
+}
+
+/* ── Sidebar ── */
+aside,
+nav[class*="sidebar"],
+.lg\:w-72,
+aside.border-r {
+  background-color: #1A1A1A !important;
+  border-color: #2a2a2a !important;
+}
+
+/* Sidebar text */
+aside a,
+aside span,
+aside p,
+aside .text-gray-400,
+aside [class*="text-gray"] {
+  color: #D4CFC6 !important;
+}
+
+/* Sidebar section titles */
+aside .font-semibold,
+aside .text-xs.font-semibold,
+aside .uppercase {
+  color: #C8972E !important;
+}
+
+/* Sidebar hover */
+aside a:hover,
+aside a:hover span {
+  color: #C8972E !important;
+}
+
+/* Sidebar active item */
+aside a[class*="bg-primary"],
+aside a.bg-primary-600,
+aside [class*="active"] {
+  background-color: rgba(200, 151, 46, 0.15) !important;
+}
+aside a[class*="bg-primary"] span,
+aside a.bg-primary-600 span {
+  color: #C8972E !important;
+}
+
+/* Sidebar search */
+aside input[type="search"],
+aside input[type="text"] {
+  background-color: #2a2a2a !important;
+  border-color: #3a3a3a !important;
+  color: #FAFAF7 !important;
+}
+
+/* ── Top header bar ── */
+header,
+.border-b.bg-white {
+  background-color: #FFFFFF !important;
+  border-bottom-color: #E8E4DD !important;
+}
+
+/* ── Cards and panels ── */
+.bg-white,
+[class*="bg-white"] {
+  background-color: #FFFFFF !important;
+  border-color: #E8E4DD !important;
+}
+
+/* ── Table rows ── */
+tr:hover td {
+  background-color: rgba(200, 151, 46, 0.04) !important;
+}
+
+/* ── Borders throughout ── */
+.border-gray-200,
+[class*="border-gray-200"],
+.border-gray-100,
+[class*="border-gray-100"] {
+  border-color: #E8E4DD !important;
+}
+
+/* ── Buttons: primary gold ── */
+.bg-primary-600,
+[class*="bg-primary-600"] {
+  background-color: #C8972E !important;
+}
+.bg-primary-600:hover,
+[class*="bg-primary-600"]:hover {
+  background-color: #B8851F !important;
+}
+
+/* ── Links: gold ── */
+a.text-primary-600,
+[class*="text-primary-600"] {
+  color: #C8972E !important;
+}
+a.text-primary-600:hover,
+[class*="text-primary-600"]:hover {
+  color: #B8851F !important;
+}
+
+/* ── CRACK logo in sidebar ── */
+aside .font-bold,
+aside .text-lg {
+  letter-spacing: 0.15em !important;
+}
+
+/* ── Focus rings: gold ── */
+*:focus-visible {
+  outline-color: #C8972E !important;
+}
+input:focus,
+select:focus,
+textarea:focus {
+  border-color: #C8972E !important;
+  box-shadow: 0 0 0 1px rgba(200, 151, 46, 0.3) !important;
+}
+
+/* ── Selection ── */
+::selection {
+  background: rgba(200, 151, 46, 0.25);
+  color: #1A1A1A;
+}
+
+/* ── Scrollbar ── */
+::-webkit-scrollbar { width: 4px; }
+::-webkit-scrollbar-track { background: #FAFAF7; }
+::-webkit-scrollbar-thumb { background: #D4CFC6; border-radius: 2px; }
+::-webkit-scrollbar-thumb:hover { background: #C8972E; }
