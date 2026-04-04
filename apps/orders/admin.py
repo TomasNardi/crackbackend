@@ -27,6 +27,9 @@ class OrderAdmin(ModelAdmin):
     readonly_fields = ("created_at", "updated_at")
     inlines = [OrderItemInline, MercadoPagoPaymentInline]
 
+    def has_add_permission(self, request):
+        return False
+
     @admin.display(description="Fecha (AR)", ordering="created_at")
     def created_at_ar(self, obj):
         local = timezone.localtime(obj.created_at)
@@ -79,3 +82,6 @@ class MercadoPagoPaymentAdmin(ModelAdmin):
     list_display = ("preference_id", "order", "status", "is_paid", "created_at")
     list_filter = ("is_paid", "status")
     readonly_fields = ("created_at", "updated_at", "raw_response")
+
+    def has_add_permission(self, request):
+        return False

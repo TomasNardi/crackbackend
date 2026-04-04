@@ -1,0 +1,20 @@
+{% load i18n admin_urls %}
+
+{% if cl %}
+    {% url cl.opts|admin_urlname:"add" as add_url %}
+    {% blocktranslate with name=cl.opts.verbose_name asvar title %}Add {{ name }}{% endblocktranslate %}
+{% else %}
+    {% url opts|admin_urlname:"add" as add_url %}
+    {% blocktranslate with name=opts.verbose_name asvar title %}Add {{ name }}{% endblocktranslate %}
+{% endif %}
+
+{% if add_url %}
+    <div class="flex flex-row items-center">
+        <span class="block bg-base-200 h-5 mx-4 w-px dark:bg-base-700"></span>
+
+        <a href="{% add_preserved_filters add_url is_popup to_field %}" class="addlink bg-primary-600 flex items-center gap-2 h-9 -my-1 px-4 rounded-full text-white text-sm font-semibold hover:bg-primary-700 transition-colors">
+            <span class="material-symbols-outlined text-white md-18">add</span>
+            Agregar {{ cl.opts.verbose_name|default:opts.verbose_name }}
+        </a>
+    </div>
+{% endif %}

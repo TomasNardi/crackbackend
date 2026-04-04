@@ -33,6 +33,9 @@ class EmailSubscriptionAdmin(ModelAdmin):
     search_fields = ("email",)
     list_editable = ("is_active",)
 
+    def has_add_permission(self, request):
+        return False
+
 
 @admin.register(ContactMessage)
 class ContactMessageAdmin(ModelAdmin):
@@ -41,3 +44,6 @@ class ContactMessageAdmin(ModelAdmin):
     search_fields = ("name", "email", "message")
     list_editable = ("read",)
     readonly_fields = ("name", "email", "message", "created_at")
+
+    def has_add_permission(self, request):
+        return False
