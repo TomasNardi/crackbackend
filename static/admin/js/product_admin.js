@@ -9,8 +9,8 @@
 (function () {
   'use strict';
 
-  const SINGLES_SLUGS = ['single', 'singles'];
-  const SLABS_SLUGS   = ['slab', 'slabs'];
+  const SINGLES_SLUGS = ['singles'];
+  const SLABS_SLUGS   = ['slabs'];
 
   function getSelectedCategoryText() {
     const select = document.getElementById('id_category');
