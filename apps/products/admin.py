@@ -37,11 +37,11 @@ class ProductAdmin(ModelAdmin):
     list_display = (
         "name", "category", "tcg",
         "price_usd", "price_ars_display", "discount_percent",
-        "rating", "rating_count", "in_stock", "created_at",
+        "in_stock",
     )
     list_filter = ("category", "tcg", "in_stock", "certification_entity")
     search_fields = ("name", "description")
-    readonly_fields = ("slug", "price_ars_display", "created_at", "updated_at")
+    readonly_fields = ("slug", "price_ars_display")
     list_editable = ("in_stock", "discount_percent")
 
     def price_ars_display(self, obj):
@@ -57,30 +57,28 @@ class ProductAdmin(ModelAdmin):
         ("Precio y stock", {
             "fields": ("price_usd", "price_ars_display", "discount_percent", "stock_quantity", "in_stock"),
         }),
-        ("Calificación", {
-            "fields": ("rating", "rating_count"),
-        }),
         ("Imágenes", {
             "fields": ("image_url", "image_url_2", "image_url_3"),
-            "classes": ("collapse",),
         }),
+        # --- Campos condicionales (JS los muestra/oculta según categoría) ---
         ("Singles — Condición", {
             "fields": ("condition",),
-            "classes": ("collapse",),
+            "classes": ("fieldset-singles",),
         }),
         ("Slabs — Certificación", {
             "fields": ("certification_entity", "certification_grade"),
-            "classes": ("collapse",),
+            "classes": ("fieldset-slabs",),
         }),
         ("Referencias externas", {
             "fields": ("pricecharting_url",),
-            "classes": ("collapse",),
-        }),
-        ("Timestamps", {
-            "fields": ("created_at", "updated_at"),
-            "classes": ("collapse",),
         }),
     )
+
+    def has_add_permission(self, request):
+        return request.user.is_superuser
+
+    def has_delete_permission(self, request, obj=None):
+        return request.user.is_superuser
 
     class Media:
         js = ("admin/js/product_admin.js",)

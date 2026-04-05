@@ -7,9 +7,14 @@ import django_filters
 from .models import Product
 
 
+class MultiValueCharFilter(django_filters.BaseInFilter, django_filters.CharFilter):
+    """Acepta un único valor o varios separados por coma: ?tcg=pokemon,lorcana"""
+    pass
+
+
 class ProductFilter(django_filters.FilterSet):
-    tcg = django_filters.CharFilter(field_name="tcg__slug")
-    category = django_filters.CharFilter(field_name="category__slug")
+    tcg = MultiValueCharFilter(field_name="tcg__slug", lookup_expr="in")
+    category = MultiValueCharFilter(field_name="category__slug", lookup_expr="in")
     condition = django_filters.CharFilter(field_name="condition__abbreviation", lookup_expr="iexact")
     certification_entity = django_filters.CharFilter(field_name="certification_entity__abbreviation", lookup_expr="iexact")
     min_price = django_filters.NumberFilter(field_name="price_usd", lookup_expr="gte")
