@@ -1,0 +1,156 @@
+{% extends 'admin/base.html' %}
+{% load i18n %}
+
+{% block breadcrumbs %}{% endblock %}
+
+{% block title %}Panel | {{ site_title|default:_('Django site admin') }}{% endblock %}
+
+{% block content %}
+<div class="px-2 py-6 max-w-5xl mx-auto">
+
+    {# Bienvenida #}
+    <div class="mb-10 text-center">
+        <h1 class="text-3xl font-bold text-font-important-light dark:text-font-important-dark mb-2">
+            Bienvenido al panel de administración
+        </h1>
+        <p class="text-sm text-font-subtle-light dark:text-font-subtle-dark">
+            Seleccioná una sección para comenzar
+        </p>
+    </div>
+
+    {# Grid de secciones #}
+    <div class="grid grid-cols-1 sm:grid-cols-2 gap-6">
+
+        {# Tienda #}
+        <div class="bg-white dark:bg-base-900 border border-base-200 dark:border-base-800 rounded-xl shadow-sm overflow-hidden">
+            <div class="flex items-center gap-3 px-5 py-4 border-b border-base-100 dark:border-base-800">
+                <span class="material-symbols-outlined text-primary-500">storefront</span>
+                <h2 class="font-semibold text-font-important-light dark:text-font-important-dark text-base">Tienda</h2>
+            </div>
+            <ul class="divide-y divide-base-100 dark:divide-base-800">
+                <li>
+                    <a href="/admin/products/product/" class="flex items-center gap-3 px-5 py-3 hover:bg-base-50 dark:hover:bg-base-800 transition-colors group">
+                        <span class="material-symbols-outlined text-base text-base-400 group-hover:text-primary-500 transition-colors">inventory_2</span>
+                        <span class="text-sm text-font-default-light dark:text-font-default-dark group-hover:text-primary-600 dark:group-hover:text-primary-400">Productos</span>
+                    </a>
+                </li>
+                <li>
+                    <a href="/admin/products/tcg/" class="flex items-center gap-3 px-5 py-3 hover:bg-base-50 dark:hover:bg-base-800 transition-colors group">
+                        <span class="material-symbols-outlined text-base text-base-400 group-hover:text-primary-500 transition-colors">playing_cards</span>
+                        <span class="text-sm text-font-default-light dark:text-font-default-dark group-hover:text-primary-600 dark:group-hover:text-primary-400">TCGs</span>
+                    </a>
+                </li>
+                <li>
+                    <a href="/admin/products/productcategory/" class="flex items-center gap-3 px-5 py-3 hover:bg-base-50 dark:hover:bg-base-800 transition-colors group">
+                        <span class="material-symbols-outlined text-base text-base-400 group-hover:text-primary-500 transition-colors">category</span>
+                        <span class="text-sm text-font-default-light dark:text-font-default-dark group-hover:text-primary-600 dark:group-hover:text-primary-400">Categorías</span>
+                    </a>
+                </li>
+                <li>
+                    <a href="/admin/products/cardcondition/" class="flex items-center gap-3 px-5 py-3 hover:bg-base-50 dark:hover:bg-base-800 transition-colors group">
+                        <span class="material-symbols-outlined text-base text-base-400 group-hover:text-primary-500 transition-colors">grade</span>
+                        <span class="text-sm text-font-default-light dark:text-font-default-dark group-hover:text-primary-600 dark:group-hover:text-primary-400">Condiciones</span>
+                    </a>
+                </li>
+                <li>
+                    <a href="/admin/products/certificationentity/" class="flex items-center gap-3 px-5 py-3 hover:bg-base-50 dark:hover:bg-base-800 transition-colors group">
+                        <span class="material-symbols-outlined text-base text-base-400 group-hover:text-primary-500 transition-colors">verified</span>
+                        <span class="text-sm text-font-default-light dark:text-font-default-dark group-hover:text-primary-600 dark:group-hover:text-primary-400">Certificadoras</span>
+                    </a>
+                </li>
+                <li>
+                    <a href="/admin/products/certificationgrade/" class="flex items-center gap-3 px-5 py-3 hover:bg-base-50 dark:hover:bg-base-800 transition-colors group">
+                        <span class="material-symbols-outlined text-base text-base-400 group-hover:text-primary-500 transition-colors">scoreboard</span>
+                        <span class="text-sm text-font-default-light dark:text-font-default-dark group-hover:text-primary-600 dark:group-hover:text-primary-400">Notas de certificación</span>
+                    </a>
+                </li>
+            </ul>
+        </div>
+
+        {# Ventas #}
+        <div class="bg-white dark:bg-base-900 border border-base-200 dark:border-base-800 rounded-xl shadow-sm overflow-hidden">
+            <div class="flex items-center gap-3 px-5 py-4 border-b border-base-100 dark:border-base-800">
+                <span class="material-symbols-outlined text-primary-500">point_of_sale</span>
+                <h2 class="font-semibold text-font-important-light dark:text-font-important-dark text-base">Ventas</h2>
+            </div>
+            <ul class="divide-y divide-base-100 dark:divide-base-800">
+                <li>
+                    <a href="/admin/orders/order/" class="flex items-center gap-3 px-5 py-3 hover:bg-base-50 dark:hover:bg-base-800 transition-colors group">
+                        <span class="material-symbols-outlined text-base text-base-400 group-hover:text-primary-500 transition-colors">receipt_long</span>
+                        <span class="text-sm text-font-default-light dark:text-font-default-dark group-hover:text-primary-600 dark:group-hover:text-primary-400">Órdenes</span>
+                    </a>
+                </li>
+                <li>
+                    <a href="/admin/orders/mercadopagopayment/" class="flex items-center gap-3 px-5 py-3 hover:bg-base-50 dark:hover:bg-base-800 transition-colors group">
+                        <span class="material-symbols-outlined text-base text-base-400 group-hover:text-primary-500 transition-colors">payments</span>
+                        <span class="text-sm text-font-default-light dark:text-font-default-dark group-hover:text-primary-600 dark:group-hover:text-primary-400">Pagos MercadoPago</span>
+                    </a>
+                </li>
+                <li>
+                    <a href="/admin/orders/discountcode/" class="flex items-center gap-3 px-5 py-3 hover:bg-base-50 dark:hover:bg-base-800 transition-colors group">
+                        <span class="material-symbols-outlined text-base text-base-400 group-hover:text-primary-500 transition-colors">sell</span>
+                        <span class="text-sm text-font-default-light dark:text-font-default-dark group-hover:text-primary-600 dark:group-hover:text-primary-400">Códigos de descuento</span>
+                    </a>
+                </li>
+            </ul>
+        </div>
+
+        {# Configuración #}
+        <div class="bg-white dark:bg-base-900 border border-base-200 dark:border-base-800 rounded-xl shadow-sm overflow-hidden">
+            <div class="flex items-center gap-3 px-5 py-4 border-b border-base-100 dark:border-base-800">
+                <span class="material-symbols-outlined text-primary-500">tune</span>
+                <h2 class="font-semibold text-font-important-light dark:text-font-important-dark text-base">Configuración</h2>
+            </div>
+            <ul class="divide-y divide-base-100 dark:divide-base-800">
+                <li>
+                    <a href="/admin/core/siteconfig/" class="flex items-center gap-3 px-5 py-3 hover:bg-base-50 dark:hover:bg-base-800 transition-colors group">
+                        <span class="material-symbols-outlined text-base text-base-400 group-hover:text-primary-500 transition-colors">settings</span>
+                        <span class="text-sm text-font-default-light dark:text-font-default-dark group-hover:text-primary-600 dark:group-hover:text-primary-400">Estado del sitio</span>
+                    </a>
+                </li>
+                <li>
+                    <a href="/admin/core/exchangerate/" class="flex items-center gap-3 px-5 py-3 hover:bg-base-50 dark:hover:bg-base-800 transition-colors group">
+                        <span class="material-symbols-outlined text-base text-base-400 group-hover:text-primary-500 transition-colors">currency_exchange</span>
+                        <span class="text-sm text-font-default-light dark:text-font-default-dark group-hover:text-primary-600 dark:group-hover:text-primary-400">Tipo de cambio</span>
+                    </a>
+                </li>
+                <li>
+                    <a href="/admin/core/emailsubscription/" class="flex items-center gap-3 px-5 py-3 hover:bg-base-50 dark:hover:bg-base-800 transition-colors group">
+                        <span class="material-symbols-outlined text-base text-base-400 group-hover:text-primary-500 transition-colors">mail</span>
+                        <span class="text-sm text-font-default-light dark:text-font-default-dark group-hover:text-primary-600 dark:group-hover:text-primary-400">Suscripciones</span>
+                    </a>
+                </li>
+                <li>
+                    <a href="/admin/core/contactmessage/" class="flex items-center gap-3 px-5 py-3 hover:bg-base-50 dark:hover:bg-base-800 transition-colors group">
+                        <span class="material-symbols-outlined text-base text-base-400 group-hover:text-primary-500 transition-colors">forum</span>
+                        <span class="text-sm text-font-default-light dark:text-font-default-dark group-hover:text-primary-600 dark:group-hover:text-primary-400">Mensajes de contacto</span>
+                    </a>
+                </li>
+            </ul>
+        </div>
+
+        {# Usuarios #}
+        <div class="bg-white dark:bg-base-900 border border-base-200 dark:border-base-800 rounded-xl shadow-sm overflow-hidden">
+            <div class="flex items-center gap-3 px-5 py-4 border-b border-base-100 dark:border-base-800">
+                <span class="material-symbols-outlined text-primary-500">manage_accounts</span>
+                <h2 class="font-semibold text-font-important-light dark:text-font-important-dark text-base">Usuarios</h2>
+            </div>
+            <ul class="divide-y divide-base-100 dark:divide-base-800">
+                <li>
+                    <a href="/admin/users/user/" class="flex items-center gap-3 px-5 py-3 hover:bg-base-50 dark:hover:bg-base-800 transition-colors group">
+                        <span class="material-symbols-outlined text-base text-base-400 group-hover:text-primary-500 transition-colors">people</span>
+                        <span class="text-sm text-font-default-light dark:text-font-default-dark group-hover:text-primary-600 dark:group-hover:text-primary-400">Usuarios</span>
+                    </a>
+                </li>
+                <li>
+                    <a href="/admin/auth/group/" class="flex items-center gap-3 px-5 py-3 hover:bg-base-50 dark:hover:bg-base-800 transition-colors group">
+                        <span class="material-symbols-outlined text-base text-base-400 group-hover:text-primary-500 transition-colors">group</span>
+                        <span class="text-sm text-font-default-light dark:text-font-default-dark group-hover:text-primary-600 dark:group-hover:text-primary-400">Grupos</span>
+                    </a>
+                </li>
+            </ul>
+        </div>
+
+    </div>
+</div>
+{% endblock %}
