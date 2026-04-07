@@ -64,7 +64,7 @@ class OrderCreateSerializer(serializers.Serializer):
         queryset = Product.objects.all()
         if for_update:
             queryset = queryset.select_for_update()
-        queryset = queryset.select_related("category", "certification_grade")
+        queryset = queryset.select_related("category")
         return {product.id: product for product in queryset.filter(id__in=product_ids)}
 
     def _get_availability_errors(self, items_input, products):
