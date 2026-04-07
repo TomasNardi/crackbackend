@@ -5,10 +5,29 @@ Maneja órdenes de compra, ítems, pagos con MercadoPago y códigos de descuento
 """
 
 import datetime
+import random
+import string
 from decimal import Decimal
 
 from django.db import models
 from django.utils import timezone
+
+
+# Caracteres usados en order_code — excluye caracteres confusos (0/O, 1/I, L)
+_CODE_ALPHABET = "ABCDEFGHJKMNPQRSTUVWXYZ23456789"
+_CODE_LENGTH = 6
+
+
+def _generate_order_code() -> str:
+    """Genera un código alfanumérico único de 6 caracteres, evitando colisiones."""
+    from django.apps import apps
+    OrderModel = apps.get_model("orders", "Order")
+    for _ in range(20):
+        code = "".join(random.choices(_CODE_ALPHABET, k=_CODE_LENGTH))
+        if not OrderModel.objects.filter(order_code=code).exists():
+            return code
+    # Fallback extremadamente improbable
+    return "".join(random.choices(_CODE_ALPHABET, k=_CODE_LENGTH + 2))
 
 
 class DiscountCode(models.Model):
@@ -125,6 +144,12 @@ class Order(models.Model):
         (SHIPPING_PICKUP, "Retiro en local"),
     ]
 
+    # Código legible único para el cliente (ej: A9K3X2)
+    order_code = models.CharField(
+        "Código de orden", max_length=8, unique=True, db_index=True, blank=True,
+        help_text="Generado automáticamente. Usado como external_reference en MercadoPago.",
+    )
+
     # Datos del comprador
     customer_name = models.CharField("Nombre cliente", max_length=255)
     customer_email = models.EmailField("Email cliente")
@@ -166,8 +191,13 @@ class Order(models.Model):
         verbose_name_plural = "Órdenes"
         ordering = ["-created_at"]
 
+    def save(self, *args, **kwargs):
+        if not self.order_code:
+            self.order_code = _generate_order_code()
+        super().save(*args, **kwargs)
+
     def __str__(self):
-        return f"Orden #{self.id} — {self.customer_name} ({self.get_status_display()})"
+        return f"Orden #{self.id} [{self.order_code}] — {self.customer_name} ({self.get_status_display()})"
 
 
 class OrderItem(models.Model):

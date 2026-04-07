@@ -19,12 +19,13 @@ class MercadoPagoPaymentInline(TabularInline):
 @admin.register(Order)
 class OrderAdmin(ModelAdmin):
     list_display = (
-        "id", "customer_name", "customer_email",
+        "order_code", "customer_name", "customer_email",
         "total", "status", "shipping_type", "created_at_ar",
     )
     list_filter = ("status", "shipping_type")
-    search_fields = ("customer_name", "customer_email", "discount_code")
-    readonly_fields = ("created_at", "updated_at")
+    search_fields = ("order_code", "customer_name", "customer_email", "discount_code")
+    readonly_fields = ("order_code", "created_at", "updated_at")
+    ordering = ("-created_at",)
     inlines = [OrderItemInline, MercadoPagoPaymentInline]
 
     def has_add_permission(self, request):

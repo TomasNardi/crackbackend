@@ -231,7 +231,8 @@ class OrderReadSerializer(serializers.ModelSerializer):
     class Meta:
         model = Order
         fields = (
-            "id", "customer_name", "customer_email", "customer_phone",
+            "id", "order_code",
+            "customer_name", "customer_email", "customer_phone",
             "shipping_type", "shipping_address", "shipping_city",
             "shipping_province", "shipping_zip", "shipping_cost",
             "discount_code", "discount_amount",

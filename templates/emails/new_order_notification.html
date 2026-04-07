@@ -4,9 +4,165 @@
   <meta http-equiv="Content-Type" content="text/html; charset=UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <meta name="x-apple-disable-message-reformatting" />
-  <title>Nueva orden #{{ order.id }} — Panel CRACK TCG</title>
+  <title>Nueva orden #{{ order.id }} — CRACK TCG</title>
 </head>
-<body style="margin:0;padding:0;background-color:#f5f1ea;-webkit-text-size-adjust:100%;-ms-text-size-adjust:100%;">
+<body style="margin:0;padding:0;background-color:#0a0a0a;-webkit-text-size-adjust:100%;-ms-text-size-adjust:100%;">
+
+  <!-- Preheader -->
+  <div style="display:none;max-height:0;overflow:hidden;mso-hide:all;">
+    &#128722; Nueva orden #{{ order.id }} · {{ order.customer_name }} · {{ total }} · {{ created_at }}
+    &nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;
+  </div>
+
+  <!-- Wrapper -->
+  <table border="0" cellpadding="0" cellspacing="0" width="100%" style="background-color:#0a0a0a;">
+    <tr>
+      <td align="center" style="padding:32px 16px;">
+
+        <!-- Container -->
+        <table border="0" cellpadding="0" cellspacing="0" width="600" style="max-width:600px;">
+
+          <!-- ══ HEADER ══ -->
+          <tr>
+            <td style="background-color:#0d0d0d;padding:20px 40px;border-radius:12px 12px 0 0;border-bottom:1px solid #1e1e1e;">
+              <table border="0" cellpadding="0" cellspacing="0" width="100%">
+                <tr>
+                  <td>
+                    <span style="font-family:Georgia,'Times New Roman',serif;font-size:22px;font-weight:900;letter-spacing:8px;color:#ffffff;text-transform:uppercase;">CRACK</span><span style="font-family:Georgia,'Times New Roman',serif;font-size:22px;font-weight:900;color:#C8972E;">.</span>
+                  </td>
+                  <td align="right" valign="middle">
+                    <span style="font-family:Arial,sans-serif;font-size:9px;font-weight:700;color:#C8972E;letter-spacing:3px;text-transform:uppercase;background-color:#1e150a;border:1px solid #C8972E;padding:4px 10px;border-radius:4px;">PANEL INTERNO</span>
+                  </td>
+                </tr>
+              </table>
+            </td>
+          </tr>
+
+          <!-- ══ ALERTA NUEVA ORDEN ══ -->
+          <tr>
+            <td style="background-color:#0f0d08;padding:28px 40px;border-bottom:1px solid #2a2a2a;border-left:3px solid #C8972E;">
+              <table border="0" cellpadding="0" cellspacing="0" width="100%">
+                <tr>
+                  <td>
+                    <p style="margin:0 0 4px;font-family:Arial,sans-serif;font-size:10px;font-weight:700;color:#C8972E;text-transform:uppercase;letter-spacing:3px;">Nueva orden recibida</p>
+                    <p style="margin:0;font-family:Georgia,'Times New Roman',serif;font-size:26px;font-weight:700;color:#ffffff;letter-spacing:1px;">#{{ order.id }}</p>
+                  </td>
+                  <td align="right" valign="middle">
+                    <p style="margin:0;font-family:Arial,sans-serif;font-size:24px;font-weight:700;color:#C8972E;white-space:nowrap;">{{ total }}</p>
+                    <p style="margin:4px 0 0;font-family:Arial,sans-serif;font-size:11px;color:#555555;text-align:right;">{{ created_at }}</p>
+                  </td>
+                </tr>
+              </table>
+            </td>
+          </tr>
+
+          <!-- ══ DATOS DEL CLIENTE ══ -->
+          <tr>
+            <td style="background-color:#161616;padding:28px 40px;border-bottom:1px solid #2a2a2a;">
+              <p style="margin:0 0 16px;font-family:Arial,sans-serif;font-size:10px;font-weight:700;color:#C8972E;text-transform:uppercase;letter-spacing:3px;">Cliente</p>
+
+              <table border="0" cellpadding="0" cellspacing="0" width="100%">
+                <!-- Nombre -->
+                <tr style="border-bottom:1px solid #222222;">
+                  <td style="padding:11px 0;font-family:Arial,sans-serif;font-size:11px;font-weight:700;color:#444444;text-transform:uppercase;letter-spacing:1px;width:110px;">Nombre</td>
+                  <td style="padding:11px 0;font-family:Arial,sans-serif;font-size:14px;font-weight:600;color:#ffffff;">{{ order.customer_name }}</td>
+                </tr>
+                <!-- Email -->
+                <tr style="border-bottom:1px solid #222222;">
+                  <td style="padding:11px 0;font-family:Arial,sans-serif;font-size:11px;font-weight:700;color:#444444;text-transform:uppercase;letter-spacing:1px;">Email</td>
+                  <td style="padding:11px 0;">
+                    <a href="mailto:{{ order.customer_email }}" style="font-family:Arial,sans-serif;font-size:13px;color:#C8972E;text-decoration:none;">{{ order.customer_email }}</a>
+                  </td>
+                </tr>
+                <!-- Teléfono -->
+                <tr style="border-bottom:1px solid #222222;">
+                  <td style="padding:11px 0;font-family:Arial,sans-serif;font-size:11px;font-weight:700;color:#444444;text-transform:uppercase;letter-spacing:1px;">Teléfono</td>
+                  <td style="padding:11px 0;font-family:Arial,sans-serif;font-size:13px;color:{% if order.customer_phone %}#dddddd{% else %}#444444{% endif %};">{{ order.customer_phone|default:"No especificado" }}</td>
+                </tr>
+                <!-- Envío -->
+                <tr {% if not order.discount_code %}{% endif %} style="border-bottom:{% if order.discount_code %}1px solid #222222{% else %}none{% endif %};">
+                  <td style="padding:11px 0;font-family:Arial,sans-serif;font-size:11px;font-weight:700;color:#444444;text-transform:uppercase;letter-spacing:1px;">Envío</td>
+                  <td style="padding:11px 0;font-family:Arial,sans-serif;font-size:13px;color:#dddddd;">
+                    {% if order.shipping_type == "home" %}
+                      {{ order.shipping_address }}, {{ order.shipping_city }}, {{ order.shipping_province }}{% if order.shipping_zip %} (CP {{ order.shipping_zip }}){% endif %}
+                    {% else %}
+                      Retiro — {{ order.shipping_branch|default:"a coordinar" }}
+                    {% endif %}
+                  </td>
+                </tr>
+                {% if order.discount_code %}
+                <!-- Descuento -->
+                <tr>
+                  <td style="padding:11px 0;font-family:Arial,sans-serif;font-size:11px;font-weight:700;color:#444444;text-transform:uppercase;letter-spacing:1px;">Descuento</td>
+                  <td style="padding:11px 0;font-family:Arial,sans-serif;font-size:13px;color:#4ade80;font-weight:600;">
+                    {{ order.discount_code }} &nbsp;&#8722;{{ discount_amount }}
+                  </td>
+                </tr>
+                {% endif %}
+              </table>
+            </td>
+          </tr>
+
+          <!-- ══ PRODUCTOS ══ -->
+          <tr>
+            <td style="background-color:#0f0f0f;padding:28px 40px;border-bottom:1px solid #2a2a2a;">
+              <p style="margin:0 0 16px;font-family:Arial,sans-serif;font-size:10px;font-weight:700;color:#C8972E;text-transform:uppercase;letter-spacing:3px;">Productos</p>
+
+              <table border="0" cellpadding="0" cellspacing="0" width="100%">
+                <!-- Header -->
+                <tr style="border-bottom:1px solid #2a2a2a;">
+                  <td style="padding:0 0 10px;font-family:Arial,sans-serif;font-size:10px;font-weight:700;color:#444444;text-transform:uppercase;letter-spacing:1.5px;">Producto</td>
+                  <td align="center" style="padding:0 0 10px;font-family:Arial,sans-serif;font-size:10px;font-weight:700;color:#444444;text-transform:uppercase;letter-spacing:1.5px;width:50px;">Cant.</td>
+                  <td align="right" style="padding:0 0 10px;font-family:Arial,sans-serif;font-size:10px;font-weight:700;color:#444444;text-transform:uppercase;letter-spacing:1.5px;width:100px;">Precio</td>
+                </tr>
+                {% for item in items %}
+                <tr style="border-bottom:1px solid #1a1a1a;">
+                  <td style="padding:13px 0;font-family:Arial,sans-serif;font-size:13px;color:#cccccc;line-height:1.4;">{{ item.name }}</td>
+                  <td align="center" style="padding:13px 0;font-family:Arial,sans-serif;font-size:13px;color:#555555;">x{{ item.qty }}</td>
+                  <td align="right" style="padding:13px 0;font-family:Arial,sans-serif;font-size:13px;font-weight:600;color:#ffffff;white-space:nowrap;">{{ item.price }}</td>
+                </tr>
+                {% endfor %}
+                <!-- Total -->
+                <tr>
+                  <td colspan="2" style="padding:18px 0 0;font-family:Arial,sans-serif;font-size:11px;font-weight:700;color:#555555;text-transform:uppercase;letter-spacing:2px;">Total a cobrar</td>
+                  <td align="right" style="padding:18px 0 0;font-family:Georgia,'Times New Roman',serif;font-size:20px;font-weight:700;color:#C8972E;white-space:nowrap;">{{ total }}</td>
+                </tr>
+              </table>
+            </td>
+          </tr>
+
+          <!-- ══ CTA ADMIN ══ -->
+          <tr>
+            <td align="center" style="background-color:#161616;padding:24px 40px;border-bottom:1px solid #2a2a2a;">
+              <table border="0" cellpadding="0" cellspacing="0">
+                <tr>
+                  <td align="center" style="background-color:#1e1e1e;border:1px solid #333333;border-radius:6px;">
+                    <a href="https://crackbackend.onrender.com/admin/orders/order/{{ order.id }}/change/" style="display:inline-block;padding:11px 28px;font-family:Arial,sans-serif;font-size:12px;font-weight:700;color:#C8972E;text-decoration:none;letter-spacing:0.5px;white-space:nowrap;">Ver en panel admin &#8599;</a>
+                  </td>
+                </tr>
+              </table>
+            </td>
+          </tr>
+
+          <!-- ══ FOOTER ══ -->
+          <tr>
+            <td align="center" style="background-color:#0d0d0d;padding:20px 40px;border-radius:0 0 12px 12px;">
+              <p style="margin:0;font-family:Arial,sans-serif;font-size:10px;color:#333333;line-height:1.8;">
+                Notificación interna &middot; <strong style="color:#444444;">CRACK TCG</strong> &middot; No responder este email
+              </p>
+            </td>
+          </tr>
+
+        </table>
+        <!-- /Container -->
+
+      </td>
+    </tr>
+  </table>
+  <!-- /Wrapper -->
+
+</body>
+</html>
 
   <!-- Wrapper -->
   <table border="0" cellpadding="0" cellspacing="0" width="100%" style="background-color:#f5f1ea;">

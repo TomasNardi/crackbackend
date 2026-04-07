@@ -6,124 +6,224 @@
   <meta name="x-apple-disable-message-reformatting" />
   <title>Pedido #{{ order.id }} confirmado — CRACK TCG</title>
 </head>
-<body style="margin:0;padding:0;background-color:#f5f1ea;-webkit-text-size-adjust:100%;-ms-text-size-adjust:100%;">
+<body style="margin:0;padding:0;background-color:#111111;-webkit-text-size-adjust:100%;-ms-text-size-adjust:100%;">
+
+  <!-- Preheader (oculto, aparece en preview del cliente de email) -->
+  <div style="display:none;max-height:0;overflow:hidden;mso-hide:all;">
+    &#9989; Tu pedido #{{ order.id }} fue recibido. Gracias por comprar en CRACK TCG, {{ order.customer_name }}.
+    &nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;
+  </div>
 
   <!-- Wrapper -->
-  <table border="0" cellpadding="0" cellspacing="0" width="100%" style="background-color:#f5f1ea;">
+  <table border="0" cellpadding="0" cellspacing="0" width="100%" style="background-color:#111111;">
     <tr>
-      <td align="center" style="padding:32px 16px;">
+      <td align="center" style="padding:40px 16px;">
 
         <!-- Container -->
-        <table border="0" cellpadding="0" cellspacing="0" width="600" style="max-width:600px;background-color:#ffffff;border-radius:12px;overflow:hidden;">
+        <table border="0" cellpadding="0" cellspacing="0" width="600" style="max-width:600px;">
 
-          <!-- ── HEADER ── -->
+          <!-- ══ HEADER ══ -->
           <tr>
-            <td align="center" style="background-color:#1a1a1a;padding:28px 40px;">
-              <span style="font-family:Arial,sans-serif;font-size:28px;font-weight:900;letter-spacing:6px;color:#ffffff;">CRACK</span><span style="font-family:Arial,sans-serif;font-size:28px;font-weight:900;color:#C8972E;">.</span>
-            </td>
-          </tr>
-
-          <!-- ── BANNER CONFIRMATION ── -->
-          <tr>
-            <td align="center" style="background-color:#fdf9f2;padding:32px 40px 24px;border-bottom:1px solid #ede8df;">
-              <!-- Checkmark circle -->
+            <td align="center" style="background-color:#0d0d0d;padding:32px 48px 28px;border-radius:12px 12px 0 0;border-bottom:1px solid #2a2a2a;">
+              <!-- Logo wordmark -->
               <table border="0" cellpadding="0" cellspacing="0">
                 <tr>
-                  <td align="center" style="width:56px;height:56px;background-color:#C8972E;border-radius:50%;">
-                    <span style="font-size:26px;line-height:56px;display:block;">&#10003;</span>
+                  <td>
+                    <span style="font-family:Georgia,'Times New Roman',serif;font-size:32px;font-weight:900;letter-spacing:10px;color:#ffffff;text-transform:uppercase;line-height:1;">CRACK</span><span style="font-family:Georgia,'Times New Roman',serif;font-size:32px;font-weight:900;color:#C8972E;line-height:1;">.</span>
+                  </td>
+                </tr>
+                <tr>
+                  <td align="center" style="padding-top:6px;">
+                    <span style="font-family:Arial,sans-serif;font-size:9px;letter-spacing:5px;color:#555555;text-transform:uppercase;">TRADING CARDS</span>
                   </td>
                 </tr>
               </table>
-              <h1 style="margin:16px 0 6px;font-family:Arial,sans-serif;font-size:22px;font-weight:800;color:#1a1a1a;letter-spacing:-0.3px;">¡Pedido #{{ order.id }} confirmado!</h1>
-              <p style="margin:0;font-family:Arial,sans-serif;font-size:14px;color:#6b6560;line-height:1.5;">
-                Hola <strong style="color:#1a1a1a;">{{ order.customer_name }}</strong>, recibimos tu pedido correctamente.<br>
-                Te contactaremos pronto para coordinar el pago y el envío.
+            </td>
+          </tr>
+
+          <!-- ══ HERO — CONFIRMACIÓN ══ -->
+          <tr>
+            <td align="center" style="background-color:#161616;padding:48px 48px 40px;">
+              <!-- Ícono check -->
+              <table border="0" cellpadding="0" cellspacing="0">
+                <tr>
+                  <td align="center" style="width:72px;height:72px;background-color:#C8972E;border-radius:50%;">
+                    <span style="font-family:Arial,sans-serif;font-size:32px;line-height:72px;display:block;color:#0d0d0d;font-weight:900;">&#10003;</span>
+                  </td>
+                </tr>
+              </table>
+
+              <h1 style="margin:24px 0 8px;font-family:Georgia,'Times New Roman',serif;font-size:28px;font-weight:700;color:#ffffff;letter-spacing:-0.5px;line-height:1.2;">
+                ¡Pedido confirmado!
+              </h1>
+              <p style="margin:0 0 4px;font-family:Arial,sans-serif;font-size:13px;color:#888888;letter-spacing:2px;text-transform:uppercase;">
+                N.° de orden
+              </p>
+              <p style="margin:0;font-family:Georgia,'Times New Roman',serif;font-size:26px;font-weight:700;color:#C8972E;letter-spacing:1px;">
+                #{{ order.id }}
+              </p>
+              <p style="margin:20px 0 0;font-family:Arial,sans-serif;font-size:15px;color:#aaaaaa;line-height:1.7;max-width:420px;">
+                Hola <strong style="color:#ffffff;">{{ order.customer_name }}</strong>, recibimos tu pedido.<br>
+                Te contactaremos a la brevedad para coordinar el pago y el despacho.
               </p>
             </td>
           </tr>
 
-          <!-- ── INFO DE ENVÍO ── -->
+          <!-- ══ QUÉ SIGUE ══ -->
           <tr>
-            <td style="padding:24px 40px 0;">
-              <table border="0" cellpadding="0" cellspacing="0" width="100%" style="background-color:#f8f6f2;border-radius:8px;overflow:hidden;">
+            <td style="background-color:#0f0f0f;padding:32px 48px;border-top:1px solid #2a2a2a;border-bottom:1px solid #2a2a2a;">
+              <p style="margin:0 0 20px;font-family:Arial,sans-serif;font-size:10px;font-weight:700;color:#C8972E;text-transform:uppercase;letter-spacing:3px;">Próximos pasos</p>
+              <table border="0" cellpadding="0" cellspacing="0" width="100%">
+                <!-- Paso 1 -->
                 <tr>
-                  <td style="padding:16px 20px;border-left:3px solid #C8972E;">
-                    <p style="margin:0 0 4px;font-family:Arial,sans-serif;font-size:11px;font-weight:700;color:#6b6560;text-transform:uppercase;letter-spacing:1px;">Número de pedido</p>
-                    <p style="margin:0 0 12px;font-family:Arial,sans-serif;font-size:15px;font-weight:800;color:#1a1a1a;">#{{ order.id }}</p>
-
-                    {% if order.shipping_type == "home" %}
-                      <p style="margin:0 0 4px;font-family:Arial,sans-serif;font-size:11px;font-weight:700;color:#6b6560;text-transform:uppercase;letter-spacing:1px;">Envío a domicilio</p>
-                      <p style="margin:0;font-family:Arial,sans-serif;font-size:13px;color:#1a1a1a;">{{ order.shipping_address }}, {{ order.shipping_city }}, {{ order.shipping_province }}</p>
-                    {% else %}
-                      <p style="margin:0 0 4px;font-family:Arial,sans-serif;font-size:11px;font-weight:700;color:#6b6560;text-transform:uppercase;letter-spacing:1px;">Retiro en sucursal</p>
-                      <p style="margin:0;font-family:Arial,sans-serif;font-size:13px;color:#1a1a1a;">{{ order.shipping_branch|default:"A coordinar" }}</p>
-                    {% endif %}
+                  <td valign="top" style="width:36px;padding-bottom:20px;">
+                    <table border="0" cellpadding="0" cellspacing="0">
+                      <tr>
+                        <td align="center" style="width:28px;height:28px;background-color:#C8972E;border-radius:50%;">
+                          <span style="font-family:Arial,sans-serif;font-size:12px;font-weight:800;color:#0d0d0d;line-height:28px;display:block;">1</span>
+                        </td>
+                      </tr>
+                    </table>
+                  </td>
+                  <td valign="top" style="padding-left:14px;padding-bottom:20px;">
+                    <p style="margin:0 0 2px;font-family:Arial,sans-serif;font-size:13px;font-weight:700;color:#ffffff;">Confirmamos tu pedido</p>
+                    <p style="margin:0;font-family:Arial,sans-serif;font-size:12px;color:#666666;line-height:1.5;">Estamos revisando la disponibilidad de tus productos.</p>
+                  </td>
+                </tr>
+                <!-- Paso 2 -->
+                <tr>
+                  <td valign="top" style="width:36px;padding-bottom:20px;">
+                    <table border="0" cellpadding="0" cellspacing="0">
+                      <tr>
+                        <td align="center" style="width:28px;height:28px;background-color:#2a2a2a;border-radius:50%;">
+                          <span style="font-family:Arial,sans-serif;font-size:12px;font-weight:800;color:#888888;line-height:28px;display:block;">2</span>
+                        </td>
+                      </tr>
+                    </table>
+                  </td>
+                  <td valign="top" style="padding-left:14px;padding-bottom:20px;">
+                    <p style="margin:0 0 2px;font-family:Arial,sans-serif;font-size:13px;font-weight:700;color:#888888;">Te contactamos para el pago</p>
+                    <p style="margin:0;font-family:Arial,sans-serif;font-size:12px;color:#555555;line-height:1.5;">Te escribiremos al email o teléfono indicado.</p>
+                  </td>
+                </tr>
+                <!-- Paso 3 -->
+                <tr>
+                  <td valign="top" style="width:36px;">
+                    <table border="0" cellpadding="0" cellspacing="0">
+                      <tr>
+                        <td align="center" style="width:28px;height:28px;background-color:#2a2a2a;border-radius:50%;">
+                          <span style="font-family:Arial,sans-serif;font-size:12px;font-weight:800;color:#888888;line-height:28px;display:block;">3</span>
+                        </td>
+                      </tr>
+                    </table>
+                  </td>
+                  <td valign="top" style="padding-left:14px;">
+                    <p style="margin:0 0 2px;font-family:Arial,sans-serif;font-size:13px;font-weight:700;color:#888888;">Enviamos o preparamos el retiro</p>
+                    <p style="margin:0;font-family:Arial,sans-serif;font-size:12px;color:#555555;line-height:1.5;">Despachamos en 24–72 hs hábiles tras acreditar el pago.</p>
                   </td>
                 </tr>
               </table>
             </td>
           </tr>
 
-          <!-- ── TABLA DE PRODUCTOS ── -->
+          <!-- ══ INFO DE ENVÍO ══ -->
           <tr>
-            <td style="padding:24px 40px 0;">
-              <p style="margin:0 0 12px;font-family:Arial,sans-serif;font-size:11px;font-weight:700;color:#6b6560;text-transform:uppercase;letter-spacing:1px;">Detalle del pedido</p>
-              <table border="0" cellpadding="0" cellspacing="0" width="100%" style="border:1px solid #e8e4dd;border-radius:8px;overflow:hidden;">
-                <!-- Encabezado -->
-                <tr style="background-color:#f8f6f2;">
-                  <td style="padding:10px 14px;font-family:Arial,sans-serif;font-size:11px;font-weight:700;color:#6b6560;text-transform:uppercase;letter-spacing:1px;">Producto</td>
-                  <td align="center" style="padding:10px 14px;font-family:Arial,sans-serif;font-size:11px;font-weight:700;color:#6b6560;text-transform:uppercase;letter-spacing:1px;width:60px;">Cant.</td>
-                  <td align="right" style="padding:10px 14px;font-family:Arial,sans-serif;font-size:11px;font-weight:700;color:#6b6560;text-transform:uppercase;letter-spacing:1px;width:90px;">Precio</td>
+            <td style="background-color:#161616;padding:32px 48px;border-bottom:1px solid #2a2a2a;">
+              <p style="margin:0 0 16px;font-family:Arial,sans-serif;font-size:10px;font-weight:700;color:#C8972E;text-transform:uppercase;letter-spacing:3px;">
+                {% if order.shipping_type == "home" %}Dirección de envío{% else %}Punto de retiro{% endif %}
+              </p>
+              {% if order.shipping_type == "home" %}
+              <table border="0" cellpadding="0" cellspacing="0" width="100%" style="border-left:2px solid #C8972E;">
+                <tr>
+                  <td style="padding:4px 0 4px 16px;">
+                    <p style="margin:0 0 2px;font-family:Arial,sans-serif;font-size:14px;font-weight:600;color:#ffffff;">{{ order.shipping_address }}</p>
+                    <p style="margin:0;font-family:Arial,sans-serif;font-size:13px;color:#888888;">{{ order.shipping_city }}, {{ order.shipping_province }}{% if order.shipping_zip %} · CP {{ order.shipping_zip }}{% endif %}</p>
+                  </td>
+                </tr>
+              </table>
+              {% else %}
+              <table border="0" cellpadding="0" cellspacing="0" width="100%" style="border-left:2px solid #C8972E;">
+                <tr>
+                  <td style="padding:4px 0 4px 16px;">
+                    <p style="margin:0;font-family:Arial,sans-serif;font-size:14px;font-weight:600;color:#ffffff;">{{ order.shipping_branch|default:"A coordinar" }}</p>
+                  </td>
+                </tr>
+              </table>
+              {% endif %}
+            </td>
+          </tr>
+
+          <!-- ══ DETALLE DEL PEDIDO ══ -->
+          <tr>
+            <td style="background-color:#0f0f0f;padding:32px 48px;border-bottom:1px solid #2a2a2a;">
+              <p style="margin:0 0 16px;font-family:Arial,sans-serif;font-size:10px;font-weight:700;color:#C8972E;text-transform:uppercase;letter-spacing:3px;">Detalle del pedido</p>
+
+              <!-- Header columnas -->
+              <table border="0" cellpadding="0" cellspacing="0" width="100%">
+                <tr style="border-bottom:1px solid #2a2a2a;">
+                  <td style="padding:0 0 10px;font-family:Arial,sans-serif;font-size:10px;font-weight:700;color:#555555;text-transform:uppercase;letter-spacing:1.5px;">Producto</td>
+                  <td align="center" style="padding:0 0 10px;font-family:Arial,sans-serif;font-size:10px;font-weight:700;color:#555555;text-transform:uppercase;letter-spacing:1.5px;width:50px;">Cant.</td>
+                  <td align="right" style="padding:0 0 10px;font-family:Arial,sans-serif;font-size:10px;font-weight:700;color:#555555;text-transform:uppercase;letter-spacing:1.5px;width:100px;">Precio</td>
                 </tr>
 
                 <!-- Items -->
                 {% for item in items %}
-                <tr style="border-top:1px solid #f0ece4;">
-                  <td style="padding:10px 14px;font-family:Arial,sans-serif;font-size:13px;color:#1a1a1a;">{{ item.name }}</td>
-                  <td align="center" style="padding:10px 14px;font-family:Arial,sans-serif;font-size:13px;color:#6b6560;">{{ item.qty }}</td>
-                  <td align="right" style="padding:10px 14px;font-family:Arial,sans-serif;font-size:13px;font-weight:600;color:#1a1a1a;">{{ item.price }}</td>
+                <tr style="border-bottom:1px solid #1e1e1e;">
+                  <td style="padding:14px 0;font-family:Arial,sans-serif;font-size:13px;color:#dddddd;line-height:1.4;">{{ item.name }}</td>
+                  <td align="center" style="padding:14px 0;font-family:Arial,sans-serif;font-size:13px;color:#666666;">x{{ item.qty }}</td>
+                  <td align="right" style="padding:14px 0;font-family:Arial,sans-serif;font-size:13px;font-weight:600;color:#ffffff;white-space:nowrap;">{{ item.price }}</td>
                 </tr>
                 {% endfor %}
 
                 <!-- Descuento (opcional) -->
                 {% if discount_amount %}
-                <tr style="border-top:1px solid #f0ece4;">
-                  <td colspan="2" align="right" style="padding:8px 14px;font-family:Arial,sans-serif;font-size:13px;color:#16a34a;">
-                    Descuento ({{ order.discount_code }})
+                <tr style="border-bottom:1px solid #1e1e1e;">
+                  <td colspan="2" style="padding:12px 0;font-family:Arial,sans-serif;font-size:12px;color:#4ade80;">
+                    Descuento aplicado
+                    <span style="background-color:#052e16;color:#4ade80;font-size:10px;font-weight:700;padding:2px 8px;border-radius:4px;margin-left:8px;letter-spacing:1px;">{{ order.discount_code }}</span>
                   </td>
-                  <td align="right" style="padding:8px 14px;font-family:Arial,sans-serif;font-size:13px;font-weight:600;color:#16a34a;">
-                    -{{ discount_amount }}
-                  </td>
+                  <td align="right" style="padding:12px 0;font-family:Arial,sans-serif;font-size:13px;font-weight:600;color:#4ade80;white-space:nowrap;">&#8722;{{ discount_amount }}</td>
                 </tr>
                 {% endif %}
 
                 <!-- Total -->
-                <tr style="background-color:#1a1a1a;">
-                  <td colspan="2" style="padding:14px;font-family:Arial,sans-serif;font-size:14px;font-weight:800;color:#ffffff;letter-spacing:1px;text-transform:uppercase;">Total</td>
-                  <td align="right" style="padding:14px;font-family:Arial,sans-serif;font-size:17px;font-weight:800;color:#C8972E;">{{ total }}</td>
+                <tr>
+                  <td colspan="2" style="padding:20px 0 0;font-family:Arial,sans-serif;font-size:12px;font-weight:700;color:#555555;text-transform:uppercase;letter-spacing:2px;">Total</td>
+                  <td align="right" style="padding:20px 0 0;font-family:Georgia,'Times New Roman',serif;font-size:22px;font-weight:700;color:#C8972E;white-space:nowrap;">{{ total }}</td>
                 </tr>
               </table>
             </td>
           </tr>
 
-          <!-- ── MENSAJE FINAL ── -->
+          <!-- ══ CTA CONTACTO ══ -->
           <tr>
-            <td style="padding:24px 40px 32px;">
-              <p style="margin:0 0 6px;font-family:Arial,sans-serif;font-size:13px;color:#6b6560;line-height:1.6;">
-                Una vez que coordines el pago, procesaremos tu pedido a la brevedad.<br>
-                ¿Tenés alguna pregunta? Escribinos a
-                <a href="mailto:cracktcg@gmail.com" style="color:#C8972E;text-decoration:none;font-weight:600;">cracktcg@gmail.com</a>.
+            <td align="center" style="background-color:#161616;padding:32px 48px;border-bottom:1px solid #2a2a2a;">
+              <p style="margin:0 0 20px;font-family:Arial,sans-serif;font-size:14px;color:#888888;line-height:1.7;">
+                ¿Tenés alguna consulta sobre tu pedido?<br>Respondé este email o escribinos directamente.
               </p>
+              <table border="0" cellpadding="0" cellspacing="0">
+                <tr>
+                  <td align="center" style="background-color:#C8972E;border-radius:6px;">
+                    <a href="mailto:cracktcg@gmail.com" style="display:inline-block;padding:13px 32px;font-family:Arial,sans-serif;font-size:13px;font-weight:700;color:#0d0d0d;text-decoration:none;letter-spacing:0.5px;white-space:nowrap;">Contactar a CRACK TCG</a>
+                  </td>
+                </tr>
+              </table>
             </td>
           </tr>
 
-          <!-- ── FOOTER ── -->
+          <!-- ══ FOOTER ══ -->
           <tr>
-            <td align="center" style="background-color:#f8f6f2;padding:20px 40px;border-top:1px solid #e8e4dd;">
-              <p style="margin:0 0 4px;font-family:Arial,sans-serif;font-size:12px;font-weight:700;letter-spacing:3px;color:#1a1a1a;">CRACK TCG</p>
-              <p style="margin:0;font-family:Arial,sans-serif;font-size:11px;color:#6b6560;">
-                Buenos Aires, Argentina &nbsp;·&nbsp;
-                <a href="mailto:cracktcg@gmail.com" style="color:#6b6560;text-decoration:none;">cracktcg@gmail.com</a>
+            <td align="center" style="background-color:#0d0d0d;padding:28px 48px;border-radius:0 0 12px 12px;">
+              <p style="margin:0 0 4px;font-family:Georgia,'Times New Roman',serif;font-size:16px;font-weight:700;letter-spacing:6px;color:#333333;text-transform:uppercase;">CRACK</p>
+              <p style="margin:0 0 16px;font-family:Arial,sans-serif;font-size:10px;letter-spacing:3px;color:#333333;text-transform:uppercase;">Trading Cards · Buenos Aires</p>
+              <p style="margin:0;font-family:Arial,sans-serif;font-size:11px;color:#444444;line-height:1.8;">
+                <a href="mailto:cracktcg@gmail.com" style="color:#555555;text-decoration:none;">cracktcg@gmail.com</a>
+                &nbsp;&middot;&nbsp;
+                <a href="https://www.instagram.com/cracktcg" style="color:#555555;text-decoration:none;">@cracktcg</a>
+              </p>
+              <p style="margin:12px 0 0;font-family:Arial,sans-serif;font-size:10px;color:#333333;line-height:1.6;">
+                Recibiste este email porque realizaste una compra en crack-tcg.com.ar.<br>
+                Este es un mensaje transaccional y no puede darse de baja.
               </p>
             </td>
           </tr>
