@@ -1,0 +1,133 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml" lang="es" xml:lang="es">
+<head>
+  <meta http-equiv="Content-Type" content="text/html; charset=UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="x-apple-disable-message-reformatting" />
+  <title>Nueva orden #{{ order.id }} — Panel CRACK TCG</title>
+</head>
+<body style="margin:0;padding:0;background-color:#f5f1ea;-webkit-text-size-adjust:100%;-ms-text-size-adjust:100%;">
+
+  <!-- Wrapper -->
+  <table border="0" cellpadding="0" cellspacing="0" width="100%" style="background-color:#f5f1ea;">
+    <tr>
+      <td align="center" style="padding:32px 16px;">
+
+        <!-- Container -->
+        <table border="0" cellpadding="0" cellspacing="0" width="600" style="max-width:600px;background-color:#ffffff;border-radius:12px;overflow:hidden;">
+
+          <!-- ── HEADER ── -->
+          <tr>
+            <td align="center" style="background-color:#1a1a1a;padding:20px 40px;">
+              <span style="font-family:Arial,sans-serif;font-size:24px;font-weight:900;letter-spacing:6px;color:#ffffff;">CRACK</span><span style="font-family:Arial,sans-serif;font-size:24px;font-weight:900;color:#C8972E;">.</span>
+              <span style="font-family:Arial,sans-serif;font-size:11px;color:#ffffff;opacity:0.4;letter-spacing:2px;margin-left:10px;">PANEL INTERNO</span>
+            </td>
+          </tr>
+
+          <!-- ── ALERTA NUEVA ORDEN ── -->
+          <tr>
+            <td style="padding:24px 40px 16px;">
+              <table border="0" cellpadding="0" cellspacing="0" width="100%" style="background-color:#fef9f0;border:1px solid #C8972E;border-radius:8px;overflow:hidden;">
+                <tr>
+                  <td style="padding:16px 20px;">
+                    <p style="margin:0;font-family:Arial,sans-serif;font-size:15px;font-weight:800;color:#1a1a1a;">
+                      &#128722; Nueva orden #{{ order.id }}
+                    </p>
+                    <p style="margin:4px 0 0;font-family:Arial,sans-serif;font-size:12px;color:#6b6560;">
+                      {{ created_at }}
+                    </p>
+                  </td>
+                </tr>
+              </table>
+            </td>
+          </tr>
+
+          <!-- ── DATOS DEL CLIENTE ── -->
+          <tr>
+            <td style="padding:0 40px 16px;">
+              <p style="margin:0 0 10px;font-family:Arial,sans-serif;font-size:11px;font-weight:700;color:#6b6560;text-transform:uppercase;letter-spacing:1px;">Datos del cliente</p>
+              <table border="0" cellpadding="0" cellspacing="0" width="100%" style="border:1px solid #e8e4dd;border-radius:8px;overflow:hidden;">
+                <tr style="border-bottom:1px solid #f0ece4;">
+                  <td style="padding:10px 14px;font-family:Arial,sans-serif;font-size:12px;font-weight:700;color:#6b6560;width:110px;background-color:#f8f6f2;text-transform:uppercase;letter-spacing:0.5px;">Cliente</td>
+                  <td style="padding:10px 14px;font-family:Arial,sans-serif;font-size:13px;font-weight:600;color:#1a1a1a;">{{ order.customer_name }}</td>
+                </tr>
+                <tr style="border-bottom:1px solid #f0ece4;">
+                  <td style="padding:10px 14px;font-family:Arial,sans-serif;font-size:12px;font-weight:700;color:#6b6560;background-color:#f8f6f2;text-transform:uppercase;letter-spacing:0.5px;">Email</td>
+                  <td style="padding:10px 14px;">
+                    <a href="mailto:{{ order.customer_email }}" style="font-family:Arial,sans-serif;font-size:13px;color:#C8972E;text-decoration:none;">{{ order.customer_email }}</a>
+                  </td>
+                </tr>
+                <tr style="border-bottom:1px solid #f0ece4;">
+                  <td style="padding:10px 14px;font-family:Arial,sans-serif;font-size:12px;font-weight:700;color:#6b6560;background-color:#f8f6f2;text-transform:uppercase;letter-spacing:0.5px;">Teléfono</td>
+                  <td style="padding:10px 14px;font-family:Arial,sans-serif;font-size:13px;color:#1a1a1a;">{{ order.customer_phone|default:"—" }}</td>
+                </tr>
+                <tr>
+                  <td style="padding:10px 14px;font-family:Arial,sans-serif;font-size:12px;font-weight:700;color:#6b6560;background-color:#f8f6f2;text-transform:uppercase;letter-spacing:0.5px;">Envío</td>
+                  <td style="padding:10px 14px;font-family:Arial,sans-serif;font-size:13px;color:#1a1a1a;">
+                    {% if order.shipping_type == "home" %}
+                      &#128230; {{ order.shipping_address }}, {{ order.shipping_city }}, {{ order.shipping_province }}
+                    {% else %}
+                      &#127978; Retiro: {{ order.shipping_branch|default:"A coordinar" }}
+                    {% endif %}
+                  </td>
+                </tr>
+                {% if order.discount_code %}
+                <tr style="border-top:1px solid #f0ece4;">
+                  <td style="padding:10px 14px;font-family:Arial,sans-serif;font-size:12px;font-weight:700;color:#6b6560;background-color:#f8f6f2;text-transform:uppercase;letter-spacing:0.5px;">Descuento</td>
+                  <td style="padding:10px 14px;font-family:Arial,sans-serif;font-size:13px;color:#16a34a;font-weight:600;">
+                    {{ order.discount_code }} (-{{ discount_amount }})
+                  </td>
+                </tr>
+                {% endif %}
+              </table>
+            </td>
+          </tr>
+
+          <!-- ── TABLA DE PRODUCTOS ── -->
+          <tr>
+            <td style="padding:0 40px 24px;">
+              <p style="margin:0 0 10px;font-family:Arial,sans-serif;font-size:11px;font-weight:700;color:#6b6560;text-transform:uppercase;letter-spacing:1px;">Productos</p>
+              <table border="0" cellpadding="0" cellspacing="0" width="100%" style="border:1px solid #e8e4dd;border-radius:8px;overflow:hidden;">
+                <!-- Encabezado -->
+                <tr style="background-color:#f8f6f2;">
+                  <td style="padding:10px 14px;font-family:Arial,sans-serif;font-size:11px;font-weight:700;color:#6b6560;text-transform:uppercase;letter-spacing:1px;">Producto</td>
+                  <td align="center" style="padding:10px 14px;font-family:Arial,sans-serif;font-size:11px;font-weight:700;color:#6b6560;text-transform:uppercase;letter-spacing:1px;width:60px;">Cant.</td>
+                  <td align="right" style="padding:10px 14px;font-family:Arial,sans-serif;font-size:11px;font-weight:700;color:#6b6560;text-transform:uppercase;letter-spacing:1px;width:90px;">Precio</td>
+                </tr>
+
+                {% for item in items %}
+                <tr style="border-top:1px solid #f0ece4;">
+                  <td style="padding:10px 14px;font-family:Arial,sans-serif;font-size:13px;color:#1a1a1a;">{{ item.name }}</td>
+                  <td align="center" style="padding:10px 14px;font-family:Arial,sans-serif;font-size:13px;color:#6b6560;">{{ item.qty }}</td>
+                  <td align="right" style="padding:10px 14px;font-family:Arial,sans-serif;font-size:13px;font-weight:600;color:#1a1a1a;">{{ item.price }}</td>
+                </tr>
+                {% endfor %}
+
+                <!-- Total -->
+                <tr style="background-color:#1a1a1a;">
+                  <td colspan="2" style="padding:14px;font-family:Arial,sans-serif;font-size:14px;font-weight:800;color:#ffffff;letter-spacing:1px;text-transform:uppercase;">Total</td>
+                  <td align="right" style="padding:14px;font-family:Arial,sans-serif;font-size:17px;font-weight:800;color:#C8972E;">{{ total }}</td>
+                </tr>
+              </table>
+            </td>
+          </tr>
+
+          <!-- ── FOOTER ── -->
+          <tr>
+            <td align="center" style="background-color:#f8f6f2;padding:16px 40px;border-top:1px solid #e8e4dd;">
+              <p style="margin:0;font-family:Arial,sans-serif;font-size:11px;color:#6b6560;">
+                Notificación interna · <strong>CRACK TCG</strong> · cracktcg@gmail.com
+              </p>
+            </td>
+          </tr>
+
+        </table>
+        <!-- /Container -->
+
+      </td>
+    </tr>
+  </table>
+  <!-- /Wrapper -->
+
+</body>
+</html>
