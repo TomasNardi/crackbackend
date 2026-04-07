@@ -61,9 +61,10 @@ class OrderCreateSerializer(serializers.Serializer):
         return list(normalized.values())
 
     def _get_products_map(self, product_ids, for_update=False):
-        queryset = Product.objects.select_related("category", "certification_grade")
+        queryset = Product.objects.all()
         if for_update:
             queryset = queryset.select_for_update()
+        queryset = queryset.select_related("category", "certification_grade")
         return {product.id: product for product in queryset.filter(id__in=product_ids)}
 
     def _get_availability_errors(self, items_input, products):
