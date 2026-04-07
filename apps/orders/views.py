@@ -9,13 +9,13 @@ from django.conf import settings
 from django.utils import timezone
 from django.utils.decorators import method_decorator
 from django_ratelimit.decorators import ratelimit
-from django_q.tasks import async_task
 from rest_framework import viewsets, permissions, status
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from .models import Order, DiscountCode, MercadoPagoPayment
 from .serializers import OrderCreateSerializer, OrderReadSerializer
+from .emails import send_order_confirmation, send_new_order_notification
 
 logger = logging.getLogger(__name__)
 
@@ -46,9 +46,16 @@ class OrderViewSet(viewsets.ModelViewSet):
         serializer.is_valid(raise_exception=True)
         order = serializer.save()
 
-        # Enviar emails de forma asíncrona (no bloquea la respuesta)
-        async_task('apps.orders.emails.send_order_confirmation', order.id)
-        async_task('apps.orders.emails.send_new_order_notification', order.id)
+        # Enviar emails de forma síncrona (críticos — deben llegar ya)
+        try:
+            send_order_confirmation(order.id)
+        except Exception as e:
+            logger.error(f"Error enviando confirmación de orden {order.id}: {e}", exc_info=True)
+
+        try:
+            send_new_order_notification(order.id)
+        except Exception as e:
+            logger.error(f"Error enviando notificación de orden {order.id}: {e}", exc_info=True)
 
         return Response(
             OrderReadSerializer(order).data,
