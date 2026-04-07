@@ -4,13 +4,13 @@
   <meta http-equiv="Content-Type" content="text/html; charset=UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <meta name="x-apple-disable-message-reformatting" />
-  <title>Pedido #{{ order.id }} confirmado — CRACK TCG</title>
+  <title>Pedido {{ order.order_code }} confirmado — CRACK TCG</title>
 </head>
 <body style="margin:0;padding:0;background-color:#111111;-webkit-text-size-adjust:100%;-ms-text-size-adjust:100%;">
 
   <!-- Preheader (oculto, aparece en preview del cliente de email) -->
   <div style="display:none;max-height:0;overflow:hidden;mso-hide:all;">
-    &#9989; Tu pedido #{{ order.id }} fue recibido. Gracias por comprar en CRACK TCG, {{ order.customer_name }}.
+    &#9989; Tu pedido {{ order.order_code }} fue recibido. Gracias por comprar en CRACK TCG, {{ order.customer_name }}.
     &nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;
   </div>
 
@@ -60,7 +60,7 @@
                 N.° de orden
               </p>
               <p style="margin:0;font-family:Georgia,'Times New Roman',serif;font-size:26px;font-weight:700;color:#C8972E;letter-spacing:1px;">
-                #{{ order.id }}
+                {{ order.order_code }}
               </p>
               <p style="margin:20px 0 0;font-family:Arial,sans-serif;font-size:15px;color:#aaaaaa;line-height:1.7;max-width:420px;">
                 Hola <strong style="color:#ffffff;">{{ order.customer_name }}</strong>, recibimos tu pedido.<br>

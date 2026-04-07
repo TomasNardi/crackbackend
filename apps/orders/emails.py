@@ -78,7 +78,7 @@ def send_order_confirmation(order_id: int) -> None:
 
     _send(
         to=[order.customer_email],
-        subject=f"✅ Pedido #{order.id} recibido — CRACK TCG",
+        subject=f"✅ Pedido {order.order_code} recibido — CRACK TCG",
         html=html,
     )
 
@@ -100,6 +100,6 @@ def send_new_order_notification(order_id: int) -> None:
 
     _send(
         to=[STORE_EMAIL],
-        subject=f"🛒 Nueva orden #{order.id} — {order.customer_name} (${order.total:,.0f})",
+        subject=f"🛒 Nueva orden {order.order_code} — {order.customer_name} (${order.total:,.0f})",
         html=html,
     )
