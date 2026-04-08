@@ -9,6 +9,7 @@ import random
 import string
 from decimal import Decimal
 
+from django.core.exceptions import ValidationError
 from django.db import models
 from django.utils import timezone
 
@@ -246,3 +247,32 @@ class MercadoPagoPayment(models.Model):
 
     def __str__(self):
         return f"MP #{self.preference_id} — Orden #{self.order.id} ({self.status})"
+
+
+class SuggestedProductsCarousel(models.Model):
+    suggested_products = models.ManyToManyField(
+        "products.Product",
+        blank=True,
+        related_name="carousel_suggested_in",
+        verbose_name="Productos sugeridos",
+        help_text="Elegí hasta 3 productos para el carrusel del detalle.",
+    )
+    created_at = models.DateTimeField("Creado", auto_now_add=True)
+    updated_at = models.DateTimeField("Actualizado", auto_now=True)
+
+    class Meta:
+        verbose_name = "Carrusel de sugeridos"
+        verbose_name_plural = "Productos sugeridos"
+        ordering = ["id"]
+
+    def clean(self):
+        if self.pk and self.suggested_products.count() > 3:
+            raise ValidationError({"suggested_products": "Solo puedes seleccionar hasta 3 productos sugeridos."})
+
+    def save(self, *args, **kwargs):
+        # Singleton: siempre se guarda con PK=1 para evitar múltiples configuraciones.
+        self.pk = 1
+        super().save(*args, **kwargs)
+
+    def __str__(self):
+        return "Carrusel de productos sugeridos"

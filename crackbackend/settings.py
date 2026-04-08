@@ -418,6 +418,11 @@ UNFOLD = {
                         "icon": "sell",
                         "link": "/admin/orders/discountcode/",
                     },
+                    {
+                        "title": "Productos sugeridos",
+                        "icon": "view_carousel",
+                        "link": "/admin/orders/suggestedproductscarousel/",
+                    },
                 ],
             },
             {

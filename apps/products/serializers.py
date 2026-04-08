@@ -72,6 +72,20 @@ class ProductListSerializer(serializers.ModelSerializer):
         )
 
 
+class ProductSuggestedSerializer(serializers.ModelSerializer):
+    category = serializers.StringRelatedField()
+    price_ars = serializers.DecimalField(max_digits=12, decimal_places=2, read_only=True)
+    final_price = serializers.DecimalField(max_digits=12, decimal_places=2, read_only=True)
+
+    class Meta:
+        model = Product
+        fields = (
+            "id", "name", "slug", "category",
+            "image_url", "price_ars", "final_price", "discount_percent",
+            "stock_quantity", "in_stock",
+        )
+
+
 class ProductDetailSerializer(serializers.ModelSerializer):
     tcg = TCGSerializer(read_only=True)
     category = ProductCategorySerializer(read_only=True)
@@ -80,6 +94,17 @@ class ProductDetailSerializer(serializers.ModelSerializer):
     certification_grade = CertificationGradeSerializer(read_only=True)
     price_ars = serializers.DecimalField(max_digits=12, decimal_places=2, read_only=True)
     final_price = serializers.DecimalField(max_digits=12, decimal_places=2, read_only=True)
+    suggested_products = serializers.SerializerMethodField()
+
+    def get_suggested_products(self, obj):
+        from apps.orders.models import SuggestedProductsCarousel
+
+        config = SuggestedProductsCarousel.objects.first()
+        if not config:
+            return []
+
+        suggested = config.suggested_products.filter(in_stock=True).order_by("-created_at")[:3]
+        return ProductSuggestedSerializer(suggested, many=True).data
 
     class Meta:
         model = Product
@@ -90,6 +115,7 @@ class ProductDetailSerializer(serializers.ModelSerializer):
             "price_usd", "price_ars", "discount_percent", "final_price",
             "stock_quantity", "in_stock",
             "image_url", "image_url_2", "image_url_3",
+            "suggested_products",
             "rating", "rating_count",
             "pricecharting_url", "created_at", "updated_at",
         )

@@ -178,6 +178,15 @@ class Product(models.Model):
     image_url_2 = models.URLField("Imagen 2", max_length=600, blank=True)
     image_url_3 = models.URLField("Imagen 3", max_length=600, blank=True)
 
+    suggested_products = models.ManyToManyField(
+        "self",
+        blank=True,
+        symmetrical=False,
+        related_name="suggested_in",
+        verbose_name="Productos sugeridos",
+        help_text="Seleccionar hasta 3 productos sugeridos para el carrusel del detalle.",
+    )
+
     # Calificación promedio (0.0 – 5.0)
     rating = models.DecimalField(
         "Calificación", max_digits=3, decimal_places=1, default=0,

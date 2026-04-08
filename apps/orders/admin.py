@@ -1,7 +1,26 @@
+from django import forms
 from django.contrib import admin
+from django.shortcuts import redirect
 from django.utils import timezone
+from django.urls import reverse
 from unfold.admin import ModelAdmin, TabularInline
-from .models import Order, OrderItem, MercadoPagoPayment, DiscountCode
+from .models import Order, OrderItem, MercadoPagoPayment, DiscountCode, SuggestedProductsCarousel
+
+
+class SuggestedProductAdminForm(forms.ModelForm):
+    class Meta:
+        model = SuggestedProductsCarousel
+        fields = "__all__"
+
+    def clean_suggested_products(self):
+        suggested = self.cleaned_data.get("suggested_products")
+        if suggested is None:
+            return suggested
+
+        if suggested.count() > 3:
+            raise forms.ValidationError("Solo puedes seleccionar hasta 3 productos sugeridos.")
+
+        return suggested
 
 
 class OrderItemInline(TabularInline):
@@ -85,4 +104,33 @@ class MercadoPagoPaymentAdmin(ModelAdmin):
     readonly_fields = ("created_at", "updated_at", "raw_response")
 
     def has_add_permission(self, request):
+        return False
+
+
+@admin.register(SuggestedProductsCarousel)
+class SuggestedProductsCarouselAdmin(ModelAdmin):
+    form = SuggestedProductAdminForm
+    list_display = ("id", "suggested_count", "updated_at")
+    filter_horizontal = ("suggested_products",)
+    fieldsets = (
+        ("Productos sugeridos", {
+            "fields": ("suggested_products",),
+            "description": "Elegí hasta 3 productos para el carrusel del detalle.",
+        }),
+    )
+
+    def suggested_count(self, obj):
+        return obj.suggested_products.count()
+
+    suggested_count.short_description = "Sugeridos"
+
+    def changelist_view(self, request, extra_context=None):
+        config, _ = SuggestedProductsCarousel.objects.get_or_create(pk=1)
+        url = reverse("admin:orders_suggestedproductscarousel_change", args=[config.pk])
+        return redirect(url)
+
+    def has_add_permission(self, request):
+        return False
+
+    def has_delete_permission(self, request, obj=None):
         return False
