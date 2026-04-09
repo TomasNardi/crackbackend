@@ -331,6 +331,7 @@ UNFOLD = {
     "SITE_TITLE": "CRACK TCG — Admin",
     "SITE_HEADER": "CRACK TCG",
     "SITE_SUBHEADER": "Panel de administración",
+    "SITE_URL": os.environ.get("SITE_URL", "https://crack-front-rho.vercel.app/"),
     "SITE_SYMBOL": "style",  # Material Symbols icon
     "SHOW_HISTORY": True,
     "SHOW_VIEW_ON_SITE": False,
@@ -498,5 +499,5 @@ UNFOLD = {
 # ---------------------------------------------------------------------------
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
-# URL base del sitio (usada para links en emails, SEO, etc.)
-SITE_URL = os.environ.get("SITE_URL", "http://localhost:8000")
+# URL base del sitio (usada para links en emails, SEO, admin, etc.)
+SITE_URL = os.environ.get("SITE_URL", "https://crack-front-rho.vercel.app/")
