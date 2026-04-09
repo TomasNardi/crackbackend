@@ -323,6 +323,10 @@ CKEDITOR_CONFIGS = {
 # ---------------------------------------------------------------------------
 # Unfold Admin — Theme
 # ---------------------------------------------------------------------------
+def admin_has_perm(perm):
+    return lambda request: request.user.has_perm(perm)
+
+
 UNFOLD = {
     "SITE_TITLE": "CRACK TCG — Admin",
     "SITE_HEADER": "CRACK TCG",
@@ -359,7 +363,7 @@ UNFOLD = {
     },
     "SIDEBAR": {
         "show_search": True,
-        "show_all_applications": True,
+        "show_all_applications": False,
         "navigation": [
             {
                 "title": "Tienda",
@@ -370,31 +374,37 @@ UNFOLD = {
                         "title": "Productos",
                         "icon": "inventory_2",
                         "link": "/admin/products/product/",
+                        "permission": admin_has_perm("products.view_product"),
                     },
                     {
                         "title": "TCGs",
                         "icon": "playing_cards",
                         "link": "/admin/products/tcg/",
+                        "permission": admin_has_perm("products.view_tcg"),
                     },
                     {
                         "title": "Categorías",
                         "icon": "category",
                         "link": "/admin/products/productcategory/",
+                        "permission": admin_has_perm("products.view_productcategory"),
                     },
                     {
                         "title": "Condiciones",
                         "icon": "grade",
                         "link": "/admin/products/cardcondition/",
+                        "permission": admin_has_perm("products.view_cardcondition"),
                     },
                     {
                         "title": "Certificadoras",
                         "icon": "verified",
                         "link": "/admin/products/certificationentity/",
+                        "permission": admin_has_perm("products.view_certificationentity"),
                     },
                     {
                         "title": "Notas de certificación",
                         "icon": "scoreboard",
                         "link": "/admin/products/certificationgrade/",
+                        "permission": admin_has_perm("products.view_certificationgrade"),
                     },
                 ],
             },
@@ -407,21 +417,25 @@ UNFOLD = {
                         "title": "Órdenes",
                         "icon": "receipt_long",
                         "link": "/admin/orders/order/",
+                        "permission": admin_has_perm("orders.view_order"),
                     },
                     {
                         "title": "Pagos MercadoPago",
                         "icon": "payments",
                         "link": "/admin/orders/mercadopagopayment/",
+                        "permission": admin_has_perm("orders.view_mercadopagopayment"),
                     },
                     {
                         "title": "Códigos de descuento",
                         "icon": "sell",
                         "link": "/admin/orders/discountcode/",
+                        "permission": admin_has_perm("orders.view_discountcode"),
                     },
                     {
                         "title": "Productos sugeridos",
                         "icon": "view_carousel",
                         "link": "/admin/orders/suggestedproductscarousel/",
+                        "permission": admin_has_perm("orders.view_suggestedproductscarousel"),
                     },
                 ],
             },
@@ -434,21 +448,25 @@ UNFOLD = {
                         "title": "Estado del sitio",
                         "icon": "settings",
                         "link": "/admin/core/siteconfig/",
+                        "permission": admin_has_perm("core.view_siteconfig"),
                     },
                     {
                         "title": "Tipo de cambio",
                         "icon": "currency_exchange",
                         "link": "/admin/core/exchangerate/",
+                        "permission": admin_has_perm("core.view_exchangerate"),
                     },
                     {
                         "title": "Suscripciones",
                         "icon": "mail",
                         "link": "/admin/core/emailsubscription/",
+                        "permission": admin_has_perm("core.view_emailsubscription"),
                     },
                     {
                         "title": "Mensajes de contacto",
                         "icon": "forum",
                         "link": "/admin/core/contactmessage/",
+                        "permission": admin_has_perm("core.view_contactmessage"),
                     },
                 ],
             },
@@ -461,11 +479,13 @@ UNFOLD = {
                         "title": "Usuarios",
                         "icon": "people",
                         "link": "/admin/users/user/",
+                        "permission": admin_has_perm("users.view_user"),
                     },
                     {
                         "title": "Grupos",
                         "icon": "group",
                         "link": "/admin/auth/group/",
+                        "permission": admin_has_perm("auth.view_group"),
                     },
                 ],
             },
