@@ -56,7 +56,7 @@ class ProductSearchSerializer(serializers.ModelSerializer):
 class ProductListSerializer(serializers.ModelSerializer):
     tcg = TCGSerializer(read_only=True)
     category = serializers.StringRelatedField()
-    condition = serializers.StringRelatedField()
+    condition = CardConditionSerializer(read_only=True)
     certification_entity = serializers.StringRelatedField()
     certification_grade = serializers.StringRelatedField()
     price_ars = serializers.DecimalField(max_digits=12, decimal_places=2, read_only=True)
