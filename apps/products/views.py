@@ -124,9 +124,22 @@ class ProductViewSet(viewsets.ModelViewSet):
 
     @action(detail=False, methods=["get"], url_path="featured")
     def featured(self, request):
-        """GET /products/featured/ — productos con descuento activo."""
-        qs = self.get_queryset().filter(discount_percent__gt=0).order_by("-created_at")[:12]
-        return Response(ProductListSerializer(qs, many=True).data)
+        """GET /products/featured/ — productos con descuento activo, completados con los más recientes si faltan."""
+        LIMIT = 8
+        discounted = list(
+            self.get_queryset()
+            .filter(discount_percent__gt=0)
+            .order_by("-created_at")[:LIMIT]
+        )
+        if len(discounted) < LIMIT:
+            exclude_ids = [p.id for p in discounted]
+            remaining = list(
+                self.get_queryset()
+                .exclude(id__in=exclude_ids)
+                .order_by("-created_at")[: LIMIT - len(discounted)]
+            )
+            discounted += remaining
+        return Response(ProductListSerializer(discounted, many=True).data)
 
     @action(detail=False, methods=["get"], url_path="new-arrivals")
     def new_arrivals(self, request):
