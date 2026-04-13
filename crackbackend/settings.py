@@ -273,9 +273,61 @@ RESEND_FROM_EMAIL = os.environ.get("RESEND_FROM_EMAIL", "onboarding@resend.dev")
 # ---------------------------------------------------------------------------
 # MercadoPago
 # ---------------------------------------------------------------------------
-# Setear MP_ACCESS_TOKEN en .env con el token del cliente.
-# En desarrollo podés usar el token de prueba de MP.
-MERCADOPAGO_ACCESS_TOKEN = os.environ.get("MP_ACCESS_TOKEN", "")
+# Variables recomendadas en .env:
+# MP_PUBLIC_KEY=...
+# MP_ACCESS_TOKEN=...
+# BACKEND_PUBLIC_URL=https://tu-api.com
+# FRONTEND_URL=https://tu-frontend.com
+MERCADOPAGO_PUBLIC_KEY = os.environ.get(
+    "MP_PUBLIC_KEY",
+    "APP_USR-f93fc978-d364-447f-af2f-0f55d494005c",
+)
+MERCADOPAGO_ACCESS_TOKEN = os.environ.get(
+    "MP_ACCESS_TOKEN",
+    "APP_USR-126784700889279-041314-5d53c1bfe2976f356c1f3a226d077c18-2149863724",
+)
+MERCADOPAGO_WEBHOOK_SECRET = os.environ.get("MP_WEBHOOK_SECRET", "")
+
+BACKEND_PUBLIC_URL = os.environ.get("BACKEND_PUBLIC_URL", "http://localhost:8000")
+
+# ---------------------------------------------------------------------------
+# Paq.ar (Correo Argentino) — Integración de envíos
+# ---------------------------------------------------------------------------
+# Obtener agreement y API-Key del área Comercial de Correo Argentino.
+# Completar en .env:
+#   PAQAR_API_KEY=tu_api_key
+#   PAQAR_AGREEMENT=tu_numero_acuerdo   (ej: 18017)
+#   PAQAR_SERVICE_TYPE=CP               (2 letras — definido en tu contrato)
+#   PAQAR_SANDBOX=True                  (False en producción)
+#   PAQAR_SENDER_NAME=Crack
+#   PAQAR_SENDER_STREET=Tu Calle
+#   PAQAR_SENDER_STREET_NUMBER=123
+#   PAQAR_SENDER_CITY=Buenos Aires
+#   PAQAR_SENDER_STATE=C                (código de provincia — C = CABA)
+#   PAQAR_SENDER_ZIP=1000
+#   PAQAR_SENDER_EMAIL=tu@email.com
+#   PAQAR_SENDER_PHONE=1112345678
+#   PAQAR_DEFAULT_WEIGHT_GRAMS=500      (peso default por paquete)
+#   PAQAR_SHIPPING_COST=2500            (costo de envío configurado en tu acuerdo)
+
+PAQAR_API_KEY = os.environ.get("PAQAR_API_KEY", "")
+PAQAR_AGREEMENT = os.environ.get("PAQAR_AGREEMENT", "")
+PAQAR_SANDBOX = os.environ.get("PAQAR_SANDBOX", "True").lower() == "true"
+PAQAR_BASE_URL = (
+    "https://apitest.correoargentino.com.ar/paqar/v1"
+    if os.environ.get("PAQAR_SANDBOX", "True").lower() == "true"
+    else "https://api.correoargentino.com.ar/paqar/v1"
+)
+PAQAR_SERVICE_TYPE = os.environ.get("PAQAR_SERVICE_TYPE", "CP")
+PAQAR_SENDER_NAME = os.environ.get("PAQAR_SENDER_NAME", "Crack")
+PAQAR_SENDER_STREET = os.environ.get("PAQAR_SENDER_STREET", "")
+PAQAR_SENDER_STREET_NUMBER = os.environ.get("PAQAR_SENDER_STREET_NUMBER", "")
+PAQAR_SENDER_CITY = os.environ.get("PAQAR_SENDER_CITY", "")
+PAQAR_SENDER_STATE = os.environ.get("PAQAR_SENDER_STATE", "C")
+PAQAR_SENDER_ZIP = os.environ.get("PAQAR_SENDER_ZIP", "")
+PAQAR_SENDER_EMAIL = os.environ.get("PAQAR_SENDER_EMAIL", "")
+PAQAR_SENDER_PHONE = os.environ.get("PAQAR_SENDER_PHONE", "")
+PAQAR_DEFAULT_WEIGHT_GRAMS = int(os.environ.get("PAQAR_DEFAULT_WEIGHT_GRAMS", "500"))
 
 # ---------------------------------------------------------------------------
 # Internationalization
@@ -450,6 +502,12 @@ UNFOLD = {
                         "icon": "settings",
                         "link": "/admin/core/siteconfig/",
                         "permission": admin_has_perm("core.view_siteconfig"),
+                    },
+                    {
+                        "title": "Pago en efectivo",
+                        "icon": "point_of_sale",
+                        "link": "/admin/core/paymentsettings/",
+                        "permission": admin_has_perm("core.view_paymentsettings"),
                     },
                     {
                         "title": "Tipo de cambio",

@@ -16,7 +16,7 @@ class ExchangeRateSerializer(serializers.ModelSerializer):
 class SiteConfigSerializer(serializers.ModelSerializer):
     class Meta:
         model = SiteConfig
-        fields = ("is_active", "maintenance_message")
+        fields = ("is_active", "maintenance_message", "cash_discount_enabled", "cash_discount_percent")
 
 
 class EmailSubscribeSerializer(serializers.ModelSerializer):

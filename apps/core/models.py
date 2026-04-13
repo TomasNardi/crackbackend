@@ -52,6 +52,18 @@ class SiteConfig(models.Model):
         blank=True,
         default="Sitio en mantenimiento. Volvemos pronto.",
     )
+    cash_discount_enabled = models.BooleanField(
+        "Descuento por efectivo activo",
+        default=True,
+        help_text="Aplica descuento cuando el cliente elige pagar en efectivo.",
+    )
+    cash_discount_percent = models.DecimalField(
+        "% descuento efectivo",
+        max_digits=5,
+        decimal_places=2,
+        default=15,
+        help_text="Porcentaje de descuento para pago en efectivo.",
+    )
 
     class Meta:
         verbose_name = "Configuración del sitio"
@@ -69,6 +81,15 @@ class SiteConfig(models.Model):
     def get(cls):
         obj, _ = cls.objects.get_or_create(pk=1)
         return obj
+
+
+class PaymentSettings(SiteConfig):
+    """Proxy para editar pago en efectivo desde una opción separada del admin."""
+
+    class Meta:
+        proxy = True
+        verbose_name = "Configuración de pago en efectivo"
+        verbose_name_plural = "Configuración de pago en efectivo"
 
 
 class EmailSubscription(models.Model):

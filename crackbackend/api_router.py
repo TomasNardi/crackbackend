@@ -16,7 +16,13 @@ from apps.products.views import (
     CertificationGradeViewSet,
     ProductViewSet,
 )
-from apps.orders.views import OrderViewSet, MercadoPagoWebhookView, ValidateDiscountView
+from apps.orders.views import (
+    OrderViewSet,
+    MercadoPagoWebhookView,
+    MercadoPagoVerifyView,
+    PaymentConfigView,
+    ValidateDiscountView,
+)
 from apps.core.views import SiteConfigView, EmailSubscribeView, PingView, ExchangeRateView, ContactView
 
 router = DefaultRouter()
@@ -42,6 +48,8 @@ urlpatterns = [
 
     # Payments
     path("payments/webhook/", MercadoPagoWebhookView.as_view(), name="mp_webhook"),
+    path("payments/verify/", MercadoPagoVerifyView.as_view(), name="mp_verify"),
+    path("payments/config/", PaymentConfigView.as_view(), name="payments_config"),
     path("payments/validate-discount/", ValidateDiscountView.as_view(), name="validate_discount"),
 
     # Core

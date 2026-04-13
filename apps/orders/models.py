@@ -138,6 +138,13 @@ class Order(models.Model):
         (STATUS_CANCELLED, "Cancelada"),
     ]
 
+    PAYMENT_MERCADOPAGO = "mercadopago"
+    PAYMENT_CASH = "cash"
+    PAYMENT_METHOD_CHOICES = [
+        (PAYMENT_MERCADOPAGO, "Mercado Pago"),
+        (PAYMENT_CASH, "Efectivo"),
+    ]
+
     SHIPPING_HOME = "home"
     SHIPPING_PICKUP = "pickup"
     SHIPPING_CHOICES = [
@@ -183,6 +190,33 @@ class Order(models.Model):
 
     # Estado
     status = models.CharField("Estado", max_length=20, choices=STATUS_CHOICES, default=STATUS_PENDING)
+    payment_method = models.CharField(
+        "Método de pago",
+        max_length=20,
+        choices=PAYMENT_METHOD_CHOICES,
+        default=PAYMENT_MERCADOPAGO,
+    )
+    cash_discount_percent = models.DecimalField("% desc. efectivo aplicado", max_digits=5, decimal_places=2, default=0)
+    cash_discount_amount = models.DecimalField("Monto desc. efectivo", max_digits=10, decimal_places=2, default=0)
+    mp_preference_id = models.CharField("MP Preference ID", max_length=150, blank=True, db_index=True)
+
+    # Paq.ar (Correo Argentino)
+    PAQAR_STATUS_PENDING = "pending"
+    PAQAR_STATUS_CREATED = "created"
+    PAQAR_STATUS_ERROR = "error"
+    PAQAR_STATUS_CANCELLED = "cancelled"
+    PAQAR_STATUS_CHOICES = [
+        (PAQAR_STATUS_PENDING, "Sin generar"),
+        (PAQAR_STATUS_CREATED, "Generado en Correo Argentino"),
+        (PAQAR_STATUS_ERROR, "Error al generar"),
+        (PAQAR_STATUS_CANCELLED, "Cancelado en Correo Argentino"),
+    ]
+    paqar_status = models.CharField(
+        "Estado Paq.ar", max_length=20, choices=PAQAR_STATUS_CHOICES,
+        default=PAQAR_STATUS_PENDING, blank=True,
+    )
+    paqar_tracking_number = models.CharField("Tracking Number", max_length=50, blank=True)
+    paqar_error = models.TextField("Error Paq.ar", blank=True)
 
     created_at = models.DateTimeField("Creado", auto_now_add=True)
     updated_at = models.DateTimeField("Actualizado", auto_now=True)
@@ -237,6 +271,11 @@ class MercadoPagoPayment(models.Model):
     is_paid = models.BooleanField("Pagado", default=False)
     payment_method = models.CharField("Método de pago", max_length=50, blank=True)
     payment_type = models.CharField("Tipo de pago", max_length=50, blank=True)
+    external_reference = models.CharField("External reference", max_length=40, blank=True, db_index=True)
+    transaction_amount = models.DecimalField("Monto transacción", max_digits=12, decimal_places=2, default=0)
+    net_received_amount = models.DecimalField("Monto neto recibido", max_digits=12, decimal_places=2, default=0)
+    date_approved = models.DateTimeField("Fecha aprobación", null=True, blank=True)
+    last_validated_at = models.DateTimeField("Última validación", null=True, blank=True)
     raw_response = models.JSONField("Respuesta cruda", null=True, blank=True, help_text="Respuesta completa de MP")
     created_at = models.DateTimeField("Creado", auto_now_add=True)
     updated_at = models.DateTimeField("Actualizado", auto_now=True)

@@ -8,6 +8,7 @@ from decimal import Decimal
 from django.db import transaction
 from rest_framework import serializers
 from apps.products.models import Product
+from apps.core.models import SiteConfig
 from .models import Order, OrderItem, MercadoPagoPayment, DiscountCode
 
 
@@ -43,6 +44,7 @@ class OrderCreateSerializer(serializers.Serializer):
     shipping_province = serializers.CharField(max_length=100, required=False, allow_blank=True)
     shipping_zip = serializers.CharField(max_length=20, required=False, allow_blank=True)
     shipping_branch = serializers.CharField(max_length=255, required=False, allow_blank=True)
+    payment_method = serializers.ChoiceField(choices=Order.PAYMENT_METHOD_CHOICES, default=Order.PAYMENT_MERCADOPAGO)
     discount_code = serializers.CharField(max_length=20, required=False, allow_blank=True)
     items = OrderItemInputSerializer(many=True)
 
@@ -180,8 +182,18 @@ class OrderCreateSerializer(serializers.Serializer):
             else:
                 discount_value = Decimal("0")
 
+            cash_discount_percent = Decimal("0")
+            cash_discount_amount = Decimal("0")
+            payment_method = validated_data.get("payment_method", Order.PAYMENT_MERCADOPAGO)
+            if payment_method == Order.PAYMENT_CASH:
+                config = SiteConfig.get()
+                if config.cash_discount_enabled and config.cash_discount_percent > 0:
+                    cash_discount_percent = Decimal(config.cash_discount_percent)
+                    cash_discount_amount = (subtotal - discount_value) * cash_discount_percent / Decimal("100")
+
             shipping_cost = Decimal("0")
-            total = subtotal - discount_value + shipping_cost
+            total = subtotal - discount_value - cash_discount_amount + shipping_cost
+            total = max(total, Decimal("0"))
 
             order = Order.objects.create(
                 customer_name=validated_data["customer_name"],
@@ -194,9 +206,12 @@ class OrderCreateSerializer(serializers.Serializer):
                 shipping_zip=validated_data.get("shipping_zip", ""),
                 shipping_branch=validated_data.get("shipping_branch", ""),
                 shipping_cost=shipping_cost,
+                payment_method=payment_method,
                 discount_code=discount_code.code.upper() if discount_code else "",
                 discount_type=discount_type,
-                discount_amount=discount_value,
+                discount_amount=discount_value + cash_discount_amount,
+                cash_discount_percent=cash_discount_percent,
+                cash_discount_amount=cash_discount_amount,
                 subtotal=subtotal,
                 total=total,
             )
@@ -235,6 +250,7 @@ class OrderReadSerializer(serializers.ModelSerializer):
             "customer_name", "customer_email", "customer_phone",
             "shipping_type", "shipping_address", "shipping_city",
             "shipping_province", "shipping_zip", "shipping_cost",
+            "payment_method", "cash_discount_percent", "cash_discount_amount",
             "discount_code", "discount_amount",
             "subtotal", "total", "status",
             "items", "created_at",
