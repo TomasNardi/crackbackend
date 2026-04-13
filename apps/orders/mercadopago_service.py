@@ -6,6 +6,7 @@ el flujo de checkout trazable y centralizado.
 """
 
 from decimal import Decimal
+from urllib.parse import urlparse
 
 import mercadopago
 from django.conf import settings
@@ -15,6 +16,27 @@ class MercadoPagoServiceError(Exception):
     pass
 
 
+def _normalize_base_url(raw_url: str, fallback: str) -> str:
+    """Normaliza URL base y aplica fallback seguro si es invalida."""
+    candidate = (raw_url or fallback or "").strip().rstrip("/")
+    parsed = urlparse(candidate)
+    if parsed.scheme in ("http", "https") and parsed.netloc:
+        return f"{parsed.scheme}://{parsed.netloc}"
+    parsed_fallback = urlparse(fallback)
+    return f"{parsed_fallback.scheme}://{parsed_fallback.netloc}"
+
+
+def _is_public_callback(url: str) -> bool:
+    """Mercado Pago suele rechazar auto_return con callbacks locales."""
+    parsed = urlparse(url)
+    host = (parsed.hostname or "").lower()
+    if not parsed.scheme or not parsed.netloc:
+        return False
+    if host in ("localhost", "127.0.0.1"):
+        return False
+    return not host.endswith(".local")
+
+
 def _sdk():
     token = getattr(settings, "MERCADOPAGO_ACCESS_TOKEN", "")
     if not token:
@@ -22,12 +44,22 @@ def _sdk():
     return mercadopago.SDK(token)
 
 
-def create_checkout_preference(order):
+def create_checkout_preference(order, frontend_url_override: str = ""):
     """Crea una preferencia de Checkout Pro para una orden pendiente."""
     sdk = _sdk()
 
-    frontend_url = (getattr(settings, "FRONTEND_URL", "") or "http://localhost:3000").rstrip("/")
-    backend_url = (getattr(settings, "BACKEND_PUBLIC_URL", "") or "http://localhost:8000").rstrip("/")
+    configured_frontend = getattr(settings, "FRONTEND_URL", "") or "http://localhost:3000"
+    forced_return_frontend = getattr(settings, "MERCADOPAGO_FRONTEND_RETURN_URL", "") or ""
+    effective_frontend = forced_return_frontend or frontend_url_override or configured_frontend
+    frontend_url = _normalize_base_url(effective_frontend, "http://localhost:3000")
+    backend_url = _normalize_base_url(
+        getattr(settings, "BACKEND_PUBLIC_URL", "") or "http://localhost:8000",
+        "http://localhost:8000",
+    )
+
+    success_url = f"{frontend_url}/checkout/confirmacion"
+    failure_url = f"{frontend_url}/checkout/error"
+    pending_url = f"{frontend_url}/checkout/pendiente"
 
     items = [
         {
@@ -71,11 +103,10 @@ def create_checkout_preference(order):
         "external_reference": order.order_code,
         "notification_url": f"{backend_url}/api/v1/payments/webhook/",
         "back_urls": {
-            "success": f"{frontend_url}/checkout/confirmacion",
-            "failure": f"{frontend_url}/checkout/error",
-            "pending": f"{frontend_url}/checkout/confirmacion",
+            "success": success_url,
+            "failure": failure_url,
+            "pending": pending_url,
         },
-        "auto_return": "approved",
         "statement_descriptor": "CRACK TCG",
         "metadata": {
             "order_id": order.id,
@@ -83,6 +114,9 @@ def create_checkout_preference(order):
             "shipping_type": order.shipping_type,
         },
     }
+
+    if _is_public_callback(success_url):
+        payload["auto_return"] = "approved"
 
     result = sdk.preference().create(payload)
     response = result.get("response", {})

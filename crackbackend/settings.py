@@ -183,6 +183,7 @@ CORS_ALLOWED_ORIGINS = [
     "http://localhost:3000",
     "http://localhost:5173",
     "http://127.0.0.1:3000",
+    "https://0v0rzg6p-3000.brs.devtunnels.ms",
 ]
 
 # Agregar el dominio del frontend en producción via env var
@@ -196,6 +197,7 @@ CORS_ALLOWED_ORIGINS.append("https://crackfrontend-eyci.vercel.app")
 # Permite subdominios de Vercel automáticamente
 CORS_ALLOWED_ORIGIN_REGEXES = [
     r"^https://[\w-]+\.vercel\.app$",
+    r"^https://[\w-]+-3000\.brs\.devtunnels\.ms$",
 ]
 
 CORS_ALLOW_CREDENTIALS = True
@@ -287,6 +289,12 @@ MERCADOPAGO_ACCESS_TOKEN = os.environ.get(
     "APP_USR-126784700889279-041314-5d53c1bfe2976f356c1f3a226d077c18-2149863724",
 )
 MERCADOPAGO_WEBHOOK_SECRET = os.environ.get("MP_WEBHOOK_SECRET", "")
+# Opcional: forzar URL pública de retorno para Checkout Pro en desarrollo local.
+# Se puede sobreescribir con MP_FRONTEND_RETURN_URL en entorno.
+MERCADOPAGO_FRONTEND_RETURN_URL = os.environ.get(
+    "MP_FRONTEND_RETURN_URL",
+    "https://0v0rzg6p-3000.brs.devtunnels.ms",
+)
 
 BACKEND_PUBLIC_URL = os.environ.get("BACKEND_PUBLIC_URL", "http://localhost:8000")
 

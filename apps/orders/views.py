@@ -156,14 +156,18 @@ class OrderViewSet(viewsets.ModelViewSet):
 
     @method_decorator(ratelimit(key="ip", rate="10/h", method="POST", block=True))
     def create(self, request, *args, **kwargs):
-        serializer = self.get_serializer(data=request.data)
+        payload = request.data.copy() if hasattr(request.data, "copy") else dict(request.data)
+        frontend_origin = str(payload.pop("frontend_origin", "") or "").strip()
+
+        serializer = self.get_serializer(data=payload)
         serializer.is_valid(raise_exception=True)
         order = serializer.save()
 
         checkout_payload = None
         if order.payment_method == Order.PAYMENT_MERCADOPAGO:
             try:
-                pref = create_checkout_preference(order)
+                request_origin = frontend_origin or request.headers.get("origin", "")
+                pref = create_checkout_preference(order, frontend_url_override=request_origin)
                 order.mp_preference_id = pref["preference_id"]
                 order.save(update_fields=["mp_preference_id", "updated_at"])
 
