@@ -8,6 +8,7 @@ from django.utils.html import format_html
 from django.contrib import messages
 from unfold.admin import ModelAdmin, TabularInline
 from .models import Order, OrderItem, MercadoPagoPayment, DiscountCode, SuggestedProductsCarousel
+from .pdf_generator import generate_order_pdf
 
 
 class SuggestedProductAdminForm(forms.ModelForm):
@@ -47,7 +48,7 @@ class OrderAdmin(ModelAdmin):
     list_display = (
         "order_code", "customer_name", "customer_email",
         "total", "status", "payment_method", "shipping_type", "paqar_status_display",
-        "paqar_label_button", "created_at_ar",
+        "pdf_download_button", "paqar_label_button", "created_at_ar",
     )
     list_filter = ("status", "payment_method", "shipping_type", "paqar_status")
     search_fields = (
@@ -60,7 +61,7 @@ class OrderAdmin(ModelAdmin):
     )
     ordering = ("-created_at",)
     inlines = [OrderItemInline, MercadoPagoPaymentInline]
-    actions = ["action_create_paqar_order", "action_cancel_paqar_order"]
+    actions = ["action_create_paqar_order", "action_cancel_paqar_order", "action_download_pdf"]
 
     def has_add_permission(self, request):
         return False
@@ -82,6 +83,18 @@ class OrderAdmin(ModelAdmin):
         label = obj.get_paqar_status_display()
         return format_html('<span style="color:{}; font-weight:600;">{}</span>', color, label)
 
+    @admin.display(description="PDF")
+    def pdf_download_button(self, obj):
+        """Botón para descargar ordenada en PDF."""
+        url = reverse("admin:orders_order_pdf_download", args=[obj.pk])
+        return format_html(
+            '<a href="{}" style="'
+            'background:#C8972E;color:#fff;padding:5px 12px;border-radius:4px;'
+            'font-size:12px;font-weight:600;text-decoration:none;display:inline-block;"'
+            'title="Descargar orden en PDF">📄 PDF</a>',
+            url,
+        )
+
     @admin.display(description="Etiqueta")
     def paqar_label_button(self, obj):
         if obj.paqar_status == Order.PAQAR_STATUS_CREATED and obj.paqar_tracking_number:
@@ -99,12 +112,57 @@ class OrderAdmin(ModelAdmin):
         urls = super().get_urls()
         custom = [
             path(
+                "<int:order_id>/pdf/",
+                self.admin_site.admin_view(self.pdf_download_view),
+                name="orders_order_pdf_download",
+            ),
+            path(
                 "<int:order_id>/paqar-label/",
                 self.admin_site.admin_view(self.paqar_label_view),
                 name="orders_order_paqar_label",
             ),
         ]
         return custom + urls
+
+    def pdf_download_view(self, request, order_id):
+        """Genera y descarga el PDF de la orden."""
+        try:
+            order = Order.objects.get(pk=order_id)
+        except Order.DoesNotExist:
+            self.message_user(request, "Orden no encontrada.", level=messages.ERROR)
+            return HttpResponseRedirect(reverse("admin:orders_order_changelist"))
+
+        try:
+            pdf_buffer = generate_order_pdf(order)
+            filename = f"orden_{order.order_code}.pdf"
+            response = HttpResponse(pdf_buffer, content_type="application/pdf")
+            response["Content-Disposition"] = f'attachment; filename="{filename}"'
+            return response
+        except Exception as exc:
+            self.message_user(request, f"Error al generar PDF: {exc}", level=messages.ERROR)
+            return HttpResponseRedirect(reverse("admin:orders_order_change", args=[order_id]))
+
+    @admin.action(description="⬇ Descargar seleccionadas como ZIP")
+    def action_download_pdf(self, request, queryset):
+        """Acción para descargar múltiples órdenes (para futura implementación con ZIP)."""
+        if queryset.count() == 1:
+            # Si es una sola, descargar directamente
+            order = queryset.first()
+            try:
+                pdf_buffer = generate_order_pdf(order)
+                filename = f"orden_{order.order_code}.pdf"
+                response = HttpResponse(pdf_buffer, content_type="application/pdf")
+                response["Content-Disposition"] = f'attachment; filename="{filename}"'
+                return response
+            except Exception as exc:
+                self.message_user(request, f"Error al generar PDF: {exc}", level=messages.ERROR)
+        else:
+            # Para múltiples, mostrar mensaje informativo
+            self.message_user(
+                request,
+                f"{queryset.count()} orden(es) seleccionadas. Usa el botón PDF en cada orden o descargalas de una en una.",
+                level=messages.INFO
+            )
 
     def paqar_label_view(self, request, order_id):
         """Descarga la etiqueta PDF desde Paq.ar y la sirve como respuesta HTTP."""

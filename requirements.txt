@@ -38,6 +38,9 @@ django-ckeditor==6.7.3
 # Admin UI
 django-unfold==0.46.0
 
+# PDF Generation
+reportlab==4.0.9
+
 # Utils
 Pillow==11.3.0
 requests==2.32.3

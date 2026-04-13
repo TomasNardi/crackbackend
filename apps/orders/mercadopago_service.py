@@ -6,7 +6,7 @@ el flujo de checkout trazable y centralizado.
 """
 
 from decimal import Decimal
-from urllib.parse import urlparse
+from urllib.parse import urlencode, urlparse
 
 import mercadopago
 from django.conf import settings
@@ -57,9 +57,16 @@ def create_checkout_preference(order, frontend_url_override: str = ""):
         "http://localhost:8000",
     )
 
-    success_url = f"{frontend_url}/checkout/confirmacion"
-    failure_url = f"{frontend_url}/checkout/error"
-    pending_url = f"{frontend_url}/checkout/pendiente"
+    return_qs = urlencode(
+        {
+            "code": order.order_code,
+            "order": order.id,
+            "email": order.customer_email,
+        }
+    )
+    success_url = f"{frontend_url}/checkout/confirmacion?{return_qs}"
+    failure_url = f"{frontend_url}/checkout/error?{return_qs}"
+    pending_url = f"{frontend_url}/checkout/pendiente?{return_qs}"
 
     items = [
         {

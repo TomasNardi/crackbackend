@@ -78,6 +78,8 @@ def _reconcile_payment(payment_data, source="webhook"):
     - external_reference debe coincidir con order_code
     - status debe ser approved
     - transaction_amount debe cubrir el total
+    
+    Actualiza tanto el registro MercadoPagoPayment como el estado de la orden.
     """
     payment_id = str(payment_data.get("id") or "")
     external_ref = str(payment_data.get("external_reference") or "")
@@ -127,8 +129,23 @@ def _reconcile_payment(payment_data, source="webhook"):
     mp_payment.raw_response = payment_data
     mp_payment.save()
 
+    # Actualizar estado de la orden según el pago
+    status_updated = False
     if final_paid and order.status != Order.STATUS_PAID:
         order.status = Order.STATUS_PAID
+        status_updated = True
+        logger.info("Orden %s marcada como PAGADA (pago %s aprobado)", order.order_code, payment_id)
+    elif payment_status in ["rejected", "cancelled"] and order.status == Order.STATUS_PENDING:
+        # Marcar como cancelada si el pago fue rechazado y la orden sigue pendiente
+        order.status = Order.STATUS_CANCELLED
+        status_updated = True
+        logger.info("Orden %s marcada como CANCELADA (pago %s: %s)", order.order_code, payment_id, payment_status)
+    elif payment_status == "pending":
+        logger.info("Pago %s en estado pendiente para orden %s (esperando confirmación)", payment_id, order.order_code)
+    elif payment_status == "in_process":
+        logger.info("Pago %s en proceso para orden %s", payment_id, order.order_code)
+
+    if status_updated:
         order.save(update_fields=["status", "updated_at"])
 
     return order, final_paid
@@ -259,6 +276,14 @@ class MercadoPagoWebhookView(APIView):
     """
     POST /payments/webhook/
     Recibe notificaciones de MercadoPago y actualiza el estado de la orden.
+    
+    Estados de pago soportados:
+    - approved: Pago confirmado
+    - pending: Esperando confirmación (ej: transferencia bancaria)
+    - rejected: Pago rechazado
+    - cancelled: Pago cancelado
+    - authorized: Autorizado pero no capturado
+    - in_process: En proceso de validación
     """
 
     permission_classes = [permissions.AllowAny]
@@ -271,6 +296,7 @@ class MercadoPagoWebhookView(APIView):
         x_signature = request.headers.get("x-signature") or request.headers.get("X-Signature")
 
         if topic != "payment" or not payment_id:
+            logger.debug("Webhook MP ignorado: topic=%s, payment_id=%s", topic, payment_id)
             return Response(status=status.HTTP_200_OK)
 
         if not _is_valid_mp_signature(payment_id, x_request_id, x_signature):
@@ -279,7 +305,14 @@ class MercadoPagoWebhookView(APIView):
 
         try:
             payment_data = get_payment(payment_id)
-            _reconcile_payment(payment_data, source="webhook")
+            payment_status = payment_data.get("status", "unknown")
+            logger.info("Webhook MP recibido: payment_id=%s, status=%s", payment_id, payment_status)
+            
+            order, paid = _reconcile_payment(payment_data, source="webhook")
+            if order:
+                logger.info("Orden %s actualizada: estado=%s, pagada=%s", order.order_code, order.status, paid)
+            else:
+                logger.warning("No se encontró orden para el pago %s", payment_id)
 
         except Exception as exc:
             logger.exception("Error procesando webhook MP: %s", exc)
