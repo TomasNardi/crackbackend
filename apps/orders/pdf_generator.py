@@ -6,6 +6,8 @@ from io import BytesIO
 from datetime import datetime
 from decimal import Decimal
 
+from django.utils import timezone
+
 from reportlab.lib.pagesizes import letter
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.lib.units import inch
@@ -96,7 +98,7 @@ def generate_order_pdf(order):
     order_info_data = [
         [
             Paragraph(f"<b>Código de Orden:</b> <font color='#C8972E'><b>{order.order_code}</b></font>", styles["Normal"]),
-            Paragraph(f"<b>Fecha:</b> {order.created_at.strftime('%d/%m/%Y %H:%M')}", styles["Normal"]),
+            Paragraph(f"<b>Fecha:</b> {timezone.localtime(order.created_at).strftime('%d/%m/%Y %H:%M')}", styles["Normal"]),
             Paragraph(f"<b>Estado:</b> <font color='{status_color}'><b>{order.get_status_display()}</b></font>", styles["Normal"]),
         ]
     ]
