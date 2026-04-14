@@ -265,12 +265,11 @@ RATELIMIT_USE_CACHE = "ratelimit"
 # ---------------------------------------------------------------------------
 # Email (Resend)
 # ---------------------------------------------------------------------------
-RESEND_API_KEY = os.environ.get("RESEND_API_KEY", "re_CxmvtHTJ_KgFEShHS1WSfm34AK8RGgoWB")
+RESEND_API_KEY = os.environ.get("RESEND_API_KEY", "re_7nKA3kPy_2qFTu2Kwa3iyMVXrWgXbctNd")
 
-# Mientras no tengas dominio verificado en Resend, usá el sandbox:
-#   RESEND_FROM_EMAIL = "onboarding@resend.dev"
-# Cuando tengas tu dominio (ej: noreply@cracktcg.com), cambialo acá o en .env
-RESEND_FROM_EMAIL = os.environ.get("RESEND_FROM_EMAIL", "onboarding@resend.dev")
+# Email de desarrollo: cracktcg@gmail.com
+# En producción, cambia a un dominio verificado en Resend (ej: noreply@cracktcg.com)
+RESEND_FROM_EMAIL = os.environ.get("RESEND_FROM_EMAIL", "cracktcg@gmail.com")
 
 # ---------------------------------------------------------------------------
 # MercadoPago
