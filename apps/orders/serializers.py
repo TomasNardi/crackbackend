@@ -219,23 +219,25 @@ class OrderCreateSerializer(serializers.Serializer):
             for item in items_to_create:
                 OrderItem.objects.create(order=order, **item)
 
-            for item in items_to_create:
-                product = item["product"]
-                category_name = product.category.name if product.category else ""
-                is_unique = category_name.strip().lower() in UNIQUE_ORDER_CATEGORIES
+            # Para Mercado Pago, el stock y el código se aplican recién cuando el pago queda aprobado.
+            if payment_method == Order.PAYMENT_CASH:
+                for item in items_to_create:
+                    product = item["product"]
+                    category_name = product.category.name if product.category else ""
+                    is_unique = category_name.strip().lower() in UNIQUE_ORDER_CATEGORIES
 
-                if is_unique:
-                    product.in_stock = False
-                    product.save(update_fields=["in_stock", "updated_at"])
-                    continue
+                    if is_unique:
+                        product.in_stock = False
+                        product.save(update_fields=["in_stock", "updated_at"])
+                        continue
 
-                if product.stock_quantity is not None:
-                    product.stock_quantity = max(0, product.stock_quantity - item["quantity"])
-                    product.in_stock = product.stock_quantity > 0
-                    product.save(update_fields=["stock_quantity", "in_stock", "updated_at"])
+                    if product.stock_quantity is not None:
+                        product.stock_quantity = max(0, product.stock_quantity - item["quantity"])
+                        product.in_stock = product.stock_quantity > 0
+                        product.save(update_fields=["stock_quantity", "in_stock", "updated_at"])
 
-            if discount_code:
-                discount_code.activate()
+                if discount_code:
+                    discount_code.activate()
 
         return order
 

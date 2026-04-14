@@ -16,6 +16,18 @@ class MercadoPagoServiceError(Exception):
     pass
 
 
+FINAL_PAYMENT_STATUS_PRIORITY = {
+    "approved": 0,
+    "rejected": 1,
+    "cancelled": 2,
+    "refunded": 3,
+    "charged_back": 4,
+    "in_process": 5,
+    "pending": 6,
+    "authorized": 7,
+}
+
+
 def _normalize_base_url(raw_url: str, fallback: str) -> str:
     """Normaliza URL base y aplica fallback seguro si es invalida."""
     candidate = (raw_url or fallback or "").strip().rstrip("/")
@@ -149,3 +161,46 @@ def get_payment(payment_id: str):
         raise MercadoPagoServiceError(f"No se pudo obtener pago {payment_id}: {response}")
 
     return response
+
+
+def _payment_sort_key(payment):
+    status = str(payment.get("status") or "").lower()
+    date_approved = str(payment.get("date_approved") or "")
+    date_created = str(payment.get("date_created") or "")
+    payment_id = str(payment.get("id") or "")
+    return (
+        FINAL_PAYMENT_STATUS_PRIORITY.get(status, 99),
+        -(1 if date_approved else 0),
+        date_approved or date_created,
+        payment_id,
+    )
+
+
+def search_payments_by_external_reference(external_reference: str):
+    """Busca pagos por external_reference y devuelve el candidato más relevante."""
+    reference = str(external_reference or "").strip()
+    if not reference:
+        raise MercadoPagoServiceError("external_reference requerido para buscar pagos.")
+
+    sdk = _sdk()
+    result = sdk.payment().search({
+        "external_reference": reference,
+        "sort": "date_created",
+        "criteria": "desc",
+        "limit": 20,
+    })
+    response = result.get("response", {})
+    payments = response.get("results") or []
+
+    if result.get("status") not in (200, 201) or not payments:
+        raise MercadoPagoServiceError(f"No se encontraron pagos para external_reference {reference}: {response}")
+
+    matching_payments = [
+        payment for payment in payments
+        if str(payment.get("external_reference") or "") == reference
+    ]
+    if not matching_payments:
+        raise MercadoPagoServiceError(f"No hay pagos válidos para external_reference {reference}.")
+
+    sorted_payments = sorted(matching_payments, key=_payment_sort_key)
+    return sorted_payments[0]
