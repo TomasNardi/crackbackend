@@ -3,14 +3,20 @@ Core Views
 ===========
 """
 
+import logging
 from django.utils.decorators import method_decorator
 from django_ratelimit.decorators import ratelimit
 from rest_framework import permissions, status
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from .models import SiteConfig, ExchangeRate, ContactMessage
-from .serializers import SiteConfigSerializer, EmailSubscribeSerializer, ExchangeRateSerializer, ContactMessageSerializer
+from .models import SiteConfig, ExchangeRate, ContactMessage, EmailSubscription
+from .serializers import (
+    SiteConfigSerializer, EmailSubscribeSerializer, ExchangeRateSerializer,
+    ContactMessageSerializer
+)
+
+logger = logging.getLogger(__name__)
 
 
 class ExchangeRateView(APIView):

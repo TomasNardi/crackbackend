@@ -149,7 +149,7 @@ class ProductViewSet(viewsets.ModelViewSet):
 
     @action(detail=False, methods=["get"], url_path="by-ids")
     def by_ids(self, request):
-        """GET /products/by-ids/?ids=1,2,3 — devuelve disponibilidad actual para sincronizar el carrito."""
+        """GET /products/by-ids/?ids=1,2,3 — devuelve disponibilidad actual para sincronizar el carrito. Solo retorna productos en stock."""
         raw_ids = (request.query_params.get("ids") or "").split(",")
         ids = []
 
@@ -169,7 +169,7 @@ class ProductViewSet(viewsets.ModelViewSet):
 
         products = {
             product.id: product
-            for product in self.get_base_queryset().filter(id__in=ids)
+            for product in self.get_queryset().filter(id__in=ids)
         }
         ordered_products = [products[product_id] for product_id in ids if product_id in products]
         return Response(ProductListSerializer(ordered_products, many=True).data)

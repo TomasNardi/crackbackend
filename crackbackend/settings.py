@@ -533,6 +533,12 @@ UNFOLD = {
                         "permission": admin_has_perm("core.view_emailsubscription"),
                     },
                     {
+                        "title": "Campañas de email",
+                        "icon": "campaign",
+                        "link": "/admin/core/emailcampaign/",
+                        "permission": admin_has_perm("core.view_emailcampaign"),
+                    },
+                    {
                         "title": "Mensajes de contacto",
                         "icon": "forum",
                         "link": "/admin/core/contactmessage/",

@@ -102,9 +102,79 @@ class EmailSubscription(models.Model):
     class Meta:
         verbose_name = "Suscripción de email"
         verbose_name_plural = "Suscripciones de email"
+        ordering = ["-subscribed_at"]
 
     def __str__(self):
         return self.email
+
+
+class EmailCampaign(models.Model):
+    """Campañas de email masivas a suscriptores."""
+    
+    STATUS_CHOICES = [
+        ('borrador', 'Borrador'),
+        ('enviando', 'Enviando'),
+        ('enviado', 'Enviado'),
+        ('cancelado', 'Cancelado'),
+    ]
+    
+    asunto = models.CharField(
+        "Asunto del email",
+        max_length=255,
+        help_text="Línea de asunto que verán los suscriptores"
+    )
+    contenido = models.TextField(
+        "Contenido del email",
+        help_text="HTML/Texto del email a enviar. Puedes usar {{email}} como variable."
+    )
+    imagen_url = models.URLField(
+        "URL de imagen",
+        max_length=500,
+        blank=True,
+        null=True,
+        help_text="Enlace a una imagen para incluir en el email (ej: banner de oferta)"
+    )
+    status = models.CharField(
+        "Estado",
+        max_length=20,
+        choices=STATUS_CHOICES,
+        default='borrador',
+        help_text="Estado actual de la campaña"
+    )
+    creado_por = models.ForeignKey(
+        "users.User",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="email_campaigns",
+        verbose_name="Creado por"
+    )
+    fecha_creacion = models.DateTimeField(
+        "Creada el",
+        auto_now_add=True
+    )
+    fecha_envio = models.DateTimeField(
+        "Enviada el",
+        null=True,
+        blank=True,
+        help_text="Se completa al enviar"
+    )
+    cantidad_enviados = models.PositiveIntegerField(
+        "Emails enviados",
+        default=0
+    )
+    cantidad_fallidos = models.PositiveIntegerField(
+        "Emails fallidos",
+        default=0
+    )
+    
+    def __str__(self):
+        return f"{self.asunto} ({self.get_status_display()})"
+    
+    class Meta:
+        verbose_name = "Campaña de email"
+        verbose_name_plural = "Campañas de email"
+        ordering = ['-fecha_creacion']
 
 
 class ContactMessage(models.Model):

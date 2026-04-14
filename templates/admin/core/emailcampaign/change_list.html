@@ -1,0 +1,32 @@
+{% extends "admin/change_list.html" %}
+
+{% block content %}
+  <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:12px;margin:0 0 16px 0;">
+    <div style="background:#ffffff;border:1px solid #e5e7eb;border-radius:10px;padding:12px;">
+      <div style="font-size:12px;color:#6b7280;">Campañas</div>
+      <div style="font-size:24px;font-weight:700;color:#111827;">{{ campaign_metrics.total_campaigns }}</div>
+    </div>
+    <div style="background:#ffffff;border:1px solid #e5e7eb;border-radius:10px;padding:12px;">
+      <div style="font-size:12px;color:#6b7280;">Borradores</div>
+      <div style="font-size:24px;font-weight:700;color:#6b7280;">{{ campaign_metrics.borradores }}</div>
+    </div>
+    <div style="background:#ffffff;border:1px solid #e5e7eb;border-radius:10px;padding:12px;">
+      <div style="font-size:12px;color:#6b7280;">Enviadas</div>
+      <div style="font-size:24px;font-weight:700;color:#16a34a;">{{ campaign_metrics.enviadas }}</div>
+    </div>
+    <div style="background:#ffffff;border:1px solid #e5e7eb;border-radius:10px;padding:12px;">
+      <div style="font-size:12px;color:#6b7280;">Total enviados</div>
+      <div style="font-size:24px;font-weight:700;color:#0f766e;">{{ campaign_metrics.total_enviados }}</div>
+    </div>
+    <div style="background:#ffffff;border:1px solid #e5e7eb;border-radius:10px;padding:12px;">
+      <div style="font-size:12px;color:#6b7280;">Total fallidos</div>
+      <div style="font-size:24px;font-weight:700;color:#dc2626;">{{ campaign_metrics.total_fallidos }}</div>
+    </div>
+    <div style="background:#ffffff;border:1px solid #e5e7eb;border-radius:10px;padding:12px;">
+      <div style="font-size:12px;color:#6b7280;">Tasa de entrega</div>
+      <div style="font-size:24px;font-weight:700;color:#1d4ed8;">{{ campaign_metrics.tasa_entrega }}%</div>
+    </div>
+  </div>
+
+  {{ block.super }}
+{% endblock %}

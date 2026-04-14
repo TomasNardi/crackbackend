@@ -8,7 +8,7 @@ from decimal import Decimal
 from django.db import transaction
 from rest_framework import serializers
 from apps.products.models import Product
-from apps.core.models import SiteConfig
+from apps.core.models import SiteConfig, EmailSubscription
 from .models import Order, OrderItem, MercadoPagoPayment, DiscountCode
 
 
@@ -218,6 +218,14 @@ class OrderCreateSerializer(serializers.Serializer):
 
             for item in items_to_create:
                 OrderItem.objects.create(order=order, **item)
+
+            # Guardar email en EmailSubscription (para campañas posteriores)
+            customer_email = validated_data.get("customer_email", "").strip()
+            if customer_email:
+                EmailSubscription.objects.get_or_create(
+                    email=customer_email,
+                    defaults={"is_active": True}
+                )
 
             # Para Mercado Pago, el stock y el código se aplican recién cuando el pago queda aprobado.
             if payment_method == Order.PAYMENT_CASH:
