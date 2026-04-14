@@ -194,6 +194,10 @@ if FRONTEND_URL and FRONTEND_URL.startswith("http"):
 # Dominio fijo de Vercel
 CORS_ALLOWED_ORIGINS.append("https://crackfrontend-eyci.vercel.app")
 
+# Dominio productivo
+CORS_ALLOWED_ORIGINS.append("https://www.cracktcg.com")
+CORS_ALLOWED_ORIGINS.append("https://cracktcg.com")
+
 # Permite subdominios de Vercel automáticamente
 CORS_ALLOWED_ORIGIN_REGEXES = [
     r"^https://[\w-]+\.vercel\.app$",
