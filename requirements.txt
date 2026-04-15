@@ -27,7 +27,7 @@ gunicorn==23.0.0
 mercadopago==2.3.0
 
 # Email
-resend==2.7.0
+resend==2.10.0
 
 # Task queue (async emails, background jobs)
 django-q2==1.7.4

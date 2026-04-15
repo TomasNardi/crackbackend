@@ -3,7 +3,6 @@ Tareas para envío de campañas de email con Resend.
 Ejecutadas por Django Q (tareas asincrónicas).
 """
 
-import os
 import time
 import logging
 from django.utils import timezone
@@ -11,12 +10,7 @@ from django.conf import settings
 
 logger = logging.getLogger(__name__)
 
-try:
-    from resend import Resend
-    RESEND_AVAILABLE = True
-except ImportError:
-    RESEND_AVAILABLE = False
-    logger.warning("Resend library not installed")
+import resend as resend_lib
 
 from .models import EmailCampaign, EmailSubscription
 
@@ -152,39 +146,28 @@ def _build_preview_html(asunto, contenido, imagen_url, recipient_email="suscript
 def send_email_campaign(campaign_id):
     """
     Envía una campaña de email a todos los suscriptores activos.
-    
     Se ejecuta de forma asincrónica via Django Q.
-    Actualiza estadísticas en la campaña.
-    
-    Args:
-        campaign_id: ID de la campaña a enviar
-    
-    Returns:
-        dict: Información sobre el envío
     """
     try:
         campaign = EmailCampaign.objects.get(id=campaign_id)
     except EmailCampaign.DoesNotExist:
         logger.error(f"Campaña con ID {campaign_id} no encontrada")
         return {"error": "Campaña no encontrada"}
-    
-    # Validar que el estado sea 'borrador'
+
     if campaign.status != 'borrador':
         logger.warning(f"Campaña {campaign_id} en estado '{campaign.get_status_display()}', no se envía")
         return {"error": f"Campaña en estado {campaign.status}"}
-    
-    # Cambiar estado a 'enviando'
+
     campaign.status = 'enviando'
     campaign.save(update_fields=["status"])
-    
-    # Obtener suscriptores activos
+
     suscriptores_emails = list(
         EmailSubscription.objects.filter(
             is_active=True,
             email__isnull=False
         ).values_list('email', flat=True)
     )
-    
+
     if not suscriptores_emails:
         campaign.status = 'cancelado'
         campaign.cantidad_enviados = 0
@@ -192,99 +175,97 @@ def send_email_campaign(campaign_id):
         campaign.save()
         logger.warning(f"Campaña {campaign_id} cancelada: No hay suscriptores activos")
         return {"error": "No hay suscriptores activos"}
-    
+
     logger.info(f"Iniciando envío de campaña {campaign_id} a {len(suscriptores_emails)} suscriptores")
-    
-    exitosos = 0
-    fallidos = 0
-    
-    if not RESEND_AVAILABLE:
-        logger.error("Resend no está disponible")
-        campaign.status = 'cancelado'
-        campaign.cantidad_fallidos = len(suscriptores_emails)
-        campaign.save()
-        return {"error": "Resend service unavailable"}
-    
-    # Configurar cliente Resend
-    api_key = getattr(settings, "RESEND_API_KEY", None)
-    from_email = getattr(settings, "RESEND_FROM_EMAIL", "noreply@crackstore.com")
-    
+
+    api_key   = getattr(settings, "RESEND_API_KEY", None)
+    from_email = getattr(settings, "RESEND_FROM_EMAIL", "noreply@cracktcg.com")
+
     if not api_key:
-        logger.error("RESEND_API_KEY no configurado")
         campaign.status = 'cancelado'
-        campaign.cantidad_fallidos = len(suscriptores_emails)
         campaign.save()
+        logger.error("RESEND_API_KEY no configurado")
         return {"error": "API key not configured"}
-    
-    client = Resend(api_key=api_key)
-    
-    # Enviar a cada suscriptor
+
+    # Configurar API key — mismo patrón que DeltaBackend
+    resend_lib.api_key = api_key
+
+    exitosos = 0
+    fallidos  = 0
+    total     = len(suscriptores_emails)
+
     for i, email in enumerate(suscriptores_emails):
         try:
-            html_content = build_campaign_html(campaign, email)
-            
-            response = client.emails.send(
-                **{
-                    "from": from_email,
-                    "to": email,
-                    "subject": campaign.asunto,
-                    "html": html_content,
-                }
+            html_content = _build_preview_html(
+                asunto=campaign.asunto or "",
+                contenido=campaign.contenido or "",
+                imagen_url=campaign.imagen_url or "",
+                recipient_email=email,
             )
-            
+
+            response = resend_lib.Emails.send({
+                "from": from_email,
+                "to": [email],
+                "subject": campaign.asunto,
+                "html": html_content,
+                "headers": {
+                    "Precedence": "bulk",
+                    "X-Entity-Ref-ID": f"campaign-{campaign_id}-{email}",
+                },
+            })
+
             if response.get("id"):
                 exitosos += 1
-                logger.debug(f"Email enviado a {email} - ID: {response.get('id')}")
+                logger.debug(f"Email enviado a {email} — ID: {response.get('id')}")
             else:
                 fallidos += 1
-                logger.error(f"Resend devolvió respuesta sin ID para {email}: {response}")
-            
-            # Rate limiting: ~0.5s entre envíos para no saturar Resend
-            if i < len(suscriptores_emails) - 1:
+                logger.error(f"Resend sin ID para {email}: {response}")
+
+            if i < total - 1:
                 time.sleep(0.5)
-        
+
         except Exception as e:
             error_str = str(e)
-            logger.error(f"Error enviando email a {email}: {error_str}")
-            
-            # Si es rate limit, reintentar
+            logger.error(f"Error enviando a {email}: {error_str}")
+
             if "rate limit" in error_str.lower() or "too many" in error_str.lower():
-                logger.info(f"Rate limit detectado. Esperando antes de reintentar {email}...")
+                logger.info(f"Rate limit — reintentando {email} en 2s...")
                 time.sleep(2)
                 try:
-                    html_content = build_campaign_html(campaign, email)
-                    response = client.emails.send(
-                        **{
-                            "from": from_email,
-                            "to": email,
-                            "subject": campaign.asunto,
-                            "html": html_content,
-                        }
+                    html_content = _build_preview_html(
+                        asunto=campaign.asunto or "",
+                        contenido=campaign.contenido or "",
+                        imagen_url=campaign.imagen_url or "",
+                        recipient_email=email,
                     )
+                    response = resend_lib.Emails.send({
+                        "from": from_email,
+                        "to": [email],
+                        "subject": campaign.asunto,
+                        "html": html_content,
+                    })
                     if response.get("id"):
                         exitosos += 1
                         logger.info(f"Reintento exitoso para {email}")
                     else:
                         fallidos += 1
-                except Exception as retry_error:
-                    logger.error(f"Reintento fallido para {email}: {retry_error}")
+                except Exception as retry_err:
+                    logger.error(f"Reintento fallido para {email}: {retry_err}")
                     fallidos += 1
             else:
                 fallidos += 1
-    
-    # Actualizar campaña con resultados
+
     campaign.status = 'enviado'
     campaign.cantidad_enviados = exitosos
     campaign.cantidad_fallidos = fallidos
     campaign.fecha_envio = timezone.now()
     campaign.save()
-    
+
     result = {
         "campaign_id": campaign_id,
         "exitosos": exitosos,
         "fallidos": fallidos,
-        "total": len(suscriptores_emails),
+        "total": total,
     }
-    
     logger.info(f"Campaña {campaign_id} completada: {exitosos} enviados, {fallidos} fallidos")
     return result
