@@ -1,0 +1,576 @@
+{% extends "admin/change_form.html" %}
+{% load i18n static %}
+
+{% block extrastyle %}
+{{ block.super }}
+<style>
+  /* ── Activar layout split en el body de esta página ── */
+  body.model-emailcampaign.change-form #content {
+    display: flex;
+    align-items: flex-start;
+    gap: 0;
+    padding-right: 0 !important;
+    max-width: none !important;
+  }
+
+  body.model-emailcampaign.change-form #content-main {
+    flex: 1;
+    min-width: 0;
+    padding-right: 24px;
+  }
+
+  /* ── Panel de preview ── */
+  #crack-preview-panel {
+    width: 460px;
+    min-width: 460px;
+    position: sticky;
+    top: 0;
+    height: 100vh;
+    display: flex;
+    flex-direction: column;
+    background: #111827;
+    border-left: 1px solid #1f2937;
+    overflow: hidden;
+    flex-shrink: 0;
+    /* Compensar el padding del #content padre */
+    margin-right: -32px;
+    margin-top: -32px;
+    margin-bottom: -32px;
+    padding-top: 0;
+  }
+
+  /* ── Header del panel ── */
+  #cpp-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 16px 20px;
+    background: #0f172a;
+    border-bottom: 1px solid #1e293b;
+    flex-shrink: 0;
+  }
+
+  #cpp-header .cpp-brand {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  #cpp-header .cpp-brand-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: #C8972E;
+    box-shadow: 0 0 8px #C8972E88;
+  }
+
+  #cpp-header .cpp-title {
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: .14em;
+    text-transform: uppercase;
+    color: #f1f5f9;
+  }
+
+  #cpp-sync-indicator {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 11px;
+    color: #64748b;
+    transition: color .3s;
+  }
+
+  #cpp-sync-dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: #334155;
+    transition: background .3s, box-shadow .3s;
+  }
+  #cpp-sync-dot.syncing {
+    background: #f59e0b;
+    box-shadow: 0 0 6px #f59e0b88;
+    animation: cpp-pulse .8s ease-in-out infinite alternate;
+  }
+  #cpp-sync-dot.synced {
+    background: #10b981;
+    box-shadow: 0 0 6px #10b98188;
+  }
+
+  @keyframes cpp-pulse {
+    from { opacity: .6; }
+    to   { opacity: 1; }
+  }
+
+  /* ── Toolbar: device + subject ── */
+  #cpp-toolbar {
+    background: #0f172a;
+    border-bottom: 1px solid #1e293b;
+    flex-shrink: 0;
+  }
+
+  #cpp-device-row {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 10px 20px 8px;
+  }
+
+  .cpp-device-btn {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    padding: 5px 14px;
+    border-radius: 6px;
+    border: 1px solid #1e293b;
+    background: transparent;
+    color: #64748b;
+    font-size: 11px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all .15s;
+    letter-spacing: .04em;
+    font-family: inherit;
+  }
+  .cpp-device-btn:hover {
+    border-color: #C8972E;
+    color: #C8972E;
+  }
+  .cpp-device-btn.active {
+    background: #C8972E;
+    border-color: #C8972E;
+    color: #fff;
+  }
+
+  #cpp-subject-row {
+    padding: 0 20px 12px;
+  }
+
+  #cpp-subject-label {
+    font-size: 9px;
+    text-transform: uppercase;
+    letter-spacing: .12em;
+    color: #475569;
+    font-weight: 700;
+    margin-bottom: 3px;
+  }
+
+  #cpp-subject-text {
+    font-size: 13px;
+    font-weight: 600;
+    color: #f1f5f9;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    line-height: 1.4;
+  }
+
+  #cpp-subject-text.empty {
+    color: #334155;
+    font-style: italic;
+    font-weight: 400;
+  }
+
+  /* ── Viewport del email ── */
+  #cpp-viewport {
+    flex: 1;
+    overflow-y: auto;
+    overflow-x: hidden;
+    background: #1e293b;
+    display: flex;
+    justify-content: center;
+    padding: 24px 20px;
+    transition: padding .2s;
+  }
+
+  #cpp-viewport.mobile {
+    padding: 24px 40px;
+    background: #0f172a;
+  }
+
+  #cpp-iframe {
+    width: 100%;
+    max-width: 420px;
+    min-height: 400px;
+    border: none;
+    border-radius: 8px;
+    box-shadow: 0 8px 40px rgba(0,0,0,.5);
+    background: #fff;
+    display: block;
+    transition: max-width .25s cubic-bezier(.4,0,.2,1), border-radius .25s;
+  }
+
+  #cpp-viewport.mobile #cpp-iframe {
+    max-width: 375px;
+    border-radius: 32px;
+    box-shadow:
+      0 0 0 10px #0f172a,
+      0 0 0 12px #334155,
+      0 20px 60px rgba(0,0,0,.7);
+  }
+
+  /* ── Estado vacío ── */
+  #cpp-empty-state {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    height: 100%;
+    gap: 12px;
+    color: #334155;
+    text-align: center;
+    padding: 40px;
+  }
+
+  #cpp-empty-state svg {
+    opacity: .3;
+  }
+
+  #cpp-empty-state p {
+    font-size: 13px;
+    line-height: 1.5;
+    margin: 0;
+  }
+
+  /* ── Footer del panel ── */
+  #cpp-footer {
+    padding: 10px 20px;
+    background: #0f172a;
+    border-top: 1px solid #1e293b;
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+
+  #cpp-footer .cpp-hint {
+    font-size: 10px;
+    color: #334155;
+    letter-spacing: .03em;
+  }
+
+  #cpp-footer .cpp-hint strong {
+    color: #475569;
+  }
+
+  /* ── Responsive ── */
+  @media (max-width: 1400px) {
+    #crack-preview-panel {
+      width: 400px;
+      min-width: 400px;
+    }
+  }
+
+  @media (max-width: 1200px) {
+    body.model-emailcampaign.change-form #content {
+      flex-direction: column;
+    }
+    body.model-emailcampaign.change-form #content-main {
+      padding-right: 0;
+    }
+    #crack-preview-panel {
+      width: 100%;
+      min-width: 0;
+      position: relative;
+      height: 700px;
+      margin: 24px 0 0 0;
+      border-left: none;
+      border-top: 2px solid #C8972E;
+    }
+  }
+</style>
+{% endblock %}
+
+{% block content %}
+{{ block.super }}
+
+<!-- ══════════════════════════════════════════════════════════
+     PANEL DE PREVIEW EN VIVO — se inyecta junto al content-main
+     via JS para mantener el DOM de Unfold intacto
+══════════════════════════════════════════════════════════ -->
+<div id="crack-preview-panel">
+
+  <!-- Header -->
+  <div id="cpp-header">
+    <div class="cpp-brand">
+      <div class="cpp-brand-dot"></div>
+      <span class="cpp-title">Preview en vivo</span>
+    </div>
+    <div id="cpp-sync-indicator">
+      <div id="cpp-sync-dot"></div>
+      <span id="cpp-sync-text">Esperando…</span>
+    </div>
+  </div>
+
+  <!-- Toolbar -->
+  <div id="cpp-toolbar">
+    <div id="cpp-device-row">
+      <button class="cpp-device-btn active" data-device="desktop" title="Vista escritorio (600px)">
+        <svg width="13" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+          <rect x="2" y="3" width="20" height="14" rx="2"/>
+          <path d="M8 21h8M12 17v4"/>
+        </svg>
+        Desktop
+      </button>
+      <button class="cpp-device-btn" data-device="mobile" title="Vista móvil (375px)">
+        <svg width="10" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+          <rect x="5" y="2" width="14" height="20" rx="2"/>
+          <circle cx="12" cy="18" r="1" fill="currentColor" stroke="none"/>
+        </svg>
+        Mobile
+      </button>
+    </div>
+    <div id="cpp-subject-row">
+      <div id="cpp-subject-label">Asunto</div>
+      <div id="cpp-subject-text" class="empty">(sin asunto)</div>
+    </div>
+  </div>
+
+  <!-- Viewport -->
+  <div id="cpp-viewport">
+    <div id="cpp-empty-state">
+      <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+        <path d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"/>
+      </svg>
+      <p>Empezá a escribir el asunto<br>o el contenido para ver el preview</p>
+    </div>
+    <iframe
+      id="cpp-iframe"
+      title="Preview del email"
+      sandbox="allow-same-origin"
+      scrolling="yes"
+      style="display:none;"
+    ></iframe>
+  </div>
+
+  <!-- Footer -->
+  <div id="cpp-footer">
+    <span class="cpp-hint">Preview idéntico al email real · <strong>{{email}}</strong> = suscriptor@ejemplo.com</span>
+  </div>
+
+</div>
+
+<!-- ══════════════════════════════════════════════════════════
+     SCRIPT — Preview en vivo
+══════════════════════════════════════════════════════════ -->
+<script>
+(function () {
+  "use strict";
+
+  // ── Config ──────────────────────────────────────────────────────────
+  const PREVIEW_URL = "{% url 'admin:core_emailcampaign_preview_ajax' %}";
+  const DEBOUNCE_MS = 500;
+  const CSRF_TOKEN  = "{{ csrf_token }}";
+
+  // ── Mover el panel al lado del content-main ─────────────────────────
+  // Unfold envuelve #content-main en un contenedor con padding.
+  // Inyectamos el panel como hermano de #content-main dentro de #content.
+  (function repositionPanel() {
+    const panel   = document.getElementById("crack-preview-panel");
+    const content = document.getElementById("content");
+    if (panel && content) {
+      content.appendChild(panel);
+    }
+  })();
+
+  // ── DOM refs ────────────────────────────────────────────────────────
+  const iframe      = document.getElementById("cpp-iframe");
+  const emptyState  = document.getElementById("cpp-empty-state");
+  const syncDot     = document.getElementById("cpp-sync-dot");
+  const syncText    = document.getElementById("cpp-sync-text");
+  const subjectText = document.getElementById("cpp-subject-text");
+  const viewport    = document.getElementById("cpp-viewport");
+
+  // ── State ────────────────────────────────────────────────────────────
+  let debounceTimer   = null;
+  let lastKey         = "";
+  let hasContent      = false;
+  let iframeHeight    = 400;
+
+  // ── Helpers ──────────────────────────────────────────────────────────
+  function setSync(state, text) {
+    syncDot.className = state || "";
+    syncText.textContent = text;
+  }
+
+  function getField(name) {
+    const el = document.querySelector(`[name="${name}"]`) ||
+               document.getElementById(`id_${name}`);
+    return el ? el.value.trim() : "";
+  }
+
+  function getCKContent() {
+    if (typeof CKEDITOR !== "undefined") {
+      const inst = CKEDITOR.instances["id_contenido"];
+      if (inst) return inst.getData();
+    }
+    const ta = document.getElementById("id_contenido");
+    return ta ? ta.value : "";
+  }
+
+  function autoResizeIframe() {
+    try {
+      const doc = iframe.contentDocument || iframe.contentWindow.document;
+      if (!doc || !doc.body) return;
+      const h = Math.max(
+        doc.body.scrollHeight,
+        doc.documentElement.scrollHeight,
+        400
+      );
+      if (Math.abs(h - iframeHeight) > 8) {
+        iframeHeight = h;
+        iframe.style.height = h + "px";
+      }
+    } catch (_) {}
+  }
+
+  // ── Fetch preview ────────────────────────────────────────────────────
+  async function fetchPreview() {
+    const asunto     = getField("asunto");
+    const contenido  = getCKContent();
+    const imagen_url = getField("imagen_url");
+
+    // Actualizar subject bar
+    if (asunto) {
+      subjectText.textContent = asunto;
+      subjectText.classList.remove("empty");
+    } else {
+      subjectText.textContent = "(sin asunto)";
+      subjectText.classList.add("empty");
+    }
+
+    // Evitar re-render si nada cambió
+    const key = asunto + "|||" + contenido + "|||" + imagen_url;
+    if (key === lastKey) return;
+    lastKey = key;
+
+    // Si no hay contenido ni asunto, mostrar empty state
+    if (!asunto && !contenido.replace(/<[^>]*>/g, "").trim()) {
+      if (hasContent) {
+        hasContent = false;
+        iframe.style.display = "none";
+        emptyState.style.display = "flex";
+      }
+      setSync("", "Esperando…");
+      return;
+    }
+
+    setSync("syncing", "Actualizando…");
+
+    try {
+      const res = await fetch(PREVIEW_URL, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "X-CSRFToken": CSRF_TOKEN,
+        },
+        body: JSON.stringify({ asunto, contenido, imagen_url }),
+      });
+
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const data = await res.json();
+
+      // Mostrar iframe, ocultar empty state
+      if (!hasContent) {
+        hasContent = true;
+        emptyState.style.display = "none";
+        iframe.style.display = "block";
+      }
+
+      // Escribir HTML en el iframe
+      const doc = iframe.contentDocument || iframe.contentWindow.document;
+      doc.open();
+      doc.write(data.html);
+      doc.close();
+
+      // Ajustar altura
+      iframe.onload = autoResizeIframe;
+      setTimeout(autoResizeIframe, 100);
+      setTimeout(autoResizeIframe, 500);
+
+      setSync("synced", "Sincronizado ✓");
+      setTimeout(() => setSync("", "En vivo"), 2500);
+
+    } catch (err) {
+      console.error("[CrackPreview]", err);
+      setSync("", "Error al actualizar");
+    }
+  }
+
+  // ── Debounce ─────────────────────────────────────────────────────────
+  function schedulePreview() {
+    setSync("syncing", "Escribiendo…");
+    clearTimeout(debounceTimer);
+    debounceTimer = setTimeout(fetchPreview, DEBOUNCE_MS);
+  }
+
+  // ── Bind campos nativos ──────────────────────────────────────────────
+  function bindNativeFields() {
+    ["asunto", "imagen_url"].forEach(name => {
+      const el = document.querySelector(`[name="${name}"]`) ||
+                 document.getElementById(`id_${name}`);
+      if (el) {
+        el.addEventListener("input",  schedulePreview);
+        el.addEventListener("change", schedulePreview);
+        el.addEventListener("paste",  () => setTimeout(schedulePreview, 50));
+      }
+    });
+  }
+
+  // ── Bind CKEditor ────────────────────────────────────────────────────
+  function bindCKEditor() {
+    if (typeof CKEDITOR === "undefined") {
+      setTimeout(bindCKEditor, 250);
+      return;
+    }
+
+    function attachToEditor(editor) {
+      editor.on("change",           schedulePreview);
+      editor.on("key",              schedulePreview);
+      editor.on("paste",            () => setTimeout(schedulePreview, 100));
+      editor.on("afterCommandExec", schedulePreview);
+      editor.on("instanceReady",    () => setTimeout(fetchPreview, 300));
+    }
+
+    // Instancias ya creadas
+    Object.values(CKEDITOR.instances).forEach(attachToEditor);
+
+    // Instancias futuras
+    CKEDITOR.on("instanceCreated", e => {
+      e.editor.on("instanceReady", () => attachToEditor(e.editor));
+    });
+  }
+
+  // ── Device switcher ──────────────────────────────────────────────────
+  document.querySelectorAll(".cpp-device-btn").forEach(btn => {
+    btn.addEventListener("click", () => {
+      document.querySelectorAll(".cpp-device-btn")
+        .forEach(b => b.classList.remove("active"));
+      btn.classList.add("active");
+      viewport.classList.toggle("mobile", btn.dataset.device === "mobile");
+      setTimeout(autoResizeIframe, 300);
+    });
+  });
+
+  // ── Init ─────────────────────────────────────────────────────────────
+  function init() {
+    bindNativeFields();
+    bindCKEditor();
+
+    // Preview inicial si es edición de campaña existente
+    setTimeout(fetchPreview, 600);
+
+    // Resize periódico
+    setInterval(autoResizeIframe, 1500);
+  }
+
+  if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", init);
+  } else {
+    init();
+  }
+
+})();
+</script>
+{% endblock %}

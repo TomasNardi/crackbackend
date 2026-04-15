@@ -23,20 +23,130 @@ from .models import EmailCampaign, EmailSubscription
 
 def build_campaign_html(campaign, recipient_email):
     """Construye HTML final del correo, aplicando variables e imagen opcional."""
-    content = (campaign.contenido or "").replace("{{email}}", recipient_email)
-    image_html = ""
-    if campaign.imagen_url:
-        image_html = (
-            f'<img src="{campaign.imagen_url}" alt="Imagen campaña" '
-            'style="display:block;max-width:100%;height:auto;border-radius:8px;margin:0 0 16px 0;">'
-        )
+    return _build_preview_html(
+        asunto=campaign.asunto or "",
+        contenido=campaign.contenido or "",
+        imagen_url=campaign.imagen_url or "",
+        recipient_email=recipient_email,
+    )
 
-    return f"""
-        <div style="font-family:Arial,Helvetica,sans-serif;line-height:1.5;color:#111827;">
-            {image_html}
-            <div>{content}</div>
-        </div>
+
+def _build_preview_html(asunto, contenido, imagen_url, recipient_email="suscriptor@ejemplo.com"):
     """
+    Genera el HTML completo del email tal como lo recibirá el suscriptor.
+    Usado tanto para el envío real como para el preview en vivo del admin.
+    """
+    content = contenido.replace("{{email}}", recipient_email)
+
+    image_block = ""
+    if imagen_url and imagen_url.strip():
+        image_block = f"""
+        <tr>
+          <td style="padding:0 0 24px 0;">
+            <img src="{imagen_url}" alt="Imagen de campaña"
+                 style="display:block;width:100%;max-width:600px;height:auto;border-radius:8px;">
+          </td>
+        </tr>"""
+
+    from django.conf import settings as django_settings
+    site_url = getattr(django_settings, "SITE_URL", "https://cracktcg.com")
+    from_name = "CRACK TCG"
+
+    return f"""<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta http-equiv="X-UA-Compatible" content="IE=edge">
+  <title>{asunto}</title>
+  <!--[if mso]>
+  <noscript><xml><o:OfficeDocumentSettings><o:PixelsPerInch>96</o:PixelsPerInch></o:OfficeDocumentSettings></xml></noscript>
+  <![endif]-->
+  <style>
+    @media only screen and (max-width: 620px) {{
+      .email-container {{ width: 100% !important; }}
+      .content-padding {{ padding: 24px 16px !important; }}
+    }}
+  </style>
+</head>
+<body style="margin:0;padding:0;background-color:#f4f1eb;font-family:Arial,Helvetica,sans-serif;-webkit-text-size-adjust:100%;-ms-text-size-adjust:100%;">
+
+  <!-- Preheader invisible -->
+  <div style="display:none;max-height:0;overflow:hidden;mso-hide:all;">
+    {asunto} — CRACK TCG
+  </div>
+
+  <table role="presentation" cellpadding="0" cellspacing="0" width="100%" style="background-color:#f4f1eb;padding:32px 16px;">
+    <tr>
+      <td align="center">
+
+        <!-- Contenedor principal -->
+        <table class="email-container" role="presentation" cellpadding="0" cellspacing="0"
+               width="600" style="max-width:600px;background-color:#ffffff;border-radius:12px;overflow:hidden;box-shadow:0 4px 24px rgba(0,0,0,.08);">
+
+          <!-- HEADER -->
+          <tr>
+            <td style="background:linear-gradient(135deg,#1a1a1a 0%,#2d2d2d 100%);padding:32px 40px;text-align:center;">
+              <p style="margin:0 0 4px 0;font-size:11px;letter-spacing:.2em;text-transform:uppercase;color:#C8972E;font-weight:600;">CRACK TCG</p>
+              <h1 style="margin:0;font-size:22px;font-weight:800;color:#ffffff;letter-spacing:-.02em;line-height:1.3;">
+                {asunto}
+              </h1>
+            </td>
+          </tr>
+
+          <!-- BODY -->
+          <tr>
+            <td class="content-padding" style="padding:36px 40px;">
+              <table role="presentation" cellpadding="0" cellspacing="0" width="100%">
+
+                {image_block}
+
+                <!-- Contenido del editor -->
+                <tr>
+                  <td style="font-size:15px;line-height:1.7;color:#374151;">
+                    {content}
+                  </td>
+                </tr>
+
+                <!-- CTA -->
+                <tr>
+                  <td style="padding:32px 0 8px 0;text-align:center;">
+                    <a href="{site_url}"
+                       style="display:inline-block;background-color:#C8972E;color:#ffffff;text-decoration:none;
+                              padding:14px 36px;border-radius:8px;font-size:14px;font-weight:700;
+                              letter-spacing:.04em;text-transform:uppercase;">
+                      Ver tienda →
+                    </a>
+                  </td>
+                </tr>
+
+              </table>
+            </td>
+          </tr>
+
+          <!-- FOOTER -->
+          <tr>
+            <td style="background-color:#f9f7f3;border-top:1px solid #e8e4dd;padding:24px 40px;text-align:center;">
+              <p style="margin:0 0 8px 0;font-size:13px;font-weight:700;color:#1a1a1a;letter-spacing:.05em;">CRACK TCG</p>
+              <p style="margin:0 0 12px 0;font-size:12px;color:#9ca3af;line-height:1.5;">
+                Recibís este email porque te suscribiste a nuestras novedades.<br>
+                Este mensaje fue enviado a <span style="color:#C8972E;">{recipient_email}</span>
+              </p>
+              <p style="margin:0;font-size:11px;color:#d1d5db;">
+                © 2025 CRACK TCG · Buenos Aires, Argentina
+              </p>
+            </td>
+          </tr>
+
+        </table>
+        <!-- /Contenedor principal -->
+
+      </td>
+    </tr>
+  </table>
+
+</body>
+</html>"""
 
 
 def send_email_campaign(campaign_id):
