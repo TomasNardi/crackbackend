@@ -170,6 +170,16 @@ class EmailCampaignAdmin(ModelAdmin):
                 self.admin_site.admin_view(self.preview_ajax),
                 name="core_emailcampaign_preview_ajax",
             ),
+            path(
+                "queue-status/",
+                self.admin_site.admin_view(self.queue_status_view),
+                name="core_emailcampaign_queue_status",
+            ),
+            path(
+                "<int:campaign_id>/send-sync/",
+                self.admin_site.admin_view(self.send_sync_view),
+                name="core_emailcampaign_send_sync",
+            ),
         ]
         return custom_urls + urls
 
@@ -257,12 +267,16 @@ class EmailCampaignAdmin(ModelAdmin):
     def quick_send_button(self, obj):
         if obj.status != "borrador":
             return "-"
-        send_url = reverse("admin:core_emailcampaign_send_now", args=[obj.pk])
+        send_url  = reverse("admin:core_emailcampaign_send_now",  args=[obj.pk])
+        sync_url  = reverse("admin:core_emailcampaign_send_sync", args=[obj.pk])
+        queue_url = reverse("admin:core_emailcampaign_queue_status")
         return format_html(
-            '<a href="{}" style="background:#C8972E;color:#fff;padding:5px 12px;border-radius:6px;font-size:12px;font-weight:600;text-decoration:none;">▶ Enviar</a>',
-            send_url,
+            '<a href="{}" style="background:#C8972E;color:#fff;padding:5px 10px;border-radius:6px;font-size:11px;font-weight:600;text-decoration:none;margin-right:4px;">▶ Async</a>'
+            '<a href="{}" style="background:#1e40af;color:#fff;padding:5px 10px;border-radius:6px;font-size:11px;font-weight:600;text-decoration:none;margin-right:4px;" title="Envío directo sin worker">⚡ Sync</a>'
+            '<a href="{}" style="background:#374151;color:#fff;padding:5px 10px;border-radius:6px;font-size:11px;font-weight:600;text-decoration:none;" title="Ver estado de la cola">🔍</a>',
+            send_url, sync_url, queue_url,
         )
-    quick_send_button.short_description = "Acción"
+    quick_send_button.short_description = "Acciones"
 
     def send_now_view(self, request, campaign_id):
         from django_q.tasks import async_task
@@ -288,6 +302,69 @@ class EmailCampaignAdmin(ModelAdmin):
             f"✓ Campaña '{campaign.asunto}' encolada. Se procesará en segundo plano.",
             messages.SUCCESS,
         )
+        return HttpResponseRedirect(reverse("admin:core_emailcampaign_change", args=[campaign_id]))
+
+    def queue_status_view(self, request):
+        """
+        GET /admin/core/emailcampaign/queue-status/
+        Muestra el estado real de la cola de Django Q en la DB.
+        """
+        from django.http import HttpResponse
+        from django_q.models import OrmQ, Success, Failure
+
+        queued   = OrmQ.objects.count()
+        success  = Success.objects.order_by("-stopped")[:10]
+        failures = Failure.objects.order_by("-stopped")[:10]
+
+        lines = [
+            "<h2 style='font-family:monospace'>Django Q — Estado de la cola</h2>",
+            f"<p><strong>Tareas en cola (pendientes):</strong> {queued}</p>",
+            "<hr>",
+            "<h3>Últimas 10 exitosas:</h3>",
+            "<ul style='font-family:monospace;font-size:13px'>",
+        ]
+        for t in success:
+            lines.append(f"<li>✅ {t.name} — {t.stopped} — resultado: {str(t.result)[:100]}</li>")
+        if not success:
+            lines.append("<li>Sin tareas exitosas aún</li>")
+        lines += ["</ul>", "<h3>Últimas 10 fallidas:</h3>", "<ul style='font-family:monospace;font-size:13px'>"]
+        for t in failures:
+            lines.append(f"<li>❌ {t.name} — {t.stopped} — error: {str(t.result)[:200]}</li>")
+        if not failures:
+            lines.append("<li>Sin tareas fallidas</li>")
+        lines.append("</ul>")
+        lines.append("<p><a href='javascript:location.reload()'>↻ Actualizar</a> &nbsp; <a href='../'>← Volver</a></p>")
+
+        return HttpResponse("\n".join(lines))
+
+    def send_sync_view(self, request, campaign_id):
+        """
+        Envío SÍNCRONO de emergencia — sin worker, directo en el request.
+        Usar solo si el worker no está disponible. Timeout de gunicorn aplica.
+        """
+        from django.contrib import messages
+        from .tasks import send_email_campaign
+
+        try:
+            campaign = EmailCampaign.objects.get(pk=campaign_id)
+        except EmailCampaign.DoesNotExist:
+            self.message_user(request, "La campaña no existe.", messages.ERROR)
+            return HttpResponseRedirect(reverse("admin:core_emailcampaign_changelist"))
+
+        if campaign.status != "borrador":
+            self.message_user(request, "Solo se pueden enviar campañas en estado Borrador.", messages.WARNING)
+            return HttpResponseRedirect(reverse("admin:core_emailcampaign_change", args=[campaign_id]))
+
+        try:
+            result = send_email_campaign(campaign.id)
+            self.message_user(
+                request,
+                f"✓ Enviado directamente: {result.get('exitosos', 0)} exitosos, {result.get('fallidos', 0)} fallidos.",
+                messages.SUCCESS,
+            )
+        except Exception as e:
+            self.message_user(request, f"✗ Error: {e}", messages.ERROR)
+
         return HttpResponseRedirect(reverse("admin:core_emailcampaign_change", args=[campaign_id]))
 
     def send_campaign(self, request, queryset):
