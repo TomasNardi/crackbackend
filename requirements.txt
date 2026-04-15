@@ -5,7 +5,7 @@ djangorestframework-simplejwt==5.5.1
 
 # Database
 dj-database-url==2.3.0
-# psycopg2-binary==2.9.10  # Solo necesario en producción (Render lo instala via build.sh)
+psycopg2-binary==2.9.10
 
 # Auth & Security
 python-dotenv==1.1.0

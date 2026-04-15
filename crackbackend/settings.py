@@ -576,3 +576,50 @@ DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
 # URL base del sitio (usada para links en emails, SEO, admin, etc.)
 SITE_URL = os.environ.get("SITE_URL", "https://crack-front-rho.vercel.app/")
+
+# ---------------------------------------------------------------------------
+# Logging — visible en Render logs
+# ---------------------------------------------------------------------------
+LOGGING = {
+    "version": 1,
+    "disable_existing_loggers": False,
+    "formatters": {
+        "render": {
+            "format": "[{asctime}] [{levelname}] {name}: {message}",
+            "style": "{",
+            "datefmt": "%Y-%m-%d %H:%M:%S",
+        },
+    },
+    "handlers": {
+        "console": {
+            "class": "logging.StreamHandler",
+            "formatter": "render",
+        },
+    },
+    "root": {
+        "handlers": ["console"],
+        "level": "INFO",
+    },
+    "loggers": {
+        "django": {
+            "handlers": ["console"],
+            "level": "WARNING",   # Solo warnings/errors de Django core
+            "propagate": False,
+        },
+        "django_q": {
+            "handlers": ["console"],
+            "level": "INFO",      # Logs del cluster y tareas
+            "propagate": False,
+        },
+        "apps.core.tasks": {
+            "handlers": ["console"],
+            "level": "INFO",      # Logs del envío de campañas
+            "propagate": False,
+        },
+        "apps.orders": {
+            "handlers": ["console"],
+            "level": "INFO",
+            "propagate": False,
+        },
+    },
+}
