@@ -356,8 +356,8 @@ USE_TZ = True
 Q_CLUSTER = {
     "name": "CrackBackend",
     "workers": 1,
-    "timeout": 120,       # segundos máx por tarea
-    "retry": 180,         # reintentar tareas fallidas después de 3 min
+    "timeout": 900,       # 15 min — 500 mails × 0.5s = ~250s, margen amplio
+    "retry": 1200,        # reintentar tareas fallidas después de 20 min
     "queue_limit": 500,
     "bulk": 5,
     "orm": "default",     # usa la misma PostgreSQL

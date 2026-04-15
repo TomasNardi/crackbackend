@@ -1,32 +1,61 @@
 {% extends "admin/change_list.html" %}
+{% load i18n %}
 
 {% block content %}
-  <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:12px;margin:0 0 16px 0;">
-    <div style="background:#ffffff;border:1px solid #e5e7eb;border-radius:10px;padding:12px;">
-      <div style="font-size:12px;color:#6b7280;">Campañas</div>
-      <div style="font-size:24px;font-weight:700;color:#111827;">{{ campaign_metrics.total_campaigns }}</div>
-    </div>
-    <div style="background:#ffffff;border:1px solid #e5e7eb;border-radius:10px;padding:12px;">
-      <div style="font-size:12px;color:#6b7280;">Borradores</div>
-      <div style="font-size:24px;font-weight:700;color:#6b7280;">{{ campaign_metrics.borradores }}</div>
-    </div>
-    <div style="background:#ffffff;border:1px solid #e5e7eb;border-radius:10px;padding:12px;">
-      <div style="font-size:12px;color:#6b7280;">Enviadas</div>
-      <div style="font-size:24px;font-weight:700;color:#16a34a;">{{ campaign_metrics.enviadas }}</div>
-    </div>
-    <div style="background:#ffffff;border:1px solid #e5e7eb;border-radius:10px;padding:12px;">
-      <div style="font-size:12px;color:#6b7280;">Total enviados</div>
-      <div style="font-size:24px;font-weight:700;color:#0f766e;">{{ campaign_metrics.total_enviados }}</div>
-    </div>
-    <div style="background:#ffffff;border:1px solid #e5e7eb;border-radius:10px;padding:12px;">
-      <div style="font-size:12px;color:#6b7280;">Total fallidos</div>
-      <div style="font-size:24px;font-weight:700;color:#dc2626;">{{ campaign_metrics.total_fallidos }}</div>
-    </div>
-    <div style="background:#ffffff;border:1px solid #e5e7eb;border-radius:10px;padding:12px;">
-      <div style="font-size:12px;color:#6b7280;">Tasa de entrega</div>
-      <div style="font-size:24px;font-weight:700;color:#1d4ed8;">{{ campaign_metrics.tasa_entrega }}%</div>
-    </div>
+
+{% if campaign_metrics %}
+<div style="
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: 16px;
+  margin: 0 0 28px 0;
+">
+
+  <div style="background:#fff;border:1px solid #e5e7eb;border-radius:12px;padding:20px 24px;">
+    <p style="margin:0 0 4px 0;font-size:11px;text-transform:uppercase;letter-spacing:.08em;color:#6b7280;">Total campañas</p>
+    <p style="margin:0;font-size:28px;font-weight:700;color:#111827;">{{ campaign_metrics.total_campaigns }}</p>
   </div>
 
-  {{ block.super }}
+  <div style="background:#fff;border:1px solid #e5e7eb;border-radius:12px;padding:20px 24px;">
+    <p style="margin:0 0 4px 0;font-size:11px;text-transform:uppercase;letter-spacing:.08em;color:#6b7280;">Borradores</p>
+    <p style="margin:0;font-size:28px;font-weight:700;color:#f59e0b;">{{ campaign_metrics.borradores }}</p>
+  </div>
+
+  <div style="background:#fff;border:1px solid #e5e7eb;border-radius:12px;padding:20px 24px;">
+    <p style="margin:0 0 4px 0;font-size:11px;text-transform:uppercase;letter-spacing:.08em;color:#6b7280;">Enviadas</p>
+    <p style="margin:0;font-size:28px;font-weight:700;color:#10b981;">{{ campaign_metrics.enviadas }}</p>
+  </div>
+
+  <div style="background:#fff;border:1px solid #e5e7eb;border-radius:12px;padding:20px 24px;">
+    <p style="margin:0 0 4px 0;font-size:11px;text-transform:uppercase;letter-spacing:.08em;color:#6b7280;">Emails enviados</p>
+    <p style="margin:0;font-size:28px;font-weight:700;color:#3b82f6;">{{ campaign_metrics.total_enviados }}</p>
+  </div>
+
+  <div style="background:#fff;border:1px solid #e5e7eb;border-radius:12px;padding:20px 24px;">
+    <p style="margin:0 0 4px 0;font-size:11px;text-transform:uppercase;letter-spacing:.08em;color:#6b7280;">Fallidos</p>
+    <p style="margin:0;font-size:28px;font-weight:700;color:#ef4444;">{{ campaign_metrics.total_fallidos }}</p>
+  </div>
+
+  <div style="background:#fff;border:1px solid #e5e7eb;border-radius:12px;padding:20px 24px;">
+    <p style="margin:0 0 4px 0;font-size:11px;text-transform:uppercase;letter-spacing:.08em;color:#6b7280;">Tasa de entrega</p>
+    <p style="margin:0;font-size:28px;font-weight:700;color:#8b5cf6;">{{ campaign_metrics.tasa_entrega }}%</p>
+  </div>
+
+</div>
+
+<div style="background:#fef3c7;border:1px solid #fcd34d;border-radius:10px;padding:14px 18px;margin-bottom:24px;display:flex;align-items:flex-start;gap:10px;">
+  <span style="font-size:18px;line-height:1;">⚡</span>
+  <div>
+    <strong style="font-size:13px;color:#92400e;">Cómo funciona el envío masivo</strong>
+    <p style="margin:4px 0 0 0;font-size:12px;color:#78350f;line-height:1.5;">
+      Al hacer clic en <strong>Enviar ahora</strong>, la campaña se encola en el worker de Django Q.
+      El worker procesa los emails en segundo plano a ~2 emails/seg para respetar el rate limit de Resend.
+      Para <strong>500 suscriptores</strong> el envío tarda ~4 minutos. El estado cambia a <em>Enviando</em> y luego a <em>Enviado</em> automáticamente.
+    </p>
+  </div>
+</div>
+{% endif %}
+
+{{ block.super }}
+
 {% endblock %}
