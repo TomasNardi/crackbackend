@@ -147,6 +147,29 @@ class ProductViewSet(viewsets.ModelViewSet):
         qs = self.get_queryset().order_by("-created_at")[:8]
         return Response(ProductListSerializer(qs, many=True).data)
 
+    @action(detail=False, methods=["get"], url_path="sitemap-index", permission_classes=[permissions.AllowAny])
+    def sitemap_index(self, request):
+        """
+        GET /products/sitemap-index/
+        Payload minimal optimizado para sitemap (slug + updated_at).
+        Solo productos en stock — sin paginar, ordenado por updated_at.
+        """
+        qs = (
+            Product.objects
+            .filter(in_stock=True)
+            .only("slug", "updated_at", "image_url")
+            .order_by("-updated_at")
+        )
+        data = [
+            {
+                "slug": p.slug,
+                "updated_at": p.updated_at.isoformat(),
+                "image_url": p.image_url or "",
+            }
+            for p in qs.iterator(chunk_size=1000)
+        ]
+        return Response(data)
+
     @action(detail=False, methods=["get"], url_path="by-ids")
     def by_ids(self, request):
         """GET /products/by-ids/?ids=1,2,3 — devuelve disponibilidad actual para sincronizar el carrito. Solo retorna productos en stock."""
