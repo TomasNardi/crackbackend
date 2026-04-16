@@ -8,7 +8,17 @@ from django.db.models import Sum
 from django.utils.html import format_html
 from ckeditor.widgets import CKEditorWidget
 from unfold.admin import ModelAdmin
-from .models import SiteConfig, PaymentSettings, EmailSubscription, EmailCampaign, ExchangeRate, ContactMessage
+from .emails import send_sale_request_status_email
+from .models import (
+    SiteConfig,
+    PaymentSettings,
+    EmailSubscription,
+    EmailCampaign,
+    ExchangeRate,
+    ContactMessage,
+    SolicitudVenta,
+    ConfiguracionNotificaciones,
+)
 
 
 @admin.register(ExchangeRate)
@@ -396,3 +406,149 @@ class ContactMessageAdmin(ModelAdmin):
 
     def has_add_permission(self, request):
         return False
+
+
+@admin.register(ConfiguracionNotificaciones)
+class ConfiguracionNotificacionesAdmin(ModelAdmin):
+    list_display = ("emails_resumen",)
+    fieldsets = (
+        (
+            "Configuración global",
+            {
+                "fields": ("emails",),
+                "description": "Emails que recibirán las nuevas solicitudes de venta.",
+            },
+        ),
+    )
+
+    @admin.display(description="Emails configurados")
+    def emails_resumen(self, obj):
+        emails = obj.get_emails_list()
+        return ", ".join(emails) if emails else "Sin emails configurados"
+
+    def has_add_permission(self, request):
+        return not ConfiguracionNotificaciones.objects.exists()
+
+    def has_delete_permission(self, request, obj=None):
+        return False
+
+    def changelist_view(self, request, extra_context=None):
+        obj = ConfiguracionNotificaciones.get()
+        change_url = reverse("admin:core_configuracionnotificaciones_change", args=[obj.pk])
+        return redirect(change_url)
+
+
+@admin.register(SolicitudVenta)
+class SolicitudVentaAdmin(ModelAdmin):
+    list_display = (
+        "nombre_completo",
+        "email",
+        "celular",
+        "tipo_coleccion_admin",
+        "estado_badge",
+        "fecha_creacion",
+        "imagenes_admin",
+    )
+    list_filter = ("estado", "tipo_coleccion", "fecha_creacion")
+    search_fields = ("nombre_completo", "email", "celular")
+    readonly_fields = ("fecha_creacion", "imagenes_preview")
+    actions = ("marcar_como_rechazado", "marcar_como_aceptado")
+    fieldsets = (
+        (
+            "Datos de la solicitud",
+            {
+                "fields": (
+                    "nombre_completo",
+                    "email",
+                    "celular",
+                    "tipo_coleccion",
+                    "estado",
+                    "fecha_creacion",
+                ),
+            },
+        ),
+        (
+            "Imágenes",
+            {
+                "fields": ("imagenes_preview",),
+            },
+        ),
+    )
+
+    @admin.display(description="Tipo de colección")
+    def tipo_coleccion_admin(self, obj):
+        return obj.get_tipo_coleccion_display()
+
+    @admin.display(description="Estado")
+    def estado_badge(self, obj):
+        colors = {
+            SolicitudVenta.Estado.PENDIENTE: "#D4A017",
+            SolicitudVenta.Estado.RECHAZADO: "#D14343",
+            SolicitudVenta.Estado.ACEPTADO: "#228B5A",
+        }
+        color = colors.get(obj.estado, "#999999")
+        return format_html(
+            '<span style="background-color:{};color:#fff;padding:3px 10px;border-radius:20px;font-size:11px;font-weight:600;letter-spacing:.04em;">{}</span>',
+            color,
+            obj.get_estado_display(),
+        )
+
+    @admin.display(description="Imágenes")
+    def imagenes_admin(self, obj):
+        count = len(obj.imagenes or [])
+        if count == 0:
+            return "Sin imágenes"
+        return format_html("<span>{} imagen(es)</span>", count)
+
+    @admin.display(description="Vista previa de imágenes")
+    def imagenes_preview(self, obj):
+        if not obj or not obj.imagenes:
+            return "Sin imágenes cargadas"
+
+        previews = []
+        for image in obj.imagenes:
+            secure_url = image.get("secure_url", "")
+            if not secure_url:
+                continue
+            previews.append(
+                format_html(
+                    '<a href="{}" target="_blank" rel="noreferrer" style="display:inline-block;margin:0 12px 12px 0;text-align:center;text-decoration:none;color:#1A1A1A;">'
+                    '<img src="{}" alt="Imagen" style="width:110px;height:110px;object-fit:cover;border-radius:10px;border:1px solid #E8E4DD;display:block;margin-bottom:8px;" />'
+                    '<span style="font-size:12px;">Abrir</span>'
+                    '</a>',
+                    secure_url,
+                    secure_url,
+                )
+            )
+        return format_html("".join(str(item) for item in previews)) if previews else "Sin imágenes válidas"
+
+    def has_add_permission(self, request):
+        return False
+
+    def marcar_como_rechazado(self, request, queryset):
+        from django.contrib import messages
+
+        updated = 0
+        for solicitud in queryset.exclude(estado=SolicitudVenta.Estado.RECHAZADO):
+            solicitud.estado = SolicitudVenta.Estado.RECHAZADO
+            solicitud.save(update_fields=["estado"])
+            send_sale_request_status_email(solicitud.id)
+            updated += 1
+
+        self.message_user(request, f"{updated} solicitud(es) marcadas como rechazadas.", messages.SUCCESS)
+
+    marcar_como_rechazado.short_description = "Marcar como Rechazado"
+
+    def marcar_como_aceptado(self, request, queryset):
+        from django.contrib import messages
+
+        updated = 0
+        for solicitud in queryset.exclude(estado=SolicitudVenta.Estado.ACEPTADO):
+            solicitud.estado = SolicitudVenta.Estado.ACEPTADO
+            solicitud.save(update_fields=["estado"])
+            send_sale_request_status_email(solicitud.id)
+            updated += 1
+
+        self.message_user(request, f"{updated} solicitud(es) marcadas como aceptadas.", messages.SUCCESS)
+
+    marcar_como_aceptado.short_description = "Marcar como Aceptado"
