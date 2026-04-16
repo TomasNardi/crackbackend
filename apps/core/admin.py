@@ -1,6 +1,7 @@
 import json
 from django import forms
 from django.contrib import admin
+from django.contrib.admin.sites import NotRegistered
 from django.shortcuts import redirect
 from django.http import HttpResponseRedirect, JsonResponse
 from django.urls import path, reverse
@@ -564,3 +565,11 @@ class SolicitudVentaAdmin(ModelAdmin):
         self.message_user(request, f"{updated} solicitud(es) marcadas como aceptadas.", messages.SUCCESS)
 
     marcar_como_aceptado.short_description = "Marcar como Aceptado"
+
+
+# Feature toggled off: keep code/data but remove models from Django admin UI.
+for _model in (SolicitudVenta, ConfiguracionNotificaciones):
+    try:
+        admin.site.unregister(_model)
+    except NotRegistered:
+        pass
