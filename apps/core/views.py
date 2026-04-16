@@ -13,8 +13,9 @@ from rest_framework.views import APIView
 from .models import SiteConfig, ExchangeRate, ContactMessage, EmailSubscription
 from .serializers import (
     SiteConfigSerializer, EmailSubscribeSerializer, ExchangeRateSerializer,
-    ContactMessageSerializer
+    ContactMessageSerializer, SolicitudVentaSerializer
 )
+from .emails import send_new_sale_request_notification
 
 logger = logging.getLogger(__name__)
 
@@ -69,3 +70,28 @@ class ContactView(APIView):
             serializer.save()
             return Response({"message": "Mensaje recibido. Te respondemos pronto."}, status=status.HTTP_201_CREATED)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+
+class SolicitudVentaCreateView(APIView):
+    permission_classes = [permissions.AllowAny]
+
+    @method_decorator(ratelimit(key="ip", rate="5/h", method="POST", block=True))
+    def post(self, request):
+        serializer = SolicitudVentaSerializer(data=request.data)
+        if not serializer.is_valid():
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+        solicitud = serializer.save()
+
+        try:
+            send_new_sale_request_notification(solicitud.id)
+        except Exception:
+            logger.exception("Error enviando notificación para la solicitud de venta %s", solicitud.id)
+
+        return Response(
+            {
+                "message": "Recibimos tu solicitud. Te vamos a contactar pronto.",
+                "id": solicitud.id,
+            },
+            status=status.HTTP_201_CREATED,
+        )

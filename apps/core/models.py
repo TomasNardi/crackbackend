@@ -193,3 +193,85 @@ class ContactMessage(models.Model):
 
     def __str__(self):
         return f"{self.name} <{self.email}> — {self.created_at:%d/%m/%Y}"
+
+
+class ConfiguracionNotificaciones(models.Model):
+    """Configuración global de emails para notificaciones internas."""
+
+    emails = models.TextField(
+        "Emails de notificación",
+        blank=True,
+        help_text="Separá múltiples emails con comas o saltos de línea.",
+    )
+
+    class Meta:
+        verbose_name = "Configuración de notificaciones"
+        verbose_name_plural = "Configuraciones de notificaciones"
+
+    def __str__(self):
+        return "Configuración global de notificaciones"
+
+    def save(self, *args, **kwargs):
+        self.pk = 1
+        super().save(*args, **kwargs)
+
+    @classmethod
+    def get(cls):
+        obj, _ = cls.objects.get_or_create(pk=1, defaults={"emails": ""})
+        return obj
+
+    def get_emails_list(self):
+        raw_values = self.emails.replace("\n", ",").split(",") if self.emails else []
+        unique_emails = []
+        seen = set()
+        for value in raw_values:
+            email = value.strip().lower()
+            if not email or email in seen:
+                continue
+            seen.add(email)
+            unique_emails.append(email)
+        return unique_emails
+
+
+class SolicitudVenta(models.Model):
+    """Solicitudes públicas para vender una colección."""
+
+    class TipoColeccion(models.TextChoices):
+        SELLADO = "sellado", "Sellado"
+        CARTAS = "cartas", "Cartas"
+        SLABS = "slabs", "Slabs"
+
+    class Estado(models.TextChoices):
+        PENDIENTE = "pendiente", "Pendiente"
+        RECHAZADO = "rechazado", "Rechazado"
+        ACEPTADO = "aceptado", "Aceptado"
+
+    nombre_completo = models.CharField("Nombre y Apellido", max_length=255)
+    email = models.EmailField("Email")
+    celular = models.CharField("Celular", max_length=50)
+    tipo_coleccion = models.CharField(
+        "Tipo de colección",
+        max_length=20,
+        choices=TipoColeccion.choices,
+    )
+    imagenes = models.JSONField(
+        "Imágenes",
+        default=list,
+        blank=True,
+        help_text="Lista de imágenes subidas a Cloudinary con secure_url y public_id.",
+    )
+    estado = models.CharField(
+        "Estado",
+        max_length=20,
+        choices=Estado.choices,
+        default=Estado.PENDIENTE,
+    )
+    fecha_creacion = models.DateTimeField("Fecha de creación", auto_now_add=True)
+
+    class Meta:
+        verbose_name = "Solicitud de venta"
+        verbose_name_plural = "Solicitudes de venta"
+        ordering = ["-fecha_creacion"]
+
+    def __str__(self):
+        return f"{self.nombre_completo} — {self.get_tipo_coleccion_display()}"

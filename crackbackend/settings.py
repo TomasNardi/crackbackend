@@ -25,7 +25,7 @@ SECRET_KEY = os.environ.get("SECRET_KEY", "PapaPuebloTango")
 
 DEBUG = os.environ.get("DEBUG", "True").lower() == "true"
 
-ALLOWED_HOSTS = ["localhost", "127.0.0.1"]
+ALLOWED_HOSTS = ["localhost", "127.0.0.1", "testserver"]
 
 RENDER_EXTERNAL_HOSTNAME = os.environ.get("RENDER_EXTERNAL_HOSTNAME")
 if RENDER_EXTERNAL_HOSTNAME:
@@ -537,6 +537,18 @@ UNFOLD = {
                         "icon": "campaign",
                         "link": "/admin/core/emailcampaign/",
                         "permission": admin_has_perm("core.view_emailcampaign"),
+                    },
+                    {
+                        "title": "Solicitudes de venta",
+                        "icon": "inventory",
+                        "link": "/admin/core/solicitudventa/",
+                        "permission": admin_has_perm("core.view_solicitudventa"),
+                    },
+                    {
+                        "title": "Notificaciones de venta",
+                        "icon": "notifications_active",
+                        "link": "/admin/core/configuracionnotificaciones/",
+                        "permission": admin_has_perm("core.view_configuracionnotificaciones"),
                     },
                     {
                         "title": "Mensajes de contacto",

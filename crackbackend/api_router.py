@@ -23,7 +23,14 @@ from apps.orders.views import (
     PaymentConfigView,
     ValidateDiscountView,
 )
-from apps.core.views import SiteConfigView, EmailSubscribeView, PingView, ExchangeRateView, ContactView
+from apps.core.views import (
+    SiteConfigView,
+    EmailSubscribeView,
+    PingView,
+    ExchangeRateView,
+    ContactView,
+    SolicitudVentaCreateView,
+)
 
 router = DefaultRouter()
 
@@ -57,6 +64,7 @@ urlpatterns = [
     path("exchange-rate/", ExchangeRateView.as_view(), name="exchange_rate"),
     path("subscribe/", EmailSubscribeView.as_view(), name="email_subscribe"),
     path("contact/", ContactView.as_view(), name="contact"),
+    path("sale-requests/", SolicitudVentaCreateView.as_view(), name="sale_requests"),
     path("ping/", PingView.as_view(), name="ping"),
 
     # Router URLs
