@@ -287,16 +287,27 @@ def _reconcile_payment(payment_data, source="webhook"):
 
         # Actualizar estado de la orden según el pago
         status_updated = False
-        negative_statuses = {"rejected", "cancelled", "refunded", "charged_back"}
+        refund_statuses = {"refunded", "charged_back"}
+        cancellation_statuses = {"rejected", "cancelled"}
 
-        if final_paid and order.status != Order.STATUS_PAID:
+        # Refunded/charged_back debe prevalecer aunque la orden se haya pagado días antes.
+        if payment_status in refund_statuses and order.status != Order.STATUS_REFUNDED:
+            order.status = Order.STATUS_REFUNDED
+            status_updated = True
+            logger.info(
+                "Orden %s marcada como DEVOLUCIÓN (pago %s: %s)",
+                order.order_code,
+                payment_id,
+                payment_status,
+            )
+        elif final_paid and order.status not in {Order.STATUS_PAID, Order.STATUS_REFUNDED}:
             order.status = Order.STATUS_PAID
             status_updated = True
             if order.payment_method == Order.PAYMENT_MERCADOPAGO:
                 _apply_order_confirmed_side_effects(order)
                 notify_order_id = order.id
             logger.info("Orden %s marcada como PAGADA (pago %s aprobado)", order.order_code, payment_id)
-        elif payment_status in negative_statuses and order.status != Order.STATUS_PAID:
+        elif payment_status in cancellation_statuses and order.status not in {Order.STATUS_PAID, Order.STATUS_REFUNDED}:
             if order.status != Order.STATUS_CANCELLED:
                 order.status = Order.STATUS_CANCELLED
                 status_updated = True

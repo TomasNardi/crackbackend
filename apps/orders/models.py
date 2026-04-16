@@ -131,10 +131,12 @@ class Order(models.Model):
 
     STATUS_PENDING = "pending"
     STATUS_PAID = "paid"
+    STATUS_REFUNDED = "refunded"
     STATUS_CANCELLED = "cancelled"
     STATUS_CHOICES = [
         (STATUS_PENDING, "Pendiente"),
         (STATUS_PAID, "Pagada"),
+        (STATUS_REFUNDED, "Devolución"),
         (STATUS_CANCELLED, "Cancelada"),
     ]
 
