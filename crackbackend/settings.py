@@ -539,18 +539,6 @@ UNFOLD = {
                         "permission": admin_has_perm("core.view_emailcampaign"),
                     },
                     {
-                        "title": "Solicitudes de venta",
-                        "icon": "inventory",
-                        "link": "/admin/core/solicitudventa/",
-                        "permission": admin_has_perm("core.view_solicitudventa"),
-                    },
-                    {
-                        "title": "Notificaciones de venta",
-                        "icon": "notifications_active",
-                        "link": "/admin/core/configuracionnotificaciones/",
-                        "permission": admin_has_perm("core.view_configuracionnotificaciones"),
-                    },
-                    {
                         "title": "Mensajes de contacto",
                         "icon": "forum",
                         "link": "/admin/core/contactmessage/",

@@ -432,6 +432,12 @@ class ConfiguracionNotificacionesAdmin(ModelAdmin):
     def has_delete_permission(self, request, obj=None):
         return False
 
+    def has_module_permission(self, request):
+        return False
+
+    def has_view_permission(self, request, obj=None):
+        return False
+
     def changelist_view(self, request, extra_context=None):
         obj = ConfiguracionNotificaciones.get()
         change_url = reverse("admin:core_configuracionnotificaciones_change", args=[obj.pk])
@@ -523,6 +529,12 @@ class SolicitudVentaAdmin(ModelAdmin):
         return format_html("".join(str(item) for item in previews)) if previews else "Sin imágenes válidas"
 
     def has_add_permission(self, request):
+        return False
+
+    def has_module_permission(self, request):
+        return False
+
+    def has_view_permission(self, request, obj=None):
         return False
 
     def marcar_como_rechazado(self, request, queryset):
