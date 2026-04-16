@@ -96,7 +96,7 @@ class ProductViewSet(viewsets.ModelViewSet):
         return ProductListSerializer
 
     def get_permissions(self):
-        if self.action in ("list", "retrieve", "featured", "new_arrivals"):
+        if self.action in ("list", "retrieve", "featured", "new_arrivals", "sitemap_index"):
             return [permissions.AllowAny()]
         return [permissions.IsAdminUser()]
 
