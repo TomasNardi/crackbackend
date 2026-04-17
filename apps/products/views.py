@@ -157,50 +157,108 @@ class ProductViewSet(viewsets.ModelViewSet):
 
         Estructura:
           {
-            "categories":        [{slug, name, count}],
-            "tcgs":              [{slug, name, count}],
-            "category_tcg":      [{category_slug, tcg_slug, count}],
-            "singles_condition": [{tcg_slug, condition, count}],
-            "slabs_cert":        [{tcg_slug, cert, count}],
-            "generated_at":      ISO8601 timestamp,
+            "page_size": 12,  # debe matchear el frontend /tienda
+            "tienda_total": int,
+            "tienda_pages": int,
+            "has_discount_count": int,
+            "categories":                    [{slug, name, count, pages, max_updated_at}],
+            "tcgs":                          [{slug, name, count, pages, max_updated_at}],
+            "certification_entities":        [{cert, count, pages, max_updated_at}],
+            "category_tcg":                  [{category_slug, tcg_slug, count, pages, max_updated_at}],
+            "singles_condition":             [{category_slug, tcg_slug, condition, count, pages, max_updated_at}],
+            "singles_condition_all_tcgs":    [{category_slug, condition, count, pages, max_updated_at}],
+            "slabs_cert":                    [{category_slug, tcg_slug, cert, count, pages, max_updated_at}],
+            "slabs_cert_all_tcgs":           [{category_slug, cert, count, pages, max_updated_at}],
+            "generated_at":                  ISO8601,
           }
         """
-        from django.db.models import Count
+        from math import ceil
+        from django.db.models import Count, Max
         from django.utils import timezone
+
+        # Debe matchear `PAGE_SIZE` en src/app/tienda/page.js
+        PAGE_SIZE = 12
 
         base_qs = Product.objects.filter(in_stock=True)
 
+        def _pages(count):
+            return max(1, ceil(count / PAGE_SIZE)) if count else 0
+
+        def _iso(value):
+            return value.isoformat() if value else None
+
+        # Totales de /tienda (para paginar la landing base)
+        tienda_total = base_qs.count()
+        tienda_pages = _pages(tienda_total)
+        has_discount_count = base_qs.filter(discount_percent__gt=0).count()
+
         categories = [
-            {"slug": row["cat_slug"], "name": row["cat_name"], "count": row["count"]}
+            {
+                "slug": row["cat_slug"],
+                "name": row["cat_name"],
+                "count": row["count"],
+                "pages": _pages(row["count"]),
+                "max_updated_at": _iso(row["max_updated_at"]),
+            }
             for row in base_qs
             .exclude(category__isnull=True)
             .values(cat_slug=models.F("category__slug"), cat_name=models.F("category__name"))
-            .annotate(count=Count("id"))
+            .annotate(count=Count("id"), max_updated_at=Max("updated_at"))
             .filter(count__gt=0)
             .order_by("-count")
         ]
 
         tcgs = [
-            {"slug": row["tcg_slug"], "name": row["tcg_name"], "count": row["count"]}
+            {
+                "slug": row["tcg_slug"],
+                "name": row["tcg_name"],
+                "count": row["count"],
+                "pages": _pages(row["count"]),
+                "max_updated_at": _iso(row["max_updated_at"]),
+            }
             for row in base_qs
             .exclude(tcg__isnull=True)
             .values(tcg_slug=models.F("tcg__slug"), tcg_name=models.F("tcg__name"))
-            .annotate(count=Count("id"))
+            .annotate(count=Count("id"), max_updated_at=Max("updated_at"))
             .filter(count__gt=0)
             .order_by("-count")
         ]
 
-        category_tcg = list(
-            base_qs
+        # Certificadoras solas (cross-TCG) — ej: "PSA Argentina", "BGS Argentina"
+        certification_entities = [
+            {
+                "cert": row["cert"],
+                "count": row["count"],
+                "pages": _pages(row["count"]),
+                "max_updated_at": _iso(row["max_updated_at"]),
+            }
+            for row in base_qs
+            .exclude(certification_entity__isnull=True)
+            .values(cert=models.F("certification_entity__abbreviation"))
+            .annotate(count=Count("id"), max_updated_at=Max("updated_at"))
+            .filter(count__gt=0)
+            .order_by("-count")
+        ]
+
+        category_tcg = [
+            {
+                "category_slug": row["category_slug"],
+                "tcg_slug": row["tcg_slug"],
+                "count": row["count"],
+                "pages": _pages(row["count"]),
+                "max_updated_at": _iso(row["max_updated_at"]),
+            }
+            for row in base_qs
+            .exclude(category__isnull=True)
             .exclude(tcg__isnull=True)
             .values(
                 category_slug=models.F("category__slug"),
                 tcg_slug=models.F("tcg__slug"),
             )
-            .annotate(count=Count("id"))
+            .annotate(count=Count("id"), max_updated_at=Max("updated_at"))
             .filter(count__gt=0)
             .order_by("-count")
-        )
+        ]
 
         singles_condition = [
             {
@@ -208,6 +266,8 @@ class ProductViewSet(viewsets.ModelViewSet):
                 "tcg_slug": row["tcg_slug"],
                 "condition": row["condition_abbr"],
                 "count": row["count"],
+                "pages": _pages(row["count"]),
+                "max_updated_at": _iso(row["max_updated_at"]),
             }
             for row in base_qs
             .filter(category__slug__in=["singles", "single"])
@@ -218,13 +278,42 @@ class ProductViewSet(viewsets.ModelViewSet):
                 tcg_slug=models.F("tcg__slug"),
                 condition_abbr=models.F("condition__abbreviation"),
             )
-            .annotate(count=Count("id"))
+            .annotate(count=Count("id"), max_updated_at=Max("updated_at"))
             .filter(count__gt=0)
             .order_by("-count")
         ]
 
-        slabs_cert = list(
-            base_qs
+        # Singles × condición sin TCG — ej: "Singles Near Mint"
+        singles_condition_all_tcgs = [
+            {
+                "category_slug": row["category_slug"],
+                "condition": row["condition_abbr"],
+                "count": row["count"],
+                "pages": _pages(row["count"]),
+                "max_updated_at": _iso(row["max_updated_at"]),
+            }
+            for row in base_qs
+            .filter(category__slug__in=["singles", "single"])
+            .exclude(condition__isnull=True)
+            .values(
+                category_slug=models.F("category__slug"),
+                condition_abbr=models.F("condition__abbreviation"),
+            )
+            .annotate(count=Count("id"), max_updated_at=Max("updated_at"))
+            .filter(count__gt=0)
+            .order_by("-count")
+        ]
+
+        slabs_cert = [
+            {
+                "category_slug": row["category_slug"],
+                "tcg_slug": row["tcg_slug"],
+                "cert": row["cert"],
+                "count": row["count"],
+                "pages": _pages(row["count"]),
+                "max_updated_at": _iso(row["max_updated_at"]),
+            }
+            for row in base_qs
             .filter(category__slug__in=["slabs", "slab"])
             .exclude(certification_entity__isnull=True)
             .exclude(tcg__isnull=True)
@@ -233,17 +322,45 @@ class ProductViewSet(viewsets.ModelViewSet):
                 tcg_slug=models.F("tcg__slug"),
                 cert=models.F("certification_entity__abbreviation"),
             )
-            .annotate(count=Count("id"))
+            .annotate(count=Count("id"), max_updated_at=Max("updated_at"))
             .filter(count__gt=0)
             .order_by("-count")
-        )
+        ]
+
+        # Slabs × certificadora sin TCG — ej: "Slabs PSA"
+        slabs_cert_all_tcgs = [
+            {
+                "category_slug": row["category_slug"],
+                "cert": row["cert"],
+                "count": row["count"],
+                "pages": _pages(row["count"]),
+                "max_updated_at": _iso(row["max_updated_at"]),
+            }
+            for row in base_qs
+            .filter(category__slug__in=["slabs", "slab"])
+            .exclude(certification_entity__isnull=True)
+            .values(
+                category_slug=models.F("category__slug"),
+                cert=models.F("certification_entity__abbreviation"),
+            )
+            .annotate(count=Count("id"), max_updated_at=Max("updated_at"))
+            .filter(count__gt=0)
+            .order_by("-count")
+        ]
 
         return Response({
+            "page_size": PAGE_SIZE,
+            "tienda_total": tienda_total,
+            "tienda_pages": tienda_pages,
+            "has_discount_count": has_discount_count,
             "categories": categories,
             "tcgs": tcgs,
+            "certification_entities": certification_entities,
             "category_tcg": category_tcg,
             "singles_condition": singles_condition,
+            "singles_condition_all_tcgs": singles_condition_all_tcgs,
             "slabs_cert": slabs_cert,
+            "slabs_cert_all_tcgs": slabs_cert_all_tcgs,
             "generated_at": timezone.now().isoformat(),
         })
 
@@ -251,20 +368,23 @@ class ProductViewSet(viewsets.ModelViewSet):
     def sitemap_index(self, request):
         """
         GET /products/sitemap-index/
-        Payload minimal optimizado para sitemap (slug + updated_at).
+        Payload minimal optimizado para sitemap (slug + updated_at + nombre + imágenes).
         Solo productos en stock — sin paginar, ordenado por updated_at.
+        `images` es un array con hasta 3 URLs (principal + 2 extras).
+        `name` se usa como alt text en el sitemap de imágenes.
         """
         qs = (
             Product.objects
             .filter(in_stock=True)
-            .only("slug", "updated_at", "image_url")
+            .only("slug", "updated_at", "image_url", "image_url_2", "image_url_3", "name")
             .order_by("-updated_at")
         )
         data = [
             {
                 "slug": p.slug,
+                "name": p.name or "",
                 "updated_at": p.updated_at.isoformat(),
-                "image_url": p.image_url or "",
+                "images": [url for url in (p.image_url, p.image_url_2, p.image_url_3) if url],
             }
             for p in qs.iterator(chunk_size=1000)
         ]
