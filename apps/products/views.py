@@ -379,12 +379,22 @@ class ProductViewSet(viewsets.ModelViewSet):
             .only("slug", "updated_at", "image_url", "image_url_2", "image_url_3", "name")
             .order_by("-updated_at")
         )
+        def _dedup_images(*urls):
+            # Preserva orden y descarta vacías/duplicadas (mismos URLs en image_url y image_url_2, etc).
+            seen = set()
+            out = []
+            for url in urls:
+                if url and url not in seen:
+                    seen.add(url)
+                    out.append(url)
+            return out
+
         data = [
             {
                 "slug": p.slug,
                 "name": p.name or "",
                 "updated_at": p.updated_at.isoformat(),
-                "images": [url for url in (p.image_url, p.image_url_2, p.image_url_3) if url],
+                "images": _dedup_images(p.image_url, p.image_url_2, p.image_url_3),
             }
             for p in qs.iterator(chunk_size=1000)
         ]
