@@ -170,23 +170,25 @@ class ProductViewSet(viewsets.ModelViewSet):
 
         base_qs = Product.objects.filter(in_stock=True)
 
-        categories = list(
-            base_qs
+        categories = [
+            {"slug": row["cat_slug"], "name": row["cat_name"], "count": row["count"]}
+            for row in base_qs
             .exclude(category__isnull=True)
-            .values(slug=models.F("category__slug"), name=models.F("category__name"))
+            .values(cat_slug=models.F("category__slug"), cat_name=models.F("category__name"))
             .annotate(count=Count("id"))
             .filter(count__gt=0)
             .order_by("-count")
-        )
+        ]
 
-        tcgs = list(
-            base_qs
+        tcgs = [
+            {"slug": row["tcg_slug"], "name": row["tcg_name"], "count": row["count"]}
+            for row in base_qs
             .exclude(tcg__isnull=True)
-            .values(slug=models.F("tcg__slug"), name=models.F("tcg__name"))
+            .values(tcg_slug=models.F("tcg__slug"), tcg_name=models.F("tcg__name"))
             .annotate(count=Count("id"))
             .filter(count__gt=0)
             .order_by("-count")
-        )
+        ]
 
         category_tcg = list(
             base_qs
@@ -200,20 +202,26 @@ class ProductViewSet(viewsets.ModelViewSet):
             .order_by("-count")
         )
 
-        singles_condition = list(
-            base_qs
+        singles_condition = [
+            {
+                "category_slug": row["category_slug"],
+                "tcg_slug": row["tcg_slug"],
+                "condition": row["condition_abbr"],
+                "count": row["count"],
+            }
+            for row in base_qs
             .filter(category__slug__in=["singles", "single"])
             .exclude(condition__isnull=True)
             .exclude(tcg__isnull=True)
             .values(
                 category_slug=models.F("category__slug"),
                 tcg_slug=models.F("tcg__slug"),
-                condition=models.F("condition__abbreviation"),
+                condition_abbr=models.F("condition__abbreviation"),
             )
             .annotate(count=Count("id"))
             .filter(count__gt=0)
             .order_by("-count")
-        )
+        ]
 
         slabs_cert = list(
             base_qs
