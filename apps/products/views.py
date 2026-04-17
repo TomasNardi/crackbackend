@@ -3,6 +3,7 @@ Products Views
 ===============
 """
 
+from django.db import models
 from django.utils.decorators import method_decorator
 from django_ratelimit.decorators import ratelimit
 from rest_framework import viewsets, permissions
@@ -96,7 +97,7 @@ class ProductViewSet(viewsets.ModelViewSet):
         return ProductListSerializer
 
     def get_permissions(self):
-        if self.action in ("list", "retrieve", "featured", "new_arrivals", "sitemap_index"):
+        if self.action in ("list", "retrieve", "featured", "new_arrivals", "sitemap_index", "seo_facets"):
             return [permissions.AllowAny()]
         return [permissions.IsAdminUser()]
 
@@ -146,6 +147,97 @@ class ProductViewSet(viewsets.ModelViewSet):
         """GET /products/new-arrivals/ — últimos 8 productos."""
         qs = self.get_queryset().order_by("-created_at")[:8]
         return Response(ProductListSerializer(qs, many=True).data)
+
+    @action(detail=False, methods=["get"], url_path="seo-facets", permission_classes=[permissions.AllowAny])
+    def seo_facets(self, request):
+        """
+        GET /products/seo-facets/
+        Retorna combinaciones de filtros con productos en stock — solo incluye
+        combinaciones con count > 0 para evitar thin content en el sitemap.
+
+        Estructura:
+          {
+            "categories":        [{slug, name, count}],
+            "tcgs":              [{slug, name, count}],
+            "category_tcg":      [{category_slug, tcg_slug, count}],
+            "singles_condition": [{tcg_slug, condition, count}],
+            "slabs_cert":        [{tcg_slug, cert, count}],
+            "generated_at":      ISO8601 timestamp,
+          }
+        """
+        from django.db.models import Count
+        from django.utils import timezone
+
+        base_qs = Product.objects.filter(in_stock=True)
+
+        categories = list(
+            base_qs
+            .exclude(category__isnull=True)
+            .values(slug=models.F("category__slug"), name=models.F("category__name"))
+            .annotate(count=Count("id"))
+            .filter(count__gt=0)
+            .order_by("-count")
+        )
+
+        tcgs = list(
+            base_qs
+            .exclude(tcg__isnull=True)
+            .values(slug=models.F("tcg__slug"), name=models.F("tcg__name"))
+            .annotate(count=Count("id"))
+            .filter(count__gt=0)
+            .order_by("-count")
+        )
+
+        category_tcg = list(
+            base_qs
+            .exclude(tcg__isnull=True)
+            .values(
+                category_slug=models.F("category__slug"),
+                tcg_slug=models.F("tcg__slug"),
+            )
+            .annotate(count=Count("id"))
+            .filter(count__gt=0)
+            .order_by("-count")
+        )
+
+        singles_condition = list(
+            base_qs
+            .filter(category__slug__in=["singles", "single"])
+            .exclude(condition__isnull=True)
+            .exclude(tcg__isnull=True)
+            .values(
+                category_slug=models.F("category__slug"),
+                tcg_slug=models.F("tcg__slug"),
+                condition=models.F("condition__abbreviation"),
+            )
+            .annotate(count=Count("id"))
+            .filter(count__gt=0)
+            .order_by("-count")
+        )
+
+        slabs_cert = list(
+            base_qs
+            .filter(category__slug__in=["slabs", "slab"])
+            .exclude(certification_entity__isnull=True)
+            .exclude(tcg__isnull=True)
+            .values(
+                category_slug=models.F("category__slug"),
+                tcg_slug=models.F("tcg__slug"),
+                cert=models.F("certification_entity__abbreviation"),
+            )
+            .annotate(count=Count("id"))
+            .filter(count__gt=0)
+            .order_by("-count")
+        )
+
+        return Response({
+            "categories": categories,
+            "tcgs": tcgs,
+            "category_tcg": category_tcg,
+            "singles_condition": singles_condition,
+            "slabs_cert": slabs_cert,
+            "generated_at": timezone.now().isoformat(),
+        })
 
     @action(detail=False, methods=["get"], url_path="sitemap-index", permission_classes=[permissions.AllowAny])
     def sitemap_index(self, request):
