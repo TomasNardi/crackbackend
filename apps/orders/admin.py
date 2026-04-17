@@ -47,21 +47,24 @@ class MercadoPagoPaymentInline(TabularInline):
 class OrderAdmin(ModelAdmin):
     list_display = (
         "order_code", "customer_name", "customer_email",
-        "total", "status", "payment_method", "shipping_type", "paqar_status_display",
-        "pdf_download_button", "paqar_label_button", "created_at_ar",
+        "total", "payment_method", "payment_status_display", "shipping_type",
+        "pdf_download_button", "created_at_ar",
     )
-    list_filter = ("status", "payment_method", "shipping_type", "paqar_status")
+    list_filter = ("payment_method", "shipping_type")
     search_fields = (
         "order_code", "customer_name", "customer_email", "discount_code",
-        "paqar_tracking_number", "mp_preference_id",
+        "mp_preference_id",
     )
     readonly_fields = (
         "order_code", "created_at", "updated_at",
-        "paqar_tracking_number", "paqar_error", "paqar_status", "mp_preference_id",
+        "mp_preference_id",
     )
     ordering = ("-created_at",)
     inlines = [OrderItemInline, MercadoPagoPaymentInline]
-    actions = ["action_create_paqar_order", "action_cancel_paqar_order", "action_download_pdf"]
+    actions = [
+        "action_mark_cash_paid",
+        "action_download_pdf",
+    ]
 
     def has_add_permission(self, request):
         return False
@@ -71,17 +74,52 @@ class OrderAdmin(ModelAdmin):
         local = timezone.localtime(obj.created_at)
         return local.strftime("%d/%m/%Y %H:%M")
 
-    @admin.display(description="Paq.ar", ordering="paqar_status")
-    def paqar_status_display(self, obj):
-        colors = {
-            "pending": "#888",
-            "created": "#2ea44f",
-            "error": "#d73a49",
-            "cancelled": "#e36209",
-        }
-        color = colors.get(obj.paqar_status, "#888")
-        label = obj.get_paqar_status_display()
-        return format_html('<span style="color:{}; font-weight:600;">{}</span>', color, label)
+    @admin.display(description="Cobro")
+    def payment_status_display(self, obj):
+        if obj.payment_method == Order.PAYMENT_CASH and obj.status == Order.STATUS_PENDING:
+            url = reverse("admin:orders_order_mark_cash_paid", args=[obj.pk])
+            return format_html(
+                '<a href="{}" style="'
+                'background:#2ea44f;color:#fff;padding:4px 10px;border-radius:4px;'
+                'font-size:12px;font-weight:600;text-decoration:none;display:inline-block;"'
+                'title="Marcar orden en efectivo como pagada">Marcar pagada</a>',
+                url,
+            )
+        if obj.payment_method == Order.PAYMENT_CASH and obj.status == Order.STATUS_PAID:
+            return format_html('<span style="color:#2ea44f; font-weight:600;">Pagada</span>')
+
+        if obj.payment_method == Order.PAYMENT_MERCADOPAGO:
+            mp_payment = obj.mp_payments.order_by("-updated_at", "-created_at").first()
+            if not mp_payment:
+                return format_html('<span style="color:#888; font-weight:600;">Sin novedades</span>')
+
+            status_raw = (mp_payment.status or "").strip()
+            status_key = status_raw.lower()
+            status_labels = {
+                "preference_created": "Checkout iniciado",
+                "approved": "Pagada",
+                "pending": "Pendiente",
+                "in_process": "En proceso",
+                "rejected": "Rechazada",
+                "cancelled": "Cancelada",
+                "refunded": "Devuelta",
+                "charged_back": "Contracargo",
+            }
+            status_colors = {
+                "preference_created": "#888",
+                "approved": "#2ea44f",
+                "pending": "#e36209",
+                "in_process": "#C8972E",
+                "rejected": "#d73a49",
+                "cancelled": "#d73a49",
+                "refunded": "#6f42c1",
+                "charged_back": "#6f42c1",
+            }
+            label = status_labels.get(status_key, status_raw or "Sin estado")
+            color = status_colors.get(status_key, "#888")
+            return format_html('<span style="color:{}; font-weight:600;">{}</span>', color, label)
+
+        return "—"
 
     @admin.display(description="PDF")
     def pdf_download_button(self, obj):
@@ -95,34 +133,43 @@ class OrderAdmin(ModelAdmin):
             url,
         )
 
-    @admin.display(description="Etiqueta")
-    def paqar_label_button(self, obj):
-        if obj.paqar_status == Order.PAQAR_STATUS_CREATED and obj.paqar_tracking_number:
-            url = reverse("admin:orders_order_paqar_label", args=[obj.pk])
-            return format_html(
-                '<a href="{}" target="_blank" style="'
-                'background:#C8972E;color:#fff;padding:3px 10px;border-radius:4px;'
-                'font-size:12px;font-weight:600;text-decoration:none;">'
-                '⬇ Descargar</a>',
-                url,
-            )
-        return "—"
-
     def get_urls(self):
         urls = super().get_urls()
         custom = [
+            path(
+                "<int:order_id>/mark-cash-paid/",
+                self.admin_site.admin_view(self.mark_cash_paid_view),
+                name="orders_order_mark_cash_paid",
+            ),
             path(
                 "<int:order_id>/pdf/",
                 self.admin_site.admin_view(self.pdf_download_view),
                 name="orders_order_pdf_download",
             ),
-            path(
-                "<int:order_id>/paqar-label/",
-                self.admin_site.admin_view(self.paqar_label_view),
-                name="orders_order_paqar_label",
-            ),
         ]
         return custom + urls
+
+    def mark_cash_paid_view(self, request, order_id):
+        try:
+            order = Order.objects.get(pk=order_id)
+        except Order.DoesNotExist:
+            self.message_user(request, "Orden no encontrada.", level=messages.ERROR)
+            return HttpResponseRedirect(reverse("admin:orders_order_changelist"))
+
+        if order.payment_method != Order.PAYMENT_CASH:
+            self.message_user(
+                request,
+                f"La orden #{order.order_code} no es de pago en efectivo.",
+                level=messages.WARNING,
+            )
+        elif order.status == Order.STATUS_PAID:
+            self.message_user(request, f"La orden #{order.order_code} ya estaba pagada.", level=messages.INFO)
+        else:
+            order.status = Order.STATUS_PAID
+            order.save(update_fields=["status", "updated_at"])
+            self.message_user(request, f"Orden #{order.order_code} marcada como pagada.", level=messages.SUCCESS)
+
+        return HttpResponseRedirect(request.META.get("HTTP_REFERER") or reverse("admin:orders_order_changelist"))
 
     def pdf_download_view(self, request, order_id):
         """Genera y descarga el PDF de la orden."""
@@ -164,75 +211,23 @@ class OrderAdmin(ModelAdmin):
                 level=messages.INFO
             )
 
-    def paqar_label_view(self, request, order_id):
-        """Descarga la etiqueta PDF desde Paq.ar y la sirve como respuesta HTTP."""
-        from .paqar_client import get_label, PaqarError
-        order = Order.objects.get(pk=order_id)
+    @admin.action(description="Marcar como pagadas (solo efectivo pendientes)")
+    def action_mark_cash_paid(self, request, queryset):
+        pending_cash = queryset.filter(
+            payment_method=Order.PAYMENT_CASH,
+            status=Order.STATUS_PENDING,
+        )
+        updated = pending_cash.update(status=Order.STATUS_PAID, updated_at=timezone.now())
+        skipped = queryset.count() - updated
 
-        if not order.paqar_tracking_number:
-            self.message_user(request, "Esta orden no tiene Tracking Number en Paq.ar.", level=messages.ERROR)
-            return HttpResponseRedirect(reverse("admin:orders_order_change", args=[order_id]))
-
-        try:
-            pdf_bytes = get_label(order.paqar_tracking_number)
-        except PaqarError as exc:
-            self.message_user(request, f"Error al obtener etiqueta: {exc}", level=messages.ERROR)
-            return HttpResponseRedirect(reverse("admin:orders_order_change", args=[order_id]))
-
-        filename = f"etiqueta_{order.order_code}.pdf"
-        response = HttpResponse(pdf_bytes, content_type="application/pdf")
-        response["Content-Disposition"] = f'attachment; filename="{filename}"'
-        return response
-
-    @admin.action(description="Generar envío en Paq.ar (Correo Argentino)")
-    def action_create_paqar_order(self, request, queryset):
-        from .paqar_client import create_order, PaqarError
-        ok = 0
-        ko = 0
-        for order in queryset:
-            if order.paqar_status == Order.PAQAR_STATUS_CREATED:
-                self.message_user(
-                    request,
-                    f"Orden #{order.order_code} ya tiene envío generado (TN: {order.paqar_tracking_number}).",
-                    level=messages.WARNING,
-                )
-                continue
-            if order.shipping_type != Order.SHIPPING_HOME:
-                # Para retiro en sucursal también se puede dar de alta pero requiere agencyId
-                pass
-            try:
-                data = create_order(order)
-                tracking = data.get("trackingNumber", "")
-                order.paqar_tracking_number = tracking
-                order.paqar_status = Order.PAQAR_STATUS_CREATED
-                order.paqar_error = ""
-                order.save(update_fields=["paqar_tracking_number", "paqar_status", "paqar_error", "updated_at"])
-                self.message_user(request, f"Orden #{order.order_code} generada en Paq.ar — TN: {tracking}")
-                ok += 1
-            except PaqarError as exc:
-                order.paqar_status = Order.PAQAR_STATUS_ERROR
-                order.paqar_error = str(exc)
-                order.save(update_fields=["paqar_status", "paqar_error", "updated_at"])
-                self.message_user(request, f"Error en orden #{order.order_code}: {exc}", level=messages.ERROR)
-                ko += 1
-        if ok:
-            self.message_user(request, f"{ok} orden(es) generadas correctamente en Paq.ar.")
-
-    @admin.action(description="Cancelar envío en Paq.ar")
-    def action_cancel_paqar_order(self, request, queryset):
-        from .paqar_client import cancel_order, PaqarError
-        for order in queryset:
-            if not order.paqar_tracking_number:
-                self.message_user(request, f"Orden #{order.order_code} no tiene TN de Paq.ar.", level=messages.WARNING)
-                continue
-            try:
-                cancel_order(order.paqar_tracking_number)
-                order.paqar_status = Order.PAQAR_STATUS_CANCELLED
-                order.save(update_fields=["paqar_status", "updated_at"])
-                self.message_user(request, f"Orden #{order.order_code} cancelada en Paq.ar.")
-            except PaqarError as exc:
-                self.message_user(request, f"Error cancelando #{order.order_code}: {exc}", level=messages.ERROR)
-
+        if updated:
+            self.message_user(request, f"{updated} orden(es) en efectivo marcadas como pagadas.", level=messages.SUCCESS)
+        if skipped:
+            self.message_user(
+                request,
+                f"{skipped} orden(es) omitidas: solo se actualizan órdenes en efectivo con estado pendiente.",
+                level=messages.WARNING,
+            )
 
 @admin.register(DiscountCode)
 class DiscountCodeAdmin(ModelAdmin):

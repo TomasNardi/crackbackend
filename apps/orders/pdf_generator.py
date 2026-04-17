@@ -27,6 +27,44 @@ TEXT_COLOR = HexColor("#2C1810")  # Dark brown
 BORDER_COLOR = HexColor("#D4A574")  # Light gold
 
 
+def _mp_status_label(status: str) -> str:
+    labels = {
+        "preference_created": "Checkout iniciado",
+        "approved": "Aprobado",
+        "pending": "Pendiente",
+        "in_process": "En proceso",
+        "rejected": "Rechazado",
+        "cancelled": "Cancelado",
+        "refunded": "Devuelto",
+        "charged_back": "Contracargo",
+    }
+    return labels.get((status or "").lower(), status or "Sin estado")
+
+
+def _mp_method_label(method: str) -> str:
+    labels = {
+        "account_money": "Dinero en cuenta MP",
+        "debit_card": "Tarjeta de débito",
+        "credit_card": "Tarjeta de crédito",
+        "prepaid_card": "Tarjeta prepaga",
+        "ticket": "Pago en efectivo (ticket)",
+        "bank_transfer": "Transferencia bancaria",
+    }
+    return labels.get((method or "").lower(), method or "No informado")
+
+
+def _mp_type_label(payment_type: str) -> str:
+    labels = {
+        "account_money": "Dinero en cuenta",
+        "debit_card": "Débito",
+        "credit_card": "Crédito",
+        "prepaid_card": "Prepaga",
+        "ticket": "Ticket",
+        "bank_transfer": "Transferencia",
+    }
+    return labels.get((payment_type or "").lower(), payment_type or "No informado")
+
+
 def generate_order_pdf(order):
     """
     Genera un PDF con el resumen de la orden.
@@ -141,6 +179,57 @@ def generate_order_pdf(order):
     ]))
     story.append(client_table)
     story.append(Spacer(1, 0.2 * inch))
+
+    # ==================== INFORMACIÓN DE PAGO (MP) ====================
+    if order.payment_method == "mercadopago":
+        story.append(Paragraph("<b style='color: #2C1810; font-size: 12px;'>INFORMACIÓN DE PAGO</b>", styles["Normal"]))
+        story.append(Spacer(1, 0.08 * inch))
+
+        mp_payment = order.mp_payments.order_by("-last_validated_at", "-updated_at", "-created_at").first()
+        if mp_payment:
+            approved_at = "—"
+            if mp_payment.date_approved:
+                approved_at = timezone.localtime(mp_payment.date_approved).strftime("%d/%m/%Y %H:%M")
+
+            validated_at = "—"
+            if mp_payment.last_validated_at:
+                validated_at = timezone.localtime(mp_payment.last_validated_at).strftime("%d/%m/%Y %H:%M")
+
+            payment_info_data = [
+                [
+                    Paragraph(f"<b>Estado MP (webhook):</b> {_mp_status_label(mp_payment.status)}", styles["Normal"]),
+                    Paragraph(f"<b>ID de pago:</b> {mp_payment.payment_id or '—'}", styles["Normal"]),
+                ],
+                [
+                    Paragraph(f"<b>Método:</b> {_mp_method_label(mp_payment.payment_method)}", styles["Normal"]),
+                    Paragraph(f"<b>Tipo:</b> {_mp_type_label(mp_payment.payment_type)}", styles["Normal"]),
+                ],
+                [
+                    Paragraph(f"<b>Monto transacción:</b> ${mp_payment.transaction_amount:.2f}", styles["Normal"]),
+                    Paragraph("", styles["Normal"]),
+                ],
+                [
+                    Paragraph(f"<b>Fecha aprobación:</b> {approved_at}", styles["Normal"]),
+                    Paragraph(f"<b>Última validación:</b> {validated_at}", styles["Normal"]),
+                ],
+            ]
+        else:
+            payment_info_data = [[Paragraph("<b>Estado MP (webhook):</b> Sin datos de transacción todavía.", styles["Normal"])]]
+
+        payment_table = Table(payment_info_data, colWidths=[3.25 * inch, 3.25 * inch] if len(payment_info_data[0]) == 2 else [6.5 * inch])
+        payment_table.setStyle(TableStyle([
+            ("ALIGN", (0, 0), (-1, -1), "LEFT"),
+            ("VALIGN", (0, 0), (-1, -1), "TOP"),
+            ("FONTSIZE", (0, 0), (-1, -1), 9),
+            ("BACKGROUND", (0, 0), (-1, -1), LIGHT_COLOR),
+            ("TOPPADDING", (0, 0), (-1, -1), 8),
+            ("BOTTOMPADDING", (0, 0), (-1, -1), 8),
+            ("LEFTPADDING", (0, 0), (-1, -1), 10),
+            ("RIGHTPADDING", (0, 0), (-1, -1), 10),
+            ("GRID", (0, 0), (-1, -1), 1, BORDER_COLOR),
+        ]))
+        story.append(payment_table)
+        story.append(Spacer(1, 0.2 * inch))
     
     # ==================== PRODUCTOS (TABLA) ====================
     story.append(Paragraph("<b style='color: #2C1810; font-size: 12px;'>PRODUCTOS</b>", styles["Normal"]))

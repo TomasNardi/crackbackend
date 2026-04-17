@@ -127,7 +127,7 @@ def _build_preview_html(asunto, contenido, imagen_url, recipient_email="suscript
                 Este mensaje fue enviado a <span style="color:#C8972E;">{recipient_email}</span>
               </p>
               <p style="margin:0;font-size:11px;color:#d1d5db;">
-                © 2025 CRACK TCG · Buenos Aires, Argentina
+                © 2026 CRACK TCG · Deheza 2921, PB, Saavedra, Buenos Aires, Argentina
               </p>
             </td>
           </tr>
