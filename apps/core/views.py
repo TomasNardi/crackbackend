@@ -16,6 +16,7 @@ from .serializers import (
     ContactMessageSerializer, SolicitudVentaSerializer
 )
 from .emails import send_new_sale_request_notification
+from .newsletter_tokens import read_unsubscribe_token
 
 logger = logging.getLogger(__name__)
 
@@ -43,14 +44,49 @@ class EmailSubscribeView(APIView):
     @method_decorator(ratelimit(key="ip", rate="5/m", method="POST", block=True))
     def post(self, request):
         serializer = EmailSubscribeSerializer(data=request.data)
-        if serializer.is_valid():
-            serializer.save()
+        if not serializer.is_valid():
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+        email = serializer.validated_data["email"]
+        subscription, created = EmailSubscription.objects.get_or_create(
+            email=email,
+            defaults={"is_active": True},
+        )
+
+        if created:
             return Response({"message": "¡Suscripción exitosa!"}, status=status.HTTP_201_CREATED)
-        # Si el email ya existe, responder amigablemente
-        email_errors = serializer.errors.get("email", [])
-        if any("unique" in str(e).lower() or "already" in str(e).lower() or "existe" in str(e).lower() for e in email_errors):
+
+        if subscription.is_active:
             return Response({"message": "¡Ya estás suscripto!"}, status=status.HTTP_200_OK)
-        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+        subscription.is_active = True
+        subscription.save(update_fields=["is_active"])
+        return Response({"message": "¡Suscripción reactivada!"}, status=status.HTTP_200_OK)
+
+
+class EmailUnsubscribeView(APIView):
+    permission_classes = [permissions.AllowAny]
+
+    @method_decorator(ratelimit(key="ip", rate="10/m", method="POST", block=True))
+    def post(self, request):
+        token = str(request.data.get("token") or "").strip()
+        if not token:
+            return Response({"detail": "Token requerido."}, status=status.HTTP_400_BAD_REQUEST)
+
+        email = read_unsubscribe_token(token)
+        if not email:
+            return Response(
+                {"detail": "El enlace de desuscripción es inválido o expiró."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        subscription = EmailSubscription.objects.filter(email=email).first()
+        if not subscription or not subscription.is_active:
+            return Response({"message": "Tu email ya estaba desuscripto."}, status=status.HTTP_200_OK)
+
+        subscription.is_active = False
+        subscription.save(update_fields=["is_active"])
+        return Response({"message": "Ya no recibirás novedades por email."}, status=status.HTTP_200_OK)
 
 
 class PingView(APIView):

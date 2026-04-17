@@ -26,6 +26,7 @@ from apps.orders.views import (
 from apps.core.views import (
     SiteConfigView,
     EmailSubscribeView,
+    EmailUnsubscribeView,
     PingView,
     ExchangeRateView,
     ContactView,
@@ -63,6 +64,7 @@ urlpatterns = [
     path("site-config/", SiteConfigView.as_view(), name="site_config"),
     path("exchange-rate/", ExchangeRateView.as_view(), name="exchange_rate"),
     path("subscribe/", EmailSubscribeView.as_view(), name="email_subscribe"),
+    path("unsubscribe/", EmailUnsubscribeView.as_view(), name="email_unsubscribe"),
     path("contact/", ContactView.as_view(), name="contact"),
     path("sale-requests/", SolicitudVentaCreateView.as_view(), name="sale_requests"),
     path("ping/", PingView.as_view(), name="ping"),

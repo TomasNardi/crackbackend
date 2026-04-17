@@ -31,8 +31,6 @@ class EmailSubscribeSerializer(serializers.ModelSerializer):
         fields = ("email",)
 
     def validate_email(self, value):
-        if EmailSubscription.objects.filter(email=value, is_active=True).exists():
-            raise serializers.ValidationError("Este email ya está suscripto.")
         return value.lower()
 
 

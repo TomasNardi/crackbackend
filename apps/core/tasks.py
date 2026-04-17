@@ -5,6 +5,7 @@ Ejecutadas por Django Q (tareas asincrónicas).
 
 import time
 import logging
+from urllib.parse import quote
 from django.utils import timezone
 from django.conf import settings
 
@@ -13,6 +14,7 @@ logger = logging.getLogger(__name__)
 import resend as resend_lib
 
 from .models import EmailCampaign, EmailSubscription
+from .newsletter_tokens import make_unsubscribe_token
 
 
 def build_campaign_html(campaign, recipient_email):
@@ -43,8 +45,13 @@ def _build_preview_html(asunto, contenido, imagen_url, recipient_email="suscript
         </tr>"""
 
     from django.conf import settings as django_settings
-    site_url = getattr(django_settings, "SITE_URL", "https://cracktcg.com")
+    frontend_url = str(getattr(django_settings, "FRONTEND_URL", "") or "").strip()
+    if not frontend_url.startswith("http"):
+      frontend_url = str(getattr(django_settings, "SITE_URL", "https://cracktcg.com") or "").strip()
+    site_url = frontend_url or "https://cracktcg.com"
     from_name = "CRACK TCG"
+    unsubscribe_token = make_unsubscribe_token(recipient_email)
+    unsubscribe_url = f"{site_url.rstrip('/')}/desuscribirse?token={quote(unsubscribe_token)}"
 
     return f"""<!DOCTYPE html>
 <html lang="es">
@@ -123,8 +130,15 @@ def _build_preview_html(asunto, contenido, imagen_url, recipient_email="suscript
             <td style="background-color:#f9f7f3;border-top:1px solid #e8e4dd;padding:24px 40px;text-align:center;">
               <p style="margin:0 0 8px 0;font-size:13px;font-weight:700;color:#1a1a1a;letter-spacing:.05em;">CRACK TCG</p>
               <p style="margin:0 0 12px 0;font-size:12px;color:#9ca3af;line-height:1.5;">
-                Recibís este email porque te suscribiste a nuestras novedades.<br>
-                Este mensaje fue enviado a <span style="color:#C8972E;">{recipient_email}</span>
+                Recibís este email porque te suscribiste a nuestras novedades.
+              </p>
+              <p style="margin:0 0 14px 0;">
+                <a href="{unsubscribe_url}"
+                   style="display:inline-block;background:#ffffff;color:#374151;text-decoration:none;
+                          border:1px solid #d1d5db;border-radius:999px;padding:8px 18px;
+                          font-size:11px;font-weight:700;letter-spacing:.03em;text-transform:uppercase;">
+                  Dejar de recibir novedades
+                </a>
               </p>
               <p style="margin:0;font-size:11px;color:#d1d5db;">
                 © 2026 CRACK TCG · Deheza 2921, PB, Saavedra, Buenos Aires, Argentina
