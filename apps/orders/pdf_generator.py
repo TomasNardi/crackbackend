@@ -5,6 +5,7 @@ Generador de PDFs para órdenes de CRACK TCG.
 from io import BytesIO
 from datetime import datetime
 from decimal import Decimal
+from pathlib import Path
 
 from django.utils import timezone
 
@@ -25,6 +26,29 @@ SECONDARY_COLOR = HexColor("#8B6914")  # Dark gold
 LIGHT_COLOR = HexColor("#F5F1E8")  # Beige
 TEXT_COLOR = HexColor("#2C1810")  # Dark brown
 BORDER_COLOR = HexColor("#D4A574")  # Light gold
+
+
+def _get_brand_logo_flowable(styles):
+    """Retorna el logo para el header del PDF o texto fallback si no está disponible."""
+    project_root = Path(__file__).resolve().parents[3]
+    logo_candidates = [
+        project_root / "crackFront" / "public" / "brand" / "logo2.png",
+        project_root / "crackFront" / "public" / "brand" / "logo.png",
+        project_root / "crackFront" / "public" / "brand" / "whiteBgColor.png",
+        project_root / "crackFront" / "public" / "brand" / "landing logo.png",
+    ]
+
+    for logo_path in logo_candidates:
+        if logo_path.exists():
+            logo = Image(str(logo_path))
+            logo.drawHeight = 0.72 * inch
+            logo.drawWidth = 2.6 * inch
+            return logo
+
+    return Paragraph(
+        '<font size="28" color="#C8972E"><b>CRACK TCG</b></font>',
+        styles["Normal"],
+    )
 
 
 def _mp_status_label(status: str) -> str:
@@ -91,10 +115,7 @@ def generate_order_pdf(order):
     # ==================== HEADER ====================
     header_data = [
         [
-            Paragraph(
-                '<font size="28" color="#C8972E"><b>CRACK TCG</b></font>',
-                styles["Normal"],
-            ),
+            _get_brand_logo_flowable(styles),
             Paragraph(
                 f'<font size="12" color="#666"><b>COMPROBANTE DE ORDEN</b></font>',
                 ParagraphStyle(
