@@ -4,7 +4,7 @@
 {% block content %}
 
 {% if campaign_metrics %}
-<div style="
+<div id="campaign-metrics-grid" style="
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
   gap: 16px;
@@ -13,34 +13,43 @@
 
   <div style="background:#fff;border:1px solid #e5e7eb;border-radius:12px;padding:20px 24px;">
     <p style="margin:0 0 4px 0;font-size:11px;text-transform:uppercase;letter-spacing:.08em;color:#6b7280;">Total campañas</p>
-    <p style="margin:0;font-size:28px;font-weight:700;color:#111827;">{{ campaign_metrics.total_campaigns }}</p>
+    <p id="metric-total-campaigns" style="margin:0;font-size:28px;font-weight:700;color:#111827;">{{ campaign_metrics.total_campaigns }}</p>
   </div>
 
   <div style="background:#fff;border:1px solid #e5e7eb;border-radius:12px;padding:20px 24px;">
     <p style="margin:0 0 4px 0;font-size:11px;text-transform:uppercase;letter-spacing:.08em;color:#6b7280;">Borradores</p>
-    <p style="margin:0;font-size:28px;font-weight:700;color:#f59e0b;">{{ campaign_metrics.borradores }}</p>
+    <p id="metric-borradores" style="margin:0;font-size:28px;font-weight:700;color:#f59e0b;">{{ campaign_metrics.borradores }}</p>
+  </div>
+
+  <div style="background:#fff;border:1px solid #e5e7eb;border-radius:12px;padding:20px 24px;">
+    <p style="margin:0 0 4px 0;font-size:11px;text-transform:uppercase;letter-spacing:.08em;color:#6b7280;">Enviando</p>
+    <p id="metric-enviando" style="margin:0;font-size:28px;font-weight:700;color:#f59e0b;">{{ campaign_metrics.enviando }}</p>
   </div>
 
   <div style="background:#fff;border:1px solid #e5e7eb;border-radius:12px;padding:20px 24px;">
     <p style="margin:0 0 4px 0;font-size:11px;text-transform:uppercase;letter-spacing:.08em;color:#6b7280;">Enviadas</p>
-    <p style="margin:0;font-size:28px;font-weight:700;color:#10b981;">{{ campaign_metrics.enviadas }}</p>
+    <p id="metric-enviadas" style="margin:0;font-size:28px;font-weight:700;color:#10b981;">{{ campaign_metrics.enviadas }}</p>
   </div>
 
   <div style="background:#fff;border:1px solid #e5e7eb;border-radius:12px;padding:20px 24px;">
     <p style="margin:0 0 4px 0;font-size:11px;text-transform:uppercase;letter-spacing:.08em;color:#6b7280;">Emails enviados</p>
-    <p style="margin:0;font-size:28px;font-weight:700;color:#3b82f6;">{{ campaign_metrics.total_enviados }}</p>
+    <p id="metric-total-enviados" style="margin:0;font-size:28px;font-weight:700;color:#3b82f6;">{{ campaign_metrics.total_enviados }}</p>
   </div>
 
   <div style="background:#fff;border:1px solid #e5e7eb;border-radius:12px;padding:20px 24px;">
     <p style="margin:0 0 4px 0;font-size:11px;text-transform:uppercase;letter-spacing:.08em;color:#6b7280;">Fallidos</p>
-    <p style="margin:0;font-size:28px;font-weight:700;color:#ef4444;">{{ campaign_metrics.total_fallidos }}</p>
+    <p id="metric-total-fallidos" style="margin:0;font-size:28px;font-weight:700;color:#ef4444;">{{ campaign_metrics.total_fallidos }}</p>
   </div>
 
   <div style="background:#fff;border:1px solid #e5e7eb;border-radius:12px;padding:20px 24px;">
     <p style="margin:0 0 4px 0;font-size:11px;text-transform:uppercase;letter-spacing:.08em;color:#6b7280;">Tasa de entrega</p>
-    <p style="margin:0;font-size:28px;font-weight:700;color:#8b5cf6;">{{ campaign_metrics.tasa_entrega }}%</p>
+    <p id="metric-tasa-entrega" style="margin:0;font-size:28px;font-weight:700;color:#8b5cf6;">{{ campaign_metrics.tasa_entrega }}%</p>
   </div>
 
+</div>
+
+<div id="campaign-live-status" style="margin:-12px 0 20px 0;font-size:12px;color:#6b7280;">
+  Actualización en vivo activa
 </div>
 
 <div style="background:#fef3c7;border:1px solid #fcd34d;border-radius:10px;padding:14px 18px;margin-bottom:24px;display:flex;align-items:flex-start;gap:10px;">
@@ -57,5 +66,96 @@
 {% endif %}
 
 {{ block.super }}
+
+{% if campaign_metrics %}
+<script>
+(function () {
+  const endpoint = "{% url 'admin:core_emailcampaign_metrics_live' %}";
+  const POLL_MS = 3000;
+  let previousSending = null;
+
+  const map = {
+    total_campaigns: document.getElementById("metric-total-campaigns"),
+    borradores: document.getElementById("metric-borradores"),
+    enviando: document.getElementById("metric-enviando"),
+    enviadas: document.getElementById("metric-enviadas"),
+    total_enviados: document.getElementById("metric-total-enviados"),
+    total_fallidos: document.getElementById("metric-total-fallidos"),
+    tasa_entrega: document.getElementById("metric-tasa-entrega"),
+  };
+  const liveLabel = document.getElementById("campaign-live-status");
+
+  async function refreshTable() {
+    if (document.visibilityState === "hidden") return;
+    try {
+      const response = await fetch(window.location.href, {
+        headers: { "X-Requested-With": "XMLHttpRequest" },
+        cache: "no-store",
+      });
+      if (!response.ok) return;
+
+      const html = await response.text();
+      const parser = new DOMParser();
+      const doc = parser.parseFromString(html, "text/html");
+
+      const currentTable = document.querySelector("#result_list");
+      const incomingTable = doc.querySelector("#result_list");
+      if (currentTable && incomingTable) {
+        currentTable.innerHTML = incomingTable.innerHTML;
+      }
+
+      const currentPaginator = document.querySelector(".paginator");
+      const incomingPaginator = doc.querySelector(".paginator");
+      if (currentPaginator && incomingPaginator) {
+        currentPaginator.innerHTML = incomingPaginator.innerHTML;
+      }
+    } catch (error) {
+      // Silencioso para no ensuciar consola del admin.
+    }
+  }
+
+  function render(metrics) {
+    Object.keys(map).forEach((key) => {
+      if (!map[key] || metrics[key] === undefined || metrics[key] === null) return;
+      map[key].textContent = key === "tasa_entrega" ? `${metrics[key]}%` : String(metrics[key]);
+    });
+
+    if (liveLabel) {
+      if ((metrics.enviando || 0) > 0) {
+        liveLabel.textContent = "Actualización en vivo: enviando campañas ahora";
+        liveLabel.style.color = "#b45309";
+      } else {
+        liveLabel.textContent = "Actualización en vivo activa";
+        liveLabel.style.color = "#6b7280";
+      }
+    }
+
+    const isSending = (metrics.enviando || 0) > 0;
+    if (isSending || (previousSending === true && !isSending)) {
+      refreshTable();
+    }
+    previousSending = isSending;
+  }
+
+  async function refresh() {
+    if (document.visibilityState === "hidden") return;
+    try {
+      const response = await fetch(endpoint, {
+        headers: { "X-Requested-With": "XMLHttpRequest" },
+        cache: "no-store",
+      });
+      if (!response.ok) return;
+      const data = await response.json();
+      render(data);
+    } catch (error) {
+      // Silencioso para no ensuciar consola del admin.
+    }
+  }
+
+  refresh();
+  setInterval(refresh, POLL_MS);
+})();
+</script>
+{% endif %}
 
 {% endblock %}

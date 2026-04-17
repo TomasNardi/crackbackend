@@ -4,39 +4,27 @@
 {% block extrastyle %}
 {{ block.super }}
 <style>
-  /* ── Activar layout split en el body de esta página ── */
-  body.model-emailcampaign.change-form #content {
-    display: flex;
-    align-items: flex-start;
-    gap: 0;
-    padding-right: 0 !important;
-    max-width: none !important;
-  }
-
+  /* ── Reservar espacio para preview fijo a la derecha ── */
   body.model-emailcampaign.change-form #content-main {
-    flex: 1;
+    width: 100%;
     min-width: 0;
-    padding-right: 24px;
+    padding-right: 444px;
   }
 
   /* ── Panel de preview ── */
   #crack-preview-panel {
-    width: 460px;
-    min-width: 460px;
-    position: sticky;
-    top: 0;
-    height: 100vh;
+    width: 420px;
+    min-width: 420px;
+    position: fixed;
+    right: 0;
+    top: 64px;
+    height: calc(100vh - 64px);
     display: flex;
     flex-direction: column;
     background: #111827;
     border-left: 1px solid #1f2937;
     overflow: hidden;
-    flex-shrink: 0;
-    /* Compensar el padding del #content padre */
-    margin-right: -32px;
-    margin-top: -32px;
-    margin-bottom: -32px;
-    padding-top: 0;
+    z-index: 40;
   }
 
   /* ── Header del panel ── */
@@ -257,15 +245,16 @@
   /* ── Responsive ── */
   @media (max-width: 1400px) {
     #crack-preview-panel {
-      width: 400px;
-      min-width: 400px;
+      width: 380px;
+      min-width: 380px;
+    }
+
+    body.model-emailcampaign.change-form #content-main {
+      padding-right: 404px;
     }
   }
 
   @media (max-width: 1200px) {
-    body.model-emailcampaign.change-form #content {
-      flex-direction: column;
-    }
     body.model-emailcampaign.change-form #content-main {
       padding-right: 0;
     }
@@ -274,7 +263,9 @@
       min-width: 0;
       position: relative;
       height: 700px;
-      margin: 24px 0 0 0;
+      right: auto;
+      top: auto;
+      margin: 24px 0 0;
       border-left: none;
       border-top: 2px solid #C8972E;
     }
@@ -362,17 +353,6 @@
   const PREVIEW_URL = "{% url 'admin:core_emailcampaign_preview_ajax' %}";
   const DEBOUNCE_MS = 500;
   const CSRF_TOKEN  = "{{ csrf_token }}";
-
-  // ── Mover el panel al lado del content-main ─────────────────────────
-  // Unfold envuelve #content-main en un contenedor con padding.
-  // Inyectamos el panel como hermano de #content-main dentro de #content.
-  (function repositionPanel() {
-    const panel   = document.getElementById("crack-preview-panel");
-    const content = document.getElementById("content");
-    if (panel && content) {
-      content.appendChild(panel);
-    }
-  })();
 
   // ── DOM refs ────────────────────────────────────────────────────────
   const iframe      = document.getElementById("cpp-iframe");
