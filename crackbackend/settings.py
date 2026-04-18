@@ -8,6 +8,7 @@ Las variables sensibles se cargan desde .env (ver .env.example).
 from pathlib import Path
 from datetime import timedelta
 import os
+from urllib.parse import urlsplit
 import dj_database_url
 from dotenv import load_dotenv
 
@@ -186,10 +187,27 @@ CORS_ALLOWED_ORIGINS = [
     "https://0v0rzg6p-3000.brs.devtunnels.ms",
 ]
 
+
+def _normalize_origin(origin: str) -> str | None:
+    """Return a valid CORS origin (scheme://host[:port]) or None if invalid."""
+    if not origin:
+        return None
+
+    origin = origin.strip()
+    if not origin:
+        return None
+
+    parts = urlsplit(origin)
+    if parts.scheme not in {"http", "https"} or not parts.netloc:
+        return None
+
+    return f"{parts.scheme}://{parts.netloc}"
+
 # Agregar el dominio del frontend en producción via env var
 FRONTEND_URL = os.environ.get("FRONTEND_URL")
-if FRONTEND_URL and FRONTEND_URL.startswith("http"):
-    CORS_ALLOWED_ORIGINS.append(FRONTEND_URL)
+_frontend_origin = _normalize_origin(FRONTEND_URL)
+if _frontend_origin:
+    CORS_ALLOWED_ORIGINS.append(_frontend_origin)
 
 # Dominio fijo de Vercel
 CORS_ALLOWED_ORIGINS.append("https://crackfrontend-eyci.vercel.app")
