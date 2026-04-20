@@ -36,9 +36,10 @@ def _get_brand_logo_flowable(styles):
     """Retorna el logo para el header del PDF o texto fallback si no está disponible."""
     project_root = Path(__file__).resolve().parents[3]
     logo_candidates = [
+        
+        project_root / "crackFront" / "public" / "brand" / "whiteBgColor.png",
         project_root / "crackFront" / "public" / "brand" / "logo2.png",
         project_root / "crackFront" / "public" / "brand" / "logo.png",
-        project_root / "crackFront" / "public" / "brand" / "whiteBgColor.png",
         project_root / "crackFront" / "public" / "brand" / "landing logo.png",
     ]
     static_candidates = [
