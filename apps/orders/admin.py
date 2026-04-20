@@ -300,6 +300,9 @@ class SuggestedProductsCarouselAdmin(ModelAdmin):
 
     suggested_count.short_description = "Sugeridos"
 
+    class Media:
+        js = ("admin/js/suggested_products_limit.js",)
+
     def changelist_view(self, request, extra_context=None):
         config, _ = SuggestedProductsCarousel.objects.get_or_create(pk=1)
         url = reverse("admin:orders_suggestedproductscarousel_change", args=[config.pk])

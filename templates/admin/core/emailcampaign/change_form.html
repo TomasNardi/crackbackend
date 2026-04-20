@@ -4,27 +4,99 @@
 {% block extrastyle %}
 {{ block.super }}
 <style>
-  /* ── Reservar espacio para preview fijo a la derecha ── */
-  body.model-emailcampaign.change-form #content-main {
-    width: 100%;
-    min-width: 0;
-    padding-right: 444px;
+  /* ── Submit row siempre accesible (sobre el drawer) ── */
+  body.model-emailcampaign.change-form .submit-row {
+    position: relative;
+    z-index: 60;
   }
 
-  /* ── Panel de preview ── */
+  /* ── Botón pill flotante ── */
+  #cpp-fab {
+    position: fixed;
+    top: 72px;
+    right: 20px;
+    z-index: 55;
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    padding: 7px 14px 7px 10px;
+    background: #0f172a;
+    border: 1px solid #334155;
+    border-radius: 8px;
+    color: #94a3b8;
+    font-size: 12px;
+    font-weight: 600;
+    letter-spacing: .06em;
+    cursor: pointer;
+    box-shadow: 0 4px 24px rgba(0,0,0,.5);
+    transition: border-color .15s, color .15s, box-shadow .15s;
+    font-family: inherit;
+    white-space: nowrap;
+  }
+  #cpp-fab:hover {
+    border-color: #C8972E;
+    color: #f1f5f9;
+    box-shadow: 0 4px 24px rgba(200,151,46,.2);
+  }
+  #cpp-fab.cpp-open {
+    border-color: #C8972E;
+    color: #f1f5f9;
+    background: #1e293b;
+  }
+  #cpp-fab-dot {
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    background: #334155;
+    flex-shrink: 0;
+    transition: background .3s, box-shadow .3s;
+  }
+  #cpp-fab-dot.syncing {
+    background: #f59e0b;
+    box-shadow: 0 0 6px #f59e0b88;
+    animation: cpp-pulse .8s ease-in-out infinite alternate;
+  }
+  #cpp-fab-dot.synced {
+    background: #10b981;
+    box-shadow: 0 0 6px #10b98188;
+  }
+
+  /* ── Backdrop ── */
+  #cpp-backdrop {
+    display: none;
+    position: fixed;
+    inset: 0;
+    z-index: 45;
+    background: rgba(0,0,0,.35);
+    backdrop-filter: blur(2px);
+  }
+  #cpp-backdrop.cpp-open { display: block; }
+
+  /* ── Preview drawer ── */
   #crack-preview-panel {
-    width: 420px;
-    min-width: 420px;
+    width: 440px;
+    min-width: 0;
     position: fixed;
     right: 0;
-    top: 64px;
-    height: calc(100vh - 64px);
+    top: 0;
+    height: 100vh;
     display: flex;
     flex-direction: column;
     background: #111827;
     border-left: 1px solid #1f2937;
+    box-shadow: -12px 0 48px rgba(0,0,0,.6);
+    transform: translateX(100%);
+    transition: transform .3s cubic-bezier(.4,0,.2,1);
     overflow: hidden;
-    z-index: 40;
+    z-index: 50;
+  }
+  #crack-preview-panel.cpp-open {
+    transform: translateX(0);
+  }
+
+  @media (max-width: 768px) {
+    #crack-preview-panel { width: 100%; }
+    #cpp-fab { top: auto; bottom: 80px; }
   }
 
   /* ── Header del panel ── */
@@ -242,33 +314,26 @@
     color: #475569;
   }
 
-  /* ── Responsive ── */
-  @media (max-width: 1400px) {
-    #crack-preview-panel {
-      width: 380px;
-      min-width: 380px;
-    }
-
-    body.model-emailcampaign.change-form #content-main {
-      padding-right: 404px;
-    }
+  /* ── Botón cerrar drawer ── */
+  #cpp-close-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 28px;
+    height: 28px;
+    border-radius: 6px;
+    border: 1px solid #1e293b;
+    background: transparent;
+    color: #64748b;
+    cursor: pointer;
+    flex-shrink: 0;
+    transition: all .15s;
+    font-family: inherit;
+    padding: 0;
   }
-
-  @media (max-width: 1200px) {
-    body.model-emailcampaign.change-form #content-main {
-      padding-right: 0;
-    }
-    #crack-preview-panel {
-      width: 100%;
-      min-width: 0;
-      position: relative;
-      height: 700px;
-      right: auto;
-      top: auto;
-      margin: 24px 0 0;
-      border-left: none;
-      border-top: 2px solid #C8972E;
-    }
+  #cpp-close-btn:hover {
+    border-color: #ef4444;
+    color: #ef4444;
   }
 </style>
 {% endblock %}
@@ -276,9 +341,21 @@
 {% block content %}
 {{ block.super }}
 
+<!-- Botón pill flotante -->
+<button id="cpp-fab" title="Ver / ocultar preview del email">
+  <div id="cpp-fab-dot"></div>
+  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
+    <circle cx="12" cy="12" r="3"/>
+  </svg>
+  Preview
+</button>
+
+<!-- Backdrop -->
+<div id="cpp-backdrop"></div>
+
 <!-- ══════════════════════════════════════════════════════════
-     PANEL DE PREVIEW EN VIVO — se inyecta junto al content-main
-     via JS para mantener el DOM de Unfold intacto
+     PANEL DE PREVIEW EN VIVO — drawer lateral
 ══════════════════════════════════════════════════════════ -->
 <div id="crack-preview-panel">
 
@@ -288,9 +365,17 @@
       <div class="cpp-brand-dot"></div>
       <span class="cpp-title">Preview en vivo</span>
     </div>
-    <div id="cpp-sync-indicator">
-      <div id="cpp-sync-dot"></div>
-      <span id="cpp-sync-text">Esperando…</span>
+    <div style="display:flex;align-items:center;gap:10px;">
+      <div id="cpp-sync-indicator">
+        <div id="cpp-sync-dot"></div>
+        <span id="cpp-sync-text">Esperando…</span>
+      </div>
+      <button id="cpp-close-btn" title="Cerrar preview">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+          <line x1="18" y1="6" x2="6" y2="18"/>
+          <line x1="6" y1="6" x2="18" y2="18"/>
+        </svg>
+      </button>
     </div>
   </div>
 
@@ -358,6 +443,7 @@
   const iframe      = document.getElementById("cpp-iframe");
   const emptyState  = document.getElementById("cpp-empty-state");
   const syncDot     = document.getElementById("cpp-sync-dot");
+  const fabDot      = document.getElementById("cpp-fab-dot");
   const syncText    = document.getElementById("cpp-sync-text");
   const subjectText = document.getElementById("cpp-subject-text");
   const viewport    = document.getElementById("cpp-viewport");
@@ -371,6 +457,7 @@
   // ── Helpers ──────────────────────────────────────────────────────────
   function setSync(state, text) {
     syncDot.className = state || "";
+    fabDot.className  = state || "";
     syncText.textContent = text;
   }
 
@@ -469,7 +556,7 @@
       setTimeout(autoResizeIframe, 100);
       setTimeout(autoResizeIframe, 500);
 
-      setSync("synced", "Sincronizado ✓");
+      setSync("synced", "Sincronizado ");
       setTimeout(() => setSync("", "En vivo"), 2500);
 
     } catch (err) {
@@ -521,6 +608,40 @@
       e.editor.on("instanceReady", () => attachToEditor(e.editor));
     });
   }
+
+  // ── Panel open / close ──────────────────────────────────────────────
+  const OPEN_KEY     = 'crack-preview-open';
+  const previewPanel = document.getElementById('crack-preview-panel');
+  const backdrop     = document.getElementById('cpp-backdrop');
+  const fab          = document.getElementById('cpp-fab');
+  const closeBtn     = document.getElementById('cpp-close-btn');
+
+  function openPanel() {
+    previewPanel.classList.add('cpp-open');
+    backdrop.classList.add('cpp-open');
+    fab.classList.add('cpp-open');
+    localStorage.setItem(OPEN_KEY, '1');
+    setTimeout(autoResizeIframe, 350);
+  }
+
+  function closePanel() {
+    previewPanel.classList.remove('cpp-open');
+    backdrop.classList.remove('cpp-open');
+    fab.classList.remove('cpp-open');
+    localStorage.setItem(OPEN_KEY, '0');
+  }
+
+  fab.addEventListener('click', function () {
+    previewPanel.classList.contains('cpp-open') ? closePanel() : openPanel();
+  });
+  closeBtn.addEventListener('click', closePanel);
+  backdrop.addEventListener('click', closePanel);
+  document.addEventListener('keydown', function (e) {
+    if (e.key === 'Escape') closePanel();
+  });
+
+  // Restaurar estado guardado
+  if (localStorage.getItem(OPEN_KEY) === '1') openPanel();
 
   // ── Device switcher ──────────────────────────────────────────────────
   document.querySelectorAll(".cpp-device-btn").forEach(btn => {
