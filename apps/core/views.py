@@ -54,14 +54,23 @@ class EmailSubscribeView(APIView):
         )
 
         if created:
-            return Response({"message": "¡Suscripción exitosa!"}, status=status.HTTP_201_CREATED)
+            return Response(
+                {"message": "Ya estás adentro. Pronto vas a recibir novedades, ingresos y promos de CRACK."},
+                status=status.HTTP_201_CREATED,
+            )
 
         if subscription.is_active:
-            return Response({"message": "¡Ya estás suscripto!"}, status=status.HTTP_200_OK)
+            return Response(
+                {"message": "Ya formas parte de la newsletter. Cuando haya novedades, te avisamos por email."},
+                status=status.HTTP_200_OK,
+            )
 
         subscription.is_active = True
         subscription.save(update_fields=["is_active"])
-        return Response({"message": "¡Suscripción reactivada!"}, status=status.HTTP_200_OK)
+        return Response(
+            {"message": "Tu suscripción volvió a quedar activa. Vas a recibir nuestras próximas novedades."},
+            status=status.HTTP_200_OK,
+        )
 
 
 class EmailUnsubscribeView(APIView):

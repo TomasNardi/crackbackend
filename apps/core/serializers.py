@@ -29,9 +29,12 @@ class EmailSubscribeSerializer(serializers.ModelSerializer):
     class Meta:
         model = EmailSubscription
         fields = ("email",)
+        extra_kwargs = {
+            "email": {"validators": []},
+        }
 
     def validate_email(self, value):
-        return value.lower()
+        return value.strip().lower()
 
 
 class ContactMessageSerializer(serializers.ModelSerializer):
