@@ -6,7 +6,11 @@ from io import BytesIO
 from datetime import datetime
 from decimal import Decimal
 from pathlib import Path
+from urllib.parse import urljoin
+from urllib.request import urlopen
 
+from django.conf import settings
+from django.contrib.staticfiles import finders
 from django.utils import timezone
 
 from reportlab.lib.pagesizes import letter
@@ -37,6 +41,12 @@ def _get_brand_logo_flowable(styles):
         project_root / "crackFront" / "public" / "brand" / "whiteBgColor.png",
         project_root / "crackFront" / "public" / "brand" / "landing logo.png",
     ]
+    static_candidates = [
+        "brand/logo2.png",
+        "brand/logo.png",
+        "brand/whiteBgColor.png",
+        "brand/landing logo.png",
+    ]
 
     for logo_path in logo_candidates:
         if logo_path.exists():
@@ -45,8 +55,31 @@ def _get_brand_logo_flowable(styles):
             logo.drawWidth = 2.6 * inch
             return logo
 
+    for static_path in static_candidates:
+        resolved_path = finders.find(static_path)
+        if resolved_path:
+            logo = Image(str(resolved_path))
+            logo.drawHeight = 0.72 * inch
+            logo.drawWidth = 2.6 * inch
+            return logo
+
+    site_url = str(getattr(settings, "SITE_URL", "") or "").strip()
+    if site_url:
+        for static_path in static_candidates:
+            logo_url = urljoin(site_url.rstrip("/") + "/", static_path)
+            try:
+                with urlopen(logo_url, timeout=5) as response:
+                    logo_bytes = BytesIO(response.read())
+                    logo_bytes.name = static_path.replace("/", "_")
+                    logo = Image(logo_bytes)
+                    logo.drawHeight = 0.72 * inch
+                    logo.drawWidth = 2.6 * inch
+                    return logo
+            except Exception:
+                continue
+
     return Paragraph(
-        '<font size="28" color="#C8972E"><b>CRACK TCG</b></font>',
+        '<font size="28" color="#C8972E"><b>TEST</b></font>',
         styles["Normal"],
     )
 
