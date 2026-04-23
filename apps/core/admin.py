@@ -36,12 +36,12 @@ class ExchangeRateAdmin(ModelAdmin):
 
 @admin.register(SiteConfig)
 class SiteConfigAdmin(ModelAdmin):
-    list_display = ("estado_sitio", "maintenance_message")
+    list_display = ("estado_sitio", "banner_superior", "maintenance_message")
     fieldsets = (
         (
             "Configuración general",
             {
-                "fields": ("is_active", "maintenance_message"),
+                "fields": ("is_active", "maintenance_message", "show_top_banner", "top_banner_message"),
                 "description": "Controla estado del sitio y mensaje de mantenimiento.",
             },
         ),
@@ -50,6 +50,10 @@ class SiteConfigAdmin(ModelAdmin):
     @admin.display(description="Estado")
     def estado_sitio(self, obj):
         return "Activo" if obj.is_active else "Mantenimiento"
+
+    @admin.display(description="Banner superior")
+    def banner_superior(self, obj):
+        return "Visible" if obj.show_top_banner else "Oculto"
 
     def has_add_permission(self, request):
         return not SiteConfig.objects.exists()

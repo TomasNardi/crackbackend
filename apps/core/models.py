@@ -52,6 +52,18 @@ class SiteConfig(models.Model):
         blank=True,
         default="Sitio en mantenimiento. Volvemos pronto.",
     )
+    show_top_banner = models.BooleanField(
+        "Mostrar banner superior",
+        default=True,
+        help_text="Activa o desactiva el banner promocional por encima del navbar.",
+    )
+    top_banner_message = models.CharField(
+        "Texto del banner superior",
+        max_length=200,
+        blank=True,
+        default="Envíos a todo el país — 15% OFF con código CRACK15",
+        help_text="Mensaje visible en el banner superior del sitio.",
+    )
     cash_discount_enabled = models.BooleanField(
         "Descuento por efectivo activo",
         default=True,
