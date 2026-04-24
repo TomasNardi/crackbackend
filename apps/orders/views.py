@@ -134,13 +134,18 @@ class ValidateDiscountView(APIView):
 
         if not dc.is_valid():
             reason = "used" if dc.used else "expired"
-            return Response({"valid": False, "reason": reason}, status=status.HTTP_200_OK)
+            payload = {"valid": False, "reason": reason}
+            if reason == "expired" and dc.valid_until:
+                payload["expires_at"] = dc.valid_until.isoformat()
+            return Response(payload, status=status.HTTP_200_OK)
 
         data: dict = {"valid": True, "code": dc.code.upper(), "type": dc.discount_type}
         if dc.discount_type == DiscountCode.DISCOUNT_PERCENT:
             data["amount"] = int(dc.discount_amount)
         else:
             data["amount"] = float(dc.discount_amount)
+        if dc.valid_until:
+            data["expires_at"] = dc.valid_until.isoformat()
 
         return Response(data, status=status.HTTP_200_OK)
 
