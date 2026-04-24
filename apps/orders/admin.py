@@ -43,6 +43,23 @@ class MercadoPagoPaymentInline(TabularInline):
     )
 
 
+class DiscountCodeAdminForm(forms.ModelForm):
+    class Meta:
+        model = DiscountCode
+        fields = "__all__"
+
+    def clean(self):
+        cleaned_data = super().clean()
+        expiration_type = cleaned_data.get("expiration_type")
+
+        if expiration_type == DiscountCode.EXPIRATION_NONE:
+            # If there is no expiration, avoid persisting stale date values.
+            cleaned_data["valid_from"] = None
+            cleaned_data["valid_until"] = None
+
+        return cleaned_data
+
+
 @admin.register(Order)
 class OrderAdmin(ModelAdmin):
     list_display = (
@@ -231,6 +248,7 @@ class OrderAdmin(ModelAdmin):
 
 @admin.register(DiscountCode)
 class DiscountCodeAdmin(ModelAdmin):
+    form = DiscountCodeAdminForm
     list_display = (
         "code", "discount_type", "discount_amount",
         "expiration_type", "valid_from_ar", "valid_until_ar",
@@ -268,6 +286,9 @@ class DiscountCodeAdmin(ModelAdmin):
         if not obj.valid_until:
             return "—"
         return timezone.localtime(obj.valid_until).strftime("%d/%m/%Y %H:%M")
+
+    class Media:
+        js = ("admin/js/discount_code_expiration.js",)
 
 
 @admin.register(MercadoPagoPayment)
