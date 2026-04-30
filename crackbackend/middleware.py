@@ -24,12 +24,13 @@ class GlobalApiRateLimitMiddleware:
 
     def __call__(self, request):
         if self._should_limit(request):
+            rate = self._resolve_rate(request)
             limited = is_ratelimited(
                 request=request,
                 group="global_api",
                 key="ip",
-                rate=getattr(settings, "GLOBAL_API_RATELIMIT_RATE", "1/40s"),
-                method=("GET", "POST", "PUT", "PATCH", "DELETE", "HEAD", "OPTIONS"),
+                rate=rate,
+                method=(request.method,),
                 increment=True,
             )
             if limited:
@@ -46,9 +47,18 @@ class GlobalApiRateLimitMiddleware:
         if not getattr(settings, "GLOBAL_API_RATELIMIT_ENABLED", False):
             return False
 
+        # Nunca limitar preflight CORS.
+        if request.method == "OPTIONS":
+            return False
+
         path = request.path.rstrip("/")
         if not path.startswith("/api/v1"):
             return False
 
         exempt = {p.rstrip("/") for p in getattr(settings, "GLOBAL_API_RATELIMIT_EXEMPT_PATHS", [])}
         return path not in exempt
+
+    def _resolve_rate(self, request):
+        if request.method in {"GET", "HEAD"}:
+            return getattr(settings, "GLOBAL_API_RATELIMIT_READ_RATE", "120/m")
+        return getattr(settings, "GLOBAL_API_RATELIMIT_WRITE_RATE", "30/m")

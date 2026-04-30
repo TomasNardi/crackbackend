@@ -295,12 +295,16 @@ RATELIMIT_USE_CACHE = "ratelimit"
 RATELIMIT_IP_META_KEY = "crackbackend.middleware.get_real_ip"
 
 # Blindaje global API en producción:
-# 1 request por IP cada 40 segundos en /api/v1/*, excepto keep-alive (/api/v1/ping/).
+# Se aplica por IP en /api/v1/*, excepto keep-alive (/api/v1/ping/).
+# Politica productiva por defecto:
+# - Lectura (GET/HEAD): 120/min por IP
+# - Escritura (POST/PUT/PATCH/DELETE): 30/min por IP
 GLOBAL_API_RATELIMIT_ENABLED = _env_bool(
     "GLOBAL_API_RATELIMIT_ENABLED",
     default=(USE_UPSTASH or not DEBUG),
 )
-GLOBAL_API_RATELIMIT_RATE = "1/40s"
+GLOBAL_API_RATELIMIT_READ_RATE = os.environ.get("GLOBAL_API_RATELIMIT_READ_RATE", "120/m")
+GLOBAL_API_RATELIMIT_WRITE_RATE = os.environ.get("GLOBAL_API_RATELIMIT_WRITE_RATE", "30/m")
 GLOBAL_API_RATELIMIT_EXEMPT_PATHS = [
     "/api/v1/ping",
 ]
