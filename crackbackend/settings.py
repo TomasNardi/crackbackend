@@ -75,6 +75,7 @@ MIDDLEWARE = [
     "django.contrib.sessions.middleware.SessionMiddleware",
     "corsheaders.middleware.CorsMiddleware",            # Antes de CommonMiddleware
     "django.middleware.common.CommonMiddleware",
+    "crackbackend.middleware.GlobalApiRateLimitMiddleware",
     "django.middleware.csrf.CsrfViewMiddleware",
     "django.contrib.auth.middleware.AuthenticationMiddleware",
     "django.contrib.messages.middleware.MessageMiddleware",
@@ -237,7 +238,7 @@ STATICFILES_STORAGE = "whitenoise.storage.CompressedManifestStaticFilesStorage"
 # ---------------------------------------------------------------------------
 # Producción: Upstash Redis (setear USE_UPSTASH=true + credenciales en .env)
 # Desarrollo: LocMemCache (sin setup)
-USE_UPSTASH = os.environ.get("USE_UPSTASH", "false").lower() == "true"
+USE_UPSTASH = os.environ.get("USE_UPSTASH", "true" if not DEBUG else "false").lower() == "true"
 
 if USE_UPSTASH:
     UPSTASH_REDIS_REST_URL = os.environ.get("UPSTASH_REDIS_REST_URL", "")
@@ -283,6 +284,15 @@ else:
     SILENCED_SYSTEM_CHECKS = ["django_ratelimit.E003"]
 
 RATELIMIT_USE_CACHE = "ratelimit"
+RATELIMIT_IP_META_KEY = "crackbackend.middleware.get_real_ip"
+
+# Blindaje global API en producción:
+# 1 request por IP cada 40 segundos en /api/v1/*, excepto keep-alive (/api/v1/ping/).
+GLOBAL_API_RATELIMIT_ENABLED = not DEBUG
+GLOBAL_API_RATELIMIT_RATE = "1/40s"
+GLOBAL_API_RATELIMIT_EXEMPT_PATHS = [
+    "/api/v1/ping",
+]
 
 # ---------------------------------------------------------------------------
 # Email (Resend)
