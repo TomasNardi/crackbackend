@@ -14,6 +14,13 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
+
+def _env_bool(name: str, default: bool = False) -> bool:
+    value = os.environ.get(name)
+    if value is None:
+        return default
+    return value.strip().lower() in {"1", "true", "yes", "on"}
+
 # ---------------------------------------------------------------------------
 # Paths
 # ---------------------------------------------------------------------------
@@ -24,7 +31,8 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 # ---------------------------------------------------------------------------
 SECRET_KEY = os.environ.get("SECRET_KEY", "PapaPuebloTango")
 
-DEBUG = os.environ.get("DEBUG", "True").lower() == "true"
+_running_on_render = _env_bool("RENDER", False)
+DEBUG = _env_bool("DEBUG", default=not _running_on_render)
 
 ALLOWED_HOSTS = ["localhost", "127.0.0.1", "testserver"]
 
@@ -238,7 +246,7 @@ STATICFILES_STORAGE = "whitenoise.storage.CompressedManifestStaticFilesStorage"
 # ---------------------------------------------------------------------------
 # Producción: Upstash Redis (setear USE_UPSTASH=true + credenciales en .env)
 # Desarrollo: LocMemCache (sin setup)
-USE_UPSTASH = os.environ.get("USE_UPSTASH", "true" if not DEBUG else "false").lower() == "true"
+USE_UPSTASH = _env_bool("USE_UPSTASH", default=not DEBUG)
 
 if USE_UPSTASH:
     UPSTASH_REDIS_REST_URL = os.environ.get("UPSTASH_REDIS_REST_URL", "")
@@ -288,7 +296,10 @@ RATELIMIT_IP_META_KEY = "crackbackend.middleware.get_real_ip"
 
 # Blindaje global API en producción:
 # 1 request por IP cada 40 segundos en /api/v1/*, excepto keep-alive (/api/v1/ping/).
-GLOBAL_API_RATELIMIT_ENABLED = not DEBUG
+GLOBAL_API_RATELIMIT_ENABLED = _env_bool(
+    "GLOBAL_API_RATELIMIT_ENABLED",
+    default=(USE_UPSTASH or not DEBUG),
+)
 GLOBAL_API_RATELIMIT_RATE = "1/40s"
 GLOBAL_API_RATELIMIT_EXEMPT_PATHS = [
     "/api/v1/ping",
