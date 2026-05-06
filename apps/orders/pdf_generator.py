@@ -93,8 +93,9 @@ def _mp_status_label(status: str) -> str:
         "in_process": "En proceso",
         "rejected": "Rechazado",
         "cancelled": "Cancelado",
-        "refunded": "Devuelto",
+        "refunded": "Devolución",
         "charged_back": "Contracargo",
+        "expired": "Checkout vencido",
     }
     return labels.get((status or "").lower(), status or "Sin estado")
 
@@ -151,7 +152,7 @@ def generate_order_pdf(order):
         [
             _get_brand_logo_flowable(styles),
             Paragraph(
-                f'<font size="12" color="#666"><b>COMPROBANTE DE ORDEN</b></font>',
+                f'<font size="12"><b>COMPROBANTE DE ORDEN</b></font>',
                 ParagraphStyle(
                     "HeaderRight",
                     parent=styles["Normal"],
@@ -183,9 +184,10 @@ def generate_order_pdf(order):
     
     # ==================== DATOS DE LA ORDEN ====================
     status_color = {
-        "pending": "#FF9800",
-        "paid": "#4CAF50",
-        "cancelled": "#F44336",
+        "pending": "#e36209",
+        "paid": "#2ea44f",
+        "cancelled": "#d73a49",
+        "refunded": "#d73a49",
     }.get(order.status, "#666")
     
     order_info_data = [
