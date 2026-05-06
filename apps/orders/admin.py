@@ -62,6 +62,29 @@ class DiscountCodeAdminForm(forms.ModelForm):
 
 @admin.register(Order)
 class OrderAdmin(ModelAdmin):
+    MP_STATUS_LABELS = {
+        "preference_created": "Checkout iniciado",
+        "approved": "Pagada",
+        "pending": "Pendiente",
+        "in_process": "En proceso",
+        "rejected": "Rechazada",
+        "cancelled": "Cancelada",
+        "refunded": "Devolución",
+        "charged_back": "Contracargo",
+        "expired": "Checkout vencido",
+    }
+    MP_STATUS_COLORS = {
+        "preference_created": "#888",
+        "approved": "#2ea44f",
+        "pending": "#e36209",
+        "in_process": "#C8972E",
+        "rejected": "#d73a49",
+        "cancelled": "#d73a49",
+        "refunded": "#d73a49",
+        "charged_back": "#d73a49",
+        "expired": "#d73a49",
+    }
+
     list_display = (
         "order_code", "customer_name", "customer_email",
         "total", "payment_method", "payment_status_display", "shipping_type",
@@ -91,6 +114,25 @@ class OrderAdmin(ModelAdmin):
         local = timezone.localtime(obj.created_at)
         return local.strftime("%d/%m/%Y %H:%M")
 
+    def _payment_status_meta(self, obj):
+        if obj.payment_method == Order.PAYMENT_CASH and obj.status == Order.STATUS_PENDING:
+            return "pending_cash", "Pendiente", "#2ea44f"
+        if obj.payment_method == Order.PAYMENT_CASH and obj.status == Order.STATUS_PAID:
+            return "paid_cash", "Pagada", "#2ea44f"
+
+        if obj.payment_method == Order.PAYMENT_MERCADOPAGO:
+            mp_payment = obj.mp_payments.order_by("-updated_at", "-created_at").first()
+            if not mp_payment:
+                return "none", "Sin novedades", "#888"
+
+            status_raw = (mp_payment.status or "").strip()
+            status_key = status_raw.lower()
+            label = self.MP_STATUS_LABELS.get(status_key, status_raw or "Sin estado")
+            color = self.MP_STATUS_COLORS.get(status_key, "#888")
+            return status_key, label, color
+
+        return "none", "—", "#888"
+
     @admin.display(description="Cobro")
     def payment_status_display(self, obj):
         if obj.payment_method == Order.PAYMENT_CASH and obj.status == Order.STATUS_PENDING:
@@ -102,54 +144,20 @@ class OrderAdmin(ModelAdmin):
                 'title="Marcar orden en efectivo como pagada">Marcar pagada</a>',
                 url,
             )
-        if obj.payment_method == Order.PAYMENT_CASH and obj.status == Order.STATUS_PAID:
-            return format_html('<span style="color:#2ea44f; font-weight:600;">Pagada</span>')
-
-        if obj.payment_method == Order.PAYMENT_MERCADOPAGO:
-            mp_payment = obj.mp_payments.order_by("-updated_at", "-created_at").first()
-            if not mp_payment:
-                return format_html('<span style="color:#888; font-weight:600;">Sin novedades</span>')
-
-            status_raw = (mp_payment.status or "").strip()
-            status_key = status_raw.lower()
-            status_labels = {
-                "preference_created": "Checkout iniciado",
-                "approved": "Pagada",
-                "pending": "Pendiente",
-                "in_process": "En proceso",
-                "rejected": "Rechazada",
-                "cancelled": "Cancelada",
-                "refunded": "Devolución",
-                "charged_back": "Contracargo",
-                "expired": "Checkout vencido",
-            }
-            status_colors = {
-                "preference_created": "#888",
-                "approved": "#2ea44f",
-                "pending": "#e36209",
-                "in_process": "#C8972E",
-                "rejected": "#d73a49",
-                "cancelled": "#d73a49",
-                "refunded": "#d73a49",
-                "charged_back": "#d73a49",
-                "expired": "#d73a49",
-            }
-            label = status_labels.get(status_key, status_raw or "Sin estado")
-            color = status_colors.get(status_key, "#888")
-            return format_html('<span style="color:{}; font-weight:600;">{}</span>', color, label)
-
-        return "—"
+        _, label, color = self._payment_status_meta(obj)
+        return format_html('<span style="color:{}; font-weight:600;">{}</span>', color, label)
 
     @admin.display(description="PDF")
     def pdf_download_button(self, obj):
         """Botón para descargar ordenada en PDF."""
         url = reverse("admin:orders_order_pdf_download", args=[obj.pk])
+        _, _, color = self._payment_status_meta(obj)
         return format_html(
             '<a href="{}" style="'
-            'background:#C8972E;color:#fff;padding:5px 12px;border-radius:4px;'
+            'background:{};color:#fff;padding:5px 12px;border-radius:4px;'
             'font-size:12px;font-weight:600;text-decoration:none;display:inline-block;"'
             'title="Descargar orden en PDF">📄 PDF</a>',
-            url,
+            url, color,
         )
 
     def get_urls(self):
