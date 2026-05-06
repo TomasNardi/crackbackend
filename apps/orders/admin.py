@@ -39,7 +39,7 @@ class MercadoPagoPaymentInline(TabularInline):
     readonly_fields = (
         "preference_id", "payment_id", "status", "is_paid",
         "payment_method", "payment_type", "external_reference",
-        "transaction_amount", "net_received_amount", "created_at",
+        "transaction_amount", "net_received_amount", "expires_at", "expired_at", "created_at",
     )
 
 
@@ -119,8 +119,9 @@ class OrderAdmin(ModelAdmin):
                 "in_process": "En proceso",
                 "rejected": "Rechazada",
                 "cancelled": "Cancelada",
-                "refunded": "Devuelta",
+                "refunded": "Devolución",
                 "charged_back": "Contracargo",
+                "expired": "Checkout vencido",
             }
             status_colors = {
                 "preference_created": "#888",
@@ -129,8 +130,9 @@ class OrderAdmin(ModelAdmin):
                 "in_process": "#C8972E",
                 "rejected": "#d73a49",
                 "cancelled": "#d73a49",
-                "refunded": "#6f42c1",
-                "charged_back": "#6f42c1",
+                "refunded": "#d73a49",
+                "charged_back": "#d73a49",
+                "expired": "#d73a49",
             }
             label = status_labels.get(status_key, status_raw or "Sin estado")
             color = status_colors.get(status_key, "#888")
@@ -295,7 +297,7 @@ class DiscountCodeAdmin(ModelAdmin):
 class MercadoPagoPaymentAdmin(ModelAdmin):
     list_display = (
         "preference_id", "payment_id", "order", "status", "is_paid",
-        "payment_method", "payment_type", "transaction_amount", "created_at",
+        "payment_method", "payment_type", "transaction_amount", "expires_at", "expired_at", "created_at",
     )
     list_filter = ("is_paid", "status", "payment_type", "payment_method")
     readonly_fields = ("created_at", "updated_at", "raw_response")

@@ -6,10 +6,12 @@ el flujo de checkout trazable y centralizado.
 """
 
 from decimal import Decimal
+from datetime import timedelta
 from urllib.parse import urlencode, urlparse
 
 import mercadopago
 from django.conf import settings
+from django.utils import timezone
 
 
 class MercadoPagoServiceError(Exception):
@@ -134,6 +136,22 @@ def create_checkout_preference(order, frontend_url_override: str = ""):
         },
     }
 
+    expiration_minutes = getattr(settings, "MERCADOPAGO_PREFERENCE_EXPIRATION_MINUTES", None)
+    if expiration_minutes is None:
+        expiration_minutes = int(getattr(settings, "MERCADOPAGO_PREFERENCE_EXPIRATION_HOURS", 24)) * 60
+    try:
+        expiration_minutes = int(expiration_minutes)
+    except (TypeError, ValueError):
+        expiration_minutes = 24 * 60
+    expiration_minutes = max(1, min(expiration_minutes, 7 * 24 * 60))
+    expiration_date_to = timezone.localtime(timezone.now() + timedelta(minutes=expiration_minutes)).isoformat(timespec="milliseconds")
+    payload.update(
+        {
+            "expires": True,
+            "expiration_date_to": expiration_date_to,
+        }
+    )
+
     if _is_public_callback(success_url):
         payload["auto_return"] = "approved"
 
@@ -147,6 +165,7 @@ def create_checkout_preference(order, frontend_url_override: str = ""):
         "preference_id": response.get("id"),
         "init_point": response.get("init_point", ""),
         "sandbox_init_point": response.get("sandbox_init_point", ""),
+        "expiration_date_to": response.get("expiration_date_to") or expiration_date_to,
         "raw": response,
     }
 
@@ -159,6 +178,20 @@ def get_payment(payment_id: str):
 
     if result.get("status") not in (200, 201) or not response:
         raise MercadoPagoServiceError(f"No se pudo obtener pago {payment_id}: {response}")
+
+    return response
+
+
+def get_merchant_order(merchant_order_id: str):
+    """Obtiene el detalle completo de una merchant order en Mercado Pago."""
+    sdk = _sdk()
+    result = sdk.merchant_order().get(str(merchant_order_id))
+    response = result.get("response", {})
+
+    if result.get("status") not in (200, 201) or not response:
+        raise MercadoPagoServiceError(
+            f"No se pudo obtener merchant order {merchant_order_id}: {response}"
+        )
 
     return response
 

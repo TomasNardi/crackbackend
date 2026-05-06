@@ -6,6 +6,7 @@ Orders Views
 import logging
 
 from django.conf import settings
+from django.utils.dateparse import parse_datetime
 from django.utils.decorators import method_decorator
 from django_ratelimit.decorators import ratelimit
 from rest_framework import viewsets, permissions, status
@@ -17,14 +18,18 @@ from .models import Order, DiscountCode, MercadoPagoPayment
 from .serializers import OrderCreateSerializer, OrderReadSerializer
 from .mercadopago_service import (
     create_checkout_preference,
+    get_payment,
+    get_merchant_order,
     MercadoPagoServiceError,
 )
 from .services import (
     send_order_emails,
     extract_payment_id,
+    extract_merchant_order_id,
     extract_mp_topic,
     get_payment_data_for_validation,
     is_valid_mp_signature,
+    reconcile_merchant_order_event,
     reconcile_payment,
 )
 
@@ -68,12 +73,15 @@ class OrderViewSet(viewsets.ModelViewSet):
                 order.mp_preference_id = pref["preference_id"]
                 order.save(update_fields=["mp_preference_id", "updated_at"])
 
+                expires_at = parse_datetime(str(pref.get("expiration_date_to") or ""))
+
                 MercadoPagoPayment.objects.update_or_create(
                     preference_id=pref["preference_id"],
                     defaults={
                         "order": order,
                         "status": "preference_created",
                         "is_paid": False,
+                        "expires_at": expires_at,
                         "raw_response": pref.get("raw", {}),
                     },
                 )
@@ -170,33 +178,86 @@ class MercadoPagoWebhookView(APIView):
         data = request.data
         topic = extract_mp_topic(data, request.query_params)
         payment_id = extract_payment_id(data, request.query_params)
+        merchant_order_id = extract_merchant_order_id(data, request.query_params)
         x_request_id = request.headers.get("x-request-id") or request.headers.get("X-Request-Id")
         x_signature = request.headers.get("x-signature") or request.headers.get("X-Signature")
+        resource_id_for_signature = payment_id or merchant_order_id
 
-        if topic != "payment" or not payment_id:
+        if topic not in {"payment", "merchant_order"}:
             logger.warning(
-                "Webhook MP ignorado: topic=%s, payment_id=%s, query=%s, body=%s",
+                "Webhook MP ignorado: topic=%s, payment_id=%s, merchant_order_id=%s, query=%s, body=%s",
                 topic,
                 payment_id,
+                merchant_order_id,
                 dict(request.query_params),
                 data,
             )
             return Response(status=status.HTTP_200_OK)
 
-        if not is_valid_mp_signature(payment_id, x_request_id, x_signature):
-            logger.warning("Webhook MP con firma inválida. payment_id=%s", payment_id)
+        if not resource_id_for_signature:
+            logger.warning(
+                "Webhook MP sin identificador de recurso: topic=%s, query=%s, body=%s",
+                topic,
+                dict(request.query_params),
+                data,
+            )
+            return Response(status=status.HTTP_200_OK)
+
+        if not is_valid_mp_signature(resource_id_for_signature, x_request_id, x_signature):
+            logger.warning(
+                "Webhook MP con firma inválida. topic=%s, payment_id=%s, merchant_order_id=%s",
+                topic,
+                payment_id,
+                merchant_order_id,
+            )
             return Response(status=status.HTTP_200_OK)
 
         try:
-            payment_data = get_payment(payment_id)
-            payment_status = payment_data.get("status", "unknown")
-            logger.info("Webhook MP recibido: payment_id=%s, topic=%s, status=%s", payment_id, topic, payment_status)
-            
-            order, paid = reconcile_payment(payment_data, source="webhook")
-            if order:
-                logger.info("Orden %s actualizada: estado=%s, pagada=%s", order.order_code, order.status, paid)
+            if topic == "payment":
+                payment_data = get_payment(payment_id)
+                payment_status = payment_data.get("status", "unknown")
+                logger.info(
+                    "Webhook MP recibido: payment_id=%s, topic=%s, status=%s",
+                    payment_id,
+                    topic,
+                    payment_status,
+                )
+
+                order, paid = reconcile_payment(payment_data, source="webhook")
+                if order:
+                    logger.info("Orden %s actualizada: estado=%s, pagada=%s", order.order_code, order.status, paid)
+                else:
+                    logger.warning("Webhook MP procesado sin orden activa para pago %s", payment_id)
             else:
-                logger.warning("Webhook MP procesado sin orden activa para pago %s", payment_id)
+                merchant_order_data = get_merchant_order(merchant_order_id)
+                payments = merchant_order_data.get("payments") or []
+                processed_any_payment = False
+
+                for payment_item in payments:
+                    current_payment_id = str(payment_item.get("id") or payment_item.get("payment_id") or "")
+                    if not current_payment_id:
+                        continue
+                    payment_data = get_payment(current_payment_id)
+                    order, paid = reconcile_payment(payment_data, source="webhook_merchant_order")
+                    processed_any_payment = True
+                    if order:
+                        logger.info(
+                            "Orden %s actualizada desde merchant_order %s con payment_id=%s (pagada=%s)",
+                            order.order_code,
+                            merchant_order_id,
+                            current_payment_id,
+                            paid,
+                        )
+
+                if not processed_any_payment:
+                    order, paid = reconcile_merchant_order_event(merchant_order_data, source="webhook_merchant_order")
+                    if order:
+                        logger.info(
+                            "Orden %s actualizada desde merchant_order %s sin pagos (pagada=%s)",
+                            order.order_code,
+                            merchant_order_id,
+                            paid,
+                        )
 
         except Exception as exc:
             logger.exception("Error procesando webhook MP: %s", exc)

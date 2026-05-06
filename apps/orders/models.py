@@ -276,6 +276,8 @@ class MercadoPagoPayment(models.Model):
     external_reference = models.CharField("External reference", max_length=40, blank=True, db_index=True)
     transaction_amount = models.DecimalField("Monto transacción", max_digits=12, decimal_places=2, default=0)
     net_received_amount = models.DecimalField("Monto neto recibido", max_digits=12, decimal_places=2, default=0)
+    expires_at = models.DateTimeField("Vence el", null=True, blank=True, db_index=True)
+    expired_at = models.DateTimeField("Vencido el", null=True, blank=True)
     date_approved = models.DateTimeField("Fecha aprobación", null=True, blank=True)
     last_validated_at = models.DateTimeField("Última validación", null=True, blank=True)
     raw_response = models.JSONField("Respuesta cruda", null=True, blank=True, help_text="Respuesta completa de MP")

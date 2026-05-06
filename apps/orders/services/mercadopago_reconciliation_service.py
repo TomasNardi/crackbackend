@@ -51,6 +51,25 @@ def extract_payment_id(data, query_params):
     return str(payment_id) if payment_id else ""
 
 
+def extract_merchant_order_id(data, query_params):
+    """Obtain merchant_order id from webhook payload formats."""
+    merchant_order_id = data.get("id")
+    if not merchant_order_id:
+        merchant_order_id = data.get("data", {}).get("id")
+    if not merchant_order_id:
+        merchant_order_id = data.get("data.id")
+    if not merchant_order_id:
+        merchant_order_id = query_params.get("id") or query_params.get("data.id")
+    if not merchant_order_id:
+        resource = str(data.get("resource") or query_params.get("resource") or "")
+        if resource:
+            resource_path = urlparse(resource).path.rstrip("/")
+            resource_id = resource_path.split("/")[-1] if resource_path else ""
+            if resource_id.isdigit():
+                merchant_order_id = resource_id
+    return str(merchant_order_id) if merchant_order_id else ""
+
+
 def extract_mp_topic(data, query_params):
     """Normalize MP event type to accept real webhook variants."""
     raw_topic = (
@@ -213,6 +232,7 @@ def reconcile_payment(payment_data, source="webhook"):
         mp_payment.payment_id = payment_id
         mp_payment.status = payment_status
         mp_payment.is_paid = final_paid
+        mp_payment.expired_at = None
         mp_payment.payment_method = payment_method
         mp_payment.payment_type = payment_type
         mp_payment.external_reference = external_ref or order.order_code
@@ -260,3 +280,87 @@ def reconcile_payment(payment_data, source="webhook"):
         send_order_emails(notify_order_id)
 
     return order, final_paid
+
+
+def reconcile_merchant_order_event(merchant_order_data, source="webhook"):
+    """Reconcile non-payment merchant_order events (e.g. checkout expiration)."""
+    merchant_order_id = str(merchant_order_data.get("id") or "")
+    external_ref = str(merchant_order_data.get("external_reference") or "")
+    preference_id = str(merchant_order_data.get("preference_id") or "")
+    merchant_order_status = str(
+        merchant_order_data.get("order_status") or merchant_order_data.get("status") or ""
+    ).strip().lower()
+
+    with transaction.atomic():
+        order = None
+        if external_ref:
+            order = Order.objects.select_for_update().filter(order_code=external_ref).first()
+        if not order and preference_id:
+            order = Order.objects.select_for_update().filter(mp_preference_id=preference_id).first()
+
+        if not order:
+            logger.warning(
+                "MP %s merchant_order sin orden asociada (merchant_order_id=%s, external_reference=%s, preference_id=%s)",
+                source,
+                merchant_order_id,
+                external_ref,
+                preference_id,
+            )
+            return None, False
+
+        payments = merchant_order_data.get("payments") or []
+        has_linked_payments = any(str(p.get("id") or p.get("payment_id") or "") for p in payments)
+        if has_linked_payments:
+            logger.info(
+                "MP %s merchant_order con pagos vinculados (merchant_order_id=%s, order=%s)",
+                source,
+                merchant_order_id,
+                order.order_code,
+            )
+            return order, order.status == Order.STATUS_PAID
+
+        expirable_statuses = {"expired", "closed"}
+        if merchant_order_status not in expirable_statuses:
+            logger.info(
+                "MP %s merchant_order sin pagos y sin estado final expirable (merchant_order_id=%s, status=%s)",
+                source,
+                merchant_order_id,
+                merchant_order_status,
+            )
+            return order, order.status == Order.STATUS_PAID
+
+        if order.status in {Order.STATUS_PAID, Order.STATUS_REFUNDED}:
+            logger.info(
+                "MP %s merchant_order expirable ignorado por estado final de orden (order=%s, status=%s)",
+                source,
+                order.order_code,
+                order.status,
+            )
+            return order, order.status == Order.STATUS_PAID
+
+        payment_preference_id = order.mp_preference_id or preference_id or f"merchant_order_{merchant_order_id}"
+        mp_payment, _ = MercadoPagoPayment.objects.select_for_update().get_or_create(
+            preference_id=payment_preference_id,
+            defaults={"order": order},
+        )
+        if mp_payment.order_id != order.id:
+            mp_payment.order = order
+
+        mp_payment.status = "expired"
+        mp_payment.is_paid = False
+        mp_payment.expired_at = timezone.now()
+        mp_payment.external_reference = order.order_code
+        mp_payment.last_validated_at = timezone.now()
+        mp_payment.raw_response = merchant_order_data
+        mp_payment.save()
+
+        order.status = Order.STATUS_CANCELLED
+        order.save(update_fields=["status", "updated_at"])
+
+        logger.info(
+            "Orden %s marcada como CANCELADA por expiracion de checkout MP (merchant_order_id=%s)",
+            order.order_code,
+            merchant_order_id,
+        )
+
+    return order, False
