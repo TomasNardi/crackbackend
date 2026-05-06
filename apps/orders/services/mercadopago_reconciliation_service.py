@@ -348,7 +348,10 @@ def reconcile_merchant_order_event(merchant_order_data, source="webhook"):
 
         mp_payment.status = "expired"
         mp_payment.is_paid = False
-        mp_payment.expired_at = timezone.now()
+        if mp_payment.expires_at:
+            mp_payment.expired_at = mp_payment.expires_at
+        else:
+            mp_payment.expired_at = timezone.now()
         mp_payment.external_reference = order.order_code
         mp_payment.last_validated_at = timezone.now()
         mp_payment.raw_response = merchant_order_data

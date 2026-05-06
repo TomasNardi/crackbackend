@@ -101,7 +101,8 @@ def expire_stale_mercadopago_checkouts(batch_size=300):
 
             locked_payment.expires_at = locked_payment.expires_at or expires_at
             locked_payment.status = "expired"
-            locked_payment.expired_at = now
+            # Keep admin-facing expiration timestamps aligned.
+            locked_payment.expired_at = locked_payment.expires_at
             locked_payment.last_validated_at = now
             locked_payment.save(
                 update_fields=["status", "expires_at", "expired_at", "last_validated_at", "updated_at"]
