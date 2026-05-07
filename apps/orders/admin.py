@@ -261,6 +261,7 @@ class OrderAdmin(ModelAdmin):
                 f"{skipped} orden(es) omitidas: solo se actualizan órdenes en efectivo con estado pendiente.",
                 level=messages.WARNING,
             )
+            
 
 @admin.register(DiscountCode)
 class DiscountCodeAdmin(ModelAdmin):
