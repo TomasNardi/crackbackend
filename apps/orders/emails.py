@@ -60,6 +60,19 @@ def _build_items_context(order) -> list[dict]:
     ]
 
 
+def _resolve_public_site_url() -> str:
+    """Resuelve URL pública del frontend para links e imágenes en emails."""
+    frontend_url = str(getattr(settings, "FRONTEND_URL", "") or "").strip()
+    if frontend_url.startswith("http"):
+        return frontend_url.rstrip("/")
+
+    site_url = str(getattr(settings, "SITE_URL", "https://cracktcg.com") or "").strip()
+    if site_url.startswith("http"):
+        return site_url.rstrip("/")
+
+    return "https://cracktcg.com"
+
+
 # ── Emails públicos ────────────────────────────────────────────────────────────
 
 def send_order_confirmation(order_id: int) -> None:
@@ -101,5 +114,27 @@ def send_new_order_notification(order_id: int) -> None:
     _send(
         to=[STORE_EMAIL],
         subject=f"🛒 Nueva orden {order.order_code} — {order.customer_name} (${order.total:,.0f})",
+        html=html,
+    )
+
+
+def send_refund_notification(order_id: int) -> None:
+    """Email al cliente notificando devolución de pago de Mercado Pago."""
+    from .models import Order
+
+    order = Order.objects.get(id=order_id)
+    site_url = _resolve_public_site_url()
+
+    context = {
+        "order": order,
+        "refund_date": timezone.localtime(timezone.now()).strftime("%d/%m/%Y %H:%M"),
+        "logo_url": f"{site_url}/brand/logo2.png",
+    }
+
+    html = render_to_string("emails/order_refund_notification.html", context)
+
+    _send(
+        to=[order.customer_email],
+        subject=f"Confirmación de devolución de compra {order.order_code} — CRACK TCG",
         html=html,
     )

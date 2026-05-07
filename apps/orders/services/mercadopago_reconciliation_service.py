@@ -21,6 +21,7 @@ from apps.orders.mercadopago_service import (
     search_payments_by_external_reference,
     MercadoPagoServiceError,
 )
+from apps.orders.emails import send_refund_notification
 from .order_confirmation_service import apply_order_confirmed_side_effects, send_order_emails
 
 logger = logging.getLogger(__name__)
@@ -181,6 +182,7 @@ def reconcile_payment(payment_data, source="webhook"):
     date_approved = parse_datetime(date_approved_raw) if date_approved_raw else None
 
     notify_order_id = None
+    notify_refund_order_id = None
 
     with transaction.atomic():
         order = None
@@ -250,6 +252,7 @@ def reconcile_payment(payment_data, source="webhook"):
         if payment_status in refund_statuses and order.status != Order.STATUS_REFUNDED:
             order.status = Order.STATUS_REFUNDED
             status_updated = True
+            notify_refund_order_id = order.id
             logger.info(
                 "Orden %s marcada como DEVOLUCION (pago %s: %s)",
                 order.order_code,
@@ -278,6 +281,19 @@ def reconcile_payment(payment_data, source="webhook"):
 
     if notify_order_id:
         send_order_emails(notify_order_id)
+
+    if notify_refund_order_id:
+        try:
+            from django_q.tasks import async_task
+
+            async_task("apps.orders.tasks.send_refund_notification_task", notify_refund_order_id)
+        except Exception as exc:
+            logger.warning(
+                "No se pudo encolar email de devolucion para orden_id=%s. Se envia en sync. Error: %s",
+                notify_refund_order_id,
+                exc,
+            )
+            send_refund_notification(notify_refund_order_id)
 
     return order, final_paid
 

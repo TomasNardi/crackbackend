@@ -7,8 +7,14 @@ from django.utils import timezone
 from django.utils.dateparse import parse_datetime
 
 from .models import Order, MercadoPagoPayment
+from .emails import send_refund_notification
 
 logger = logging.getLogger(__name__)
+
+
+def send_refund_notification_task(order_id: int) -> None:
+    """Wrapper para cola: envía email de devolución al cliente."""
+    send_refund_notification(order_id)
 
 
 def _normalize_mp_datetime(value):
