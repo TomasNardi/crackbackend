@@ -125,22 +125,22 @@ class ProductViewSet(viewsets.ModelViewSet):
 
     @action(detail=False, methods=["get"], url_path="featured")
     def featured(self, request):
-        """GET /products/featured/ — productos con descuento activo, completados con los más recientes si faltan."""
+        """GET /products/featured/ — productos más caros (solo Singles o certificadas; excluye Sellados)."""
         LIMIT = 8
-        discounted = list(
+        qs = (
             self.get_queryset()
-            .filter(discount_percent__gt=0)
-            .order_by("-created_at")[:LIMIT]
-        )
-        if len(discounted) < LIMIT:
-            exclude_ids = [p.id for p in discounted]
-            remaining = list(
-                self.get_queryset()
-                .exclude(id__in=exclude_ids)
-                .order_by("-created_at")[: LIMIT - len(discounted)]
+            .filter(
+                models.Q(category__slug__in=["single", "singles"])
+                | models.Q(category__name__iexact="Single")
+                | models.Q(category__name__iexact="Singles")
+                | models.Q(certification_entity__isnull=False)
             )
-            discounted += remaining
-        return Response(ProductListSerializer(discounted, many=True).data)
+            .exclude(category__slug__in=["sellado", "sellados", "sealed"])
+            .exclude(category__name__iexact="Sellado")
+            .exclude(category__name__iexact="Sellados")
+            .order_by("-price_usd", "-created_at")[:LIMIT]
+        )
+        return Response(ProductListSerializer(qs, many=True).data)
 
     @action(detail=False, methods=["get"], url_path="new-arrivals")
     def new_arrivals(self, request):
