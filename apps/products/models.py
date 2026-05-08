@@ -11,7 +11,9 @@ Categorías soportadas:
   - Mystery Pack → sin campos extra
 """
 
+from django.core.exceptions import ValidationError
 from django.db import models
+from django.db.models import Q
 from django.utils.text import slugify
 from ckeditor.fields import RichTextField
 
@@ -268,3 +270,128 @@ class Product(models.Model):
 
     def __str__(self):
         return self.name
+
+    def get_ordered_images(self):
+        return list(self.images.order_by("order_index", "id")[:3])
+
+    def sync_legacy_images_from_gallery(self, save=True):
+        ordered = self.get_ordered_images()
+        urls = [img.secure_url for img in ordered]
+        while len(urls) < 3:
+            urls.append("")
+
+        self.image_url, self.image_url_2, self.image_url_3 = urls[0], urls[1], urls[2]
+        if save:
+            self.save(update_fields=["image_url", "image_url_2", "image_url_3", "updated_at"])
+
+
+class ProductImage(models.Model):
+    SOURCE_CLOUDINARY = "cloudinary"
+    SOURCE_URL = "url"
+    SOURCE_CHOICES = (
+        (SOURCE_CLOUDINARY, "Cloudinary"),
+        (SOURCE_URL, "URL externa"),
+    )
+
+    STATUS_PENDING = "pending"
+    STATUS_UPLOADED = "uploaded"
+    STATUS_CONFIRMED = "confirmed"
+    STATUS_FAILED = "failed"
+    STATUS_CHOICES = (
+        (STATUS_PENDING, "Pendiente"),
+        (STATUS_UPLOADED, "Subida"),
+        (STATUS_CONFIRMED, "Confirmada"),
+        (STATUS_FAILED, "Fallida"),
+    )
+
+    product = models.ForeignKey(
+        Product,
+        on_delete=models.CASCADE,
+        null=True,
+        blank=True,
+        related_name="images",
+        verbose_name="Producto",
+    )
+    draft_token = models.CharField(
+        "Draft token",
+        max_length=64,
+        blank=True,
+        db_index=True,
+        help_text="Permite persistir imágenes antes de guardar el producto.",
+    )
+    secure_url = models.URLField("Secure URL", max_length=800)
+    public_id = models.CharField("Public ID", max_length=255, blank=True, db_index=True)
+    source = models.CharField("Origen", max_length=20, choices=SOURCE_CHOICES, default=SOURCE_CLOUDINARY)
+    order_index = models.PositiveSmallIntegerField("Orden", default=0)
+    width = models.PositiveIntegerField("Ancho", null=True, blank=True)
+    height = models.PositiveIntegerField("Alto", null=True, blank=True)
+    bytes = models.PositiveIntegerField("Bytes", null=True, blank=True)
+    format = models.CharField("Formato", max_length=20, blank=True)
+    status = models.CharField("Estado", max_length=20, choices=STATUS_CHOICES, default=STATUS_PENDING)
+    metadata = models.JSONField("Metadata", default=dict, blank=True)
+    upload_error = models.TextField("Error de upload", blank=True)
+    uploaded_at = models.DateTimeField("Subido", auto_now_add=True)
+    confirmed_at = models.DateTimeField("Confirmado", null=True, blank=True)
+
+    class Meta:
+        verbose_name = "Imagen de producto"
+        verbose_name_plural = "Imágenes de producto"
+        ordering = ["order_index", "id"]
+        constraints = [
+            models.CheckConstraint(
+                check=Q(order_index__gte=0) & Q(order_index__lte=2),
+                name="products_img_order_between_0_2",
+            ),
+            models.CheckConstraint(
+                check=Q(product__isnull=False) | ~Q(draft_token=""),
+                name="products_img_requires_product_or_draft",
+            ),
+            models.UniqueConstraint(
+                fields=["product", "order_index"],
+                condition=Q(product__isnull=False),
+                name="products_img_unique_order_per_product",
+            ),
+        ]
+
+    def clean(self):
+        if not self.product_id and not self.draft_token:
+            raise ValidationError("La imagen debe estar asociada a un producto o draft token.")
+
+        if self.product_id:
+            siblings = ProductImage.objects.filter(product_id=self.product_id).exclude(pk=self.pk)
+            if siblings.count() >= 3:
+                raise ValidationError("Cada producto admite máximo 3 imágenes.")
+
+    def __str__(self):
+        target = self.product_id or self.draft_token
+        return f"{target} · {self.order_index}"
+
+
+class ProductImageWebhookEvent(models.Model):
+    EVENT_UPLOAD = "upload"
+    EVENT_DELETE = "delete"
+    EVENT_EAGER = "eager"
+    EVENT_OTHER = "other"
+    EVENT_CHOICES = (
+        (EVENT_UPLOAD, "Upload"),
+        (EVENT_DELETE, "Delete"),
+        (EVENT_EAGER, "Eager"),
+        (EVENT_OTHER, "Other"),
+    )
+
+    event_type = models.CharField("Evento", max_length=30, choices=EVENT_CHOICES, default=EVENT_OTHER)
+    public_id = models.CharField("Public ID", max_length=255, blank=True, db_index=True)
+    payload = models.JSONField("Payload", default=dict)
+    is_valid_signature = models.BooleanField("Firma válida", default=False)
+    processed = models.BooleanField("Procesado", default=False)
+    error = models.TextField("Error", blank=True)
+    created_at = models.DateTimeField("Creado", auto_now_add=True)
+    processed_at = models.DateTimeField("Procesado en", null=True, blank=True)
+
+    class Meta:
+        verbose_name = "Webhook de imagen"
+        verbose_name_plural = "Webhooks de imágenes"
+        ordering = ["-created_at"]
+
+    def __str__(self):
+        return f"{self.event_type} · {self.public_id or '-'}"

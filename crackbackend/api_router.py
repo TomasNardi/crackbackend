@@ -15,6 +15,10 @@ from apps.products.views import (
     CertificationEntityViewSet,
     CertificationGradeViewSet,
     ProductViewSet,
+    CloudinarySignedUploadSignatureView,
+    ProductImageRegisterUploadView,
+    ProductImageDeleteView,
+    CloudinaryUploadWebhookView,
 )
 from apps.orders.views import (
     OrderViewSet,
@@ -68,6 +72,12 @@ urlpatterns = [
     path("contact/", ContactView.as_view(), name="contact"),
     path("sale-requests/", SolicitudVentaCreateView.as_view(), name="sale_requests"),
     path("ping/", PingView.as_view(), name="ping"),
+
+    # Cloudinary (admin product uploads)
+    path("products/admin/cloudinary/signature/", CloudinarySignedUploadSignatureView.as_view(), name="cloudinary_upload_signature"),
+    path("products/admin/cloudinary/register-upload/", ProductImageRegisterUploadView.as_view(), name="cloudinary_register_upload"),
+    path("products/admin/cloudinary/delete/", ProductImageDeleteView.as_view(), name="cloudinary_delete_upload"),
+    path("products/admin/cloudinary/webhook/", CloudinaryUploadWebhookView.as_view(), name="cloudinary_upload_webhook"),
 
     # Router URLs
     path("", include(router.urls)),

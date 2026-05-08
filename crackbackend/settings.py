@@ -365,6 +365,23 @@ MERCADOPAGO_FRONTEND_RETURN_URL = os.environ.get(
 BACKEND_PUBLIC_URL = os.environ.get("BACKEND_PUBLIC_URL", "http://localhost:8000")
 
 # ---------------------------------------------------------------------------
+# Cloudinary
+# ---------------------------------------------------------------------------
+CLOUDINARY_CLOUD_NAME = os.environ.get("CLOUDINARY_CLOUD_NAME", "")
+CLOUDINARY_API_KEY = os.environ.get("CLOUDINARY_API_KEY", "")
+CLOUDINARY_API_SECRET = os.environ.get("CLOUDINARY_API_SECRET", "")
+CLOUDINARY_ADMIN_UPLOAD_PRESET = os.environ.get("CLOUDINARY_ADMIN_UPLOAD_PRESET", "admin_upload")
+
+# Fallback compatible con CLOUDINARY_URL (formato: cloudinary://api_key:api_secret@cloud_name)
+_cloudinary_url = os.environ.get("CLOUDINARY_URL", "").strip()
+if _cloudinary_url and (not CLOUDINARY_CLOUD_NAME or not CLOUDINARY_API_KEY or not CLOUDINARY_API_SECRET):
+    _parts = urlsplit(_cloudinary_url)
+    if _parts.scheme == "cloudinary":
+        CLOUDINARY_CLOUD_NAME = CLOUDINARY_CLOUD_NAME or (_parts.hostname or "")
+        CLOUDINARY_API_KEY = CLOUDINARY_API_KEY or (_parts.username or "")
+        CLOUDINARY_API_SECRET = CLOUDINARY_API_SECRET or (_parts.password or "")
+
+# ---------------------------------------------------------------------------
 # Paq.ar (Correo Argentino) — Integración de envíos
 # ---------------------------------------------------------------------------
 # Obtener agreement y API-Key del área Comercial de Correo Argentino.

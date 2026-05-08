@@ -1,6 +1,20 @@
+import json
+
 from django.contrib import admin
+from django.contrib import messages
 from unfold.admin import ModelAdmin
-from .models import TCG, ProductCategory, CardCondition, CertificationEntity, CertificationGrade, Product
+from .forms import ProductAdminForm
+from .models import (
+    TCG,
+    ProductCategory,
+    CardCondition,
+    CertificationEntity,
+    CertificationGrade,
+    Product,
+    ProductImage,
+    ProductImageWebhookEvent,
+)
+from .services.cloudinary_service import CloudinaryValidationError, attach_images_to_product
 
 
 @admin.register(TCG)
@@ -34,6 +48,7 @@ class CertificationGradeAdmin(ModelAdmin):
 
 @admin.register(Product)
 class ProductAdmin(ModelAdmin):
+    form = ProductAdminForm
     list_display = (
         "name", "category", "tcg",
         "price_usd", "price_ars_display", "discount_percent",
@@ -58,7 +73,7 @@ class ProductAdmin(ModelAdmin):
             "fields": ("price_usd", "price_ars_display", "discount_percent", "stock_quantity", "in_stock"),
         }),
         ("Imágenes", {
-            "fields": ("image_url", "image_url_2", "image_url_3"),
+            "fields": ("cloudinary_draft_token", "images_payload", "image_url", "image_url_2", "image_url_3"),
         }),
         # --- Campos condicionales (JS los muestra/oculta según categoría) ---
         ("Singles — Condición", {
@@ -77,5 +92,37 @@ class ProductAdmin(ModelAdmin):
     def has_delete_permission(self, request, obj=None):
         return request.user.is_superuser
 
+    def save_model(self, request, obj, form, change):
+        super().save_model(request, obj, form, change)
+
+        raw_payload = form.cleaned_data.get("images_payload") or "[]"
+        draft_token = form.cleaned_data.get("cloudinary_draft_token") or ""
+
+        try:
+            payload = json.loads(raw_payload)
+            image_ids = [int(item["id"]) for item in payload if isinstance(item, dict) and item.get("id")]
+            attach_images_to_product(product=obj, draft_token=draft_token, ordered_image_ids=image_ids)
+        except (ValueError, json.JSONDecodeError, CloudinaryValidationError) as exc:
+            self.message_user(request, f"No se pudieron sincronizar las imágenes: {exc}", level=messages.ERROR)
+
     class Media:
-        js = ("admin/js/product_admin.js",)
+        css = {
+            "all": ("admin/css/product_admin_uploader.css",),
+        }
+        js = ("admin/js/product_admin_uploader.js",)
+
+
+@admin.register(ProductImage)
+class ProductImageAdmin(ModelAdmin):
+    list_display = ("id", "product", "source", "order_index", "status", "uploaded_at")
+    list_filter = ("source", "status")
+    search_fields = ("public_id", "secure_url", "draft_token")
+    readonly_fields = ("uploaded_at", "confirmed_at", "metadata")
+
+
+@admin.register(ProductImageWebhookEvent)
+class ProductImageWebhookEventAdmin(ModelAdmin):
+    list_display = ("id", "event_type", "public_id", "is_valid_signature", "processed", "created_at")
+    list_filter = ("event_type", "is_valid_signature", "processed")
+    search_fields = ("public_id",)
+    readonly_fields = ("created_at", "processed_at", "payload")

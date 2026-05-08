@@ -4,7 +4,24 @@ Products Serializers
 """
 
 from rest_framework import serializers
-from .models import TCG, ProductCategory, CardCondition, CertificationEntity, CertificationGrade, Product
+from .models import TCG, ProductCategory, CardCondition, CertificationEntity, CertificationGrade, Product, ProductImage
+
+
+class ProductImageSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = ProductImage
+        fields = (
+            "id",
+            "secure_url",
+            "public_id",
+            "order_index",
+            "source",
+            "status",
+            "width",
+            "height",
+            "bytes",
+            "format",
+        )
 
 
 class TCGSerializer(serializers.ModelSerializer):
@@ -61,6 +78,7 @@ class ProductListSerializer(serializers.ModelSerializer):
     certification_grade = serializers.StringRelatedField()
     price_ars = serializers.DecimalField(max_digits=12, decimal_places=2, read_only=True)
     final_price = serializers.DecimalField(max_digits=12, decimal_places=2, read_only=True)
+    images = ProductImageSerializer(many=True, read_only=True)
 
     class Meta:
         model = Product
@@ -68,7 +86,7 @@ class ProductListSerializer(serializers.ModelSerializer):
             "id", "name", "slug", "tcg", "category",
             "condition", "certification_entity", "certification_grade",
             "price_usd", "price_ars", "discount_percent", "final_price",
-            "stock_quantity", "in_stock", "image_url", "rating", "rating_count", "created_at",
+            "stock_quantity", "in_stock", "image_url", "images", "rating", "rating_count", "created_at",
         )
 
 
@@ -76,12 +94,13 @@ class ProductSuggestedSerializer(serializers.ModelSerializer):
     category = serializers.StringRelatedField()
     price_ars = serializers.DecimalField(max_digits=12, decimal_places=2, read_only=True)
     final_price = serializers.DecimalField(max_digits=12, decimal_places=2, read_only=True)
+    images = ProductImageSerializer(many=True, read_only=True)
 
     class Meta:
         model = Product
         fields = (
             "id", "name", "slug", "category",
-            "image_url", "price_ars", "final_price", "discount_percent",
+            "image_url", "images", "price_ars", "final_price", "discount_percent",
             "stock_quantity", "in_stock",
         )
 
@@ -95,6 +114,7 @@ class ProductDetailSerializer(serializers.ModelSerializer):
     price_ars = serializers.DecimalField(max_digits=12, decimal_places=2, read_only=True)
     final_price = serializers.DecimalField(max_digits=12, decimal_places=2, read_only=True)
     suggested_products = serializers.SerializerMethodField()
+    images = ProductImageSerializer(many=True, read_only=True)
 
     def get_suggested_products(self, obj):
         from apps.orders.models import SuggestedProductsCarousel
@@ -115,6 +135,7 @@ class ProductDetailSerializer(serializers.ModelSerializer):
             "price_usd", "price_ars", "discount_percent", "final_price",
             "stock_quantity", "in_stock",
             "image_url", "image_url_2", "image_url_3",
+            "images",
             "suggested_products",
             "rating", "rating_count",
             "pricecharting_url", "created_at", "updated_at",

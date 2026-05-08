@@ -3,14 +3,22 @@ Products Views
 ===============
 """
 
+import json
+import logging
+
+from django.views.decorators.csrf import csrf_exempt
 from django.db import models
+from django.utils import timezone
 from django.utils.decorators import method_decorator
 from django_ratelimit.decorators import ratelimit
-from rest_framework import viewsets, permissions
+from rest_framework import permissions, status, viewsets
+from rest_framework.authentication import SessionAuthentication
 from rest_framework.decorators import action
+from rest_framework.views import APIView
+from rest_framework_simplejwt.authentication import JWTAuthentication
 from rest_framework.response import Response
 
-from .models import TCG, ProductCategory, CardCondition, CertificationEntity, CertificationGrade, Product
+from .models import TCG, ProductCategory, CardCondition, CertificationEntity, CertificationGrade, Product, ProductImage, ProductImageWebhookEvent
 from .serializers import (
     TCGSerializer,
     ProductCategorySerializer,
@@ -23,6 +31,17 @@ from .serializers import (
     ProductSearchSerializer,
 )
 from .filters import ProductFilter
+from .services.cloudinary_service import (
+    CloudinaryConfigurationError,
+    CloudinaryValidationError,
+    create_pending_image,
+    generate_signed_upload_payload,
+    remove_cloudinary_asset,
+    verify_notification_signature,
+)
+
+
+logger = logging.getLogger(__name__)
 
 
 class TCGViewSet(viewsets.ReadOnlyModelViewSet):
@@ -84,7 +103,7 @@ class ProductViewSet(viewsets.ModelViewSet):
         return Product.objects.select_related(
             "tcg", "category", "condition",
             "certification_entity", "certification_grade",
-        )
+        ).prefetch_related("images")
 
     def get_queryset(self):
         return self.get_base_queryset().filter(in_stock=True)
@@ -426,3 +445,190 @@ class ProductViewSet(viewsets.ModelViewSet):
         }
         ordered_products = [products[product_id] for product_id in ids if product_id in products]
         return Response(ProductListSerializer(ordered_products, many=True).data)
+
+
+class _AdminProductImageAPIView(APIView):
+    authentication_classes = [SessionAuthentication, JWTAuthentication]
+    permission_classes = [permissions.IsAdminUser]
+
+
+class CloudinarySignedUploadSignatureView(_AdminProductImageAPIView):
+    def post(self, request):
+        draft_token = (request.data.get("draft_token") or "").strip()
+        slot = request.data.get("slot")
+
+        if not draft_token:
+            return Response({"detail": "draft_token es obligatorio."}, status=status.HTTP_400_BAD_REQUEST)
+
+        try:
+            slot = int(slot)
+        except (TypeError, ValueError):
+            return Response({"detail": "slot inválido."}, status=status.HTTP_400_BAD_REQUEST)
+
+        if slot < 0 or slot > 2:
+            return Response({"detail": "slot inválido."}, status=status.HTTP_400_BAD_REQUEST)
+
+        try:
+            payload = generate_signed_upload_payload(
+                draft_token=draft_token,
+                slot=slot,
+                user_id=request.user.id if request.user.is_authenticated else None,
+            )
+            return Response(payload)
+        except CloudinaryConfigurationError as exc:
+            return Response({"detail": str(exc)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+class ProductImageRegisterUploadView(_AdminProductImageAPIView):
+    def post(self, request):
+        draft_token = (request.data.get("draft_token") or "").strip()
+        secure_url = (request.data.get("secure_url") or "").strip()
+        public_id = (request.data.get("public_id") or "").strip()
+        source = (request.data.get("source") or ProductImage.SOURCE_CLOUDINARY).strip()
+        order_index = request.data.get("order_index", 0)
+        metadata = request.data.get("metadata") or {}
+
+        if not draft_token:
+            return Response({"detail": "draft_token es obligatorio."}, status=status.HTTP_400_BAD_REQUEST)
+        if not secure_url:
+            return Response({"detail": "secure_url es obligatorio."}, status=status.HTTP_400_BAD_REQUEST)
+
+        try:
+            order_index = int(order_index)
+            image = create_pending_image(
+                draft_token=draft_token,
+                secure_url=secure_url,
+                order_index=order_index,
+                source=source,
+                public_id=public_id,
+                metadata=metadata if isinstance(metadata, dict) else {},
+            )
+        except (ValueError, CloudinaryValidationError) as exc:
+            return Response({"detail": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+
+        return Response(
+            {
+                "id": image.id,
+                "secure_url": image.secure_url,
+                "public_id": image.public_id,
+                "order_index": image.order_index,
+                "status": image.status,
+                "source": image.source,
+            },
+            status=status.HTTP_201_CREATED,
+        )
+
+
+class ProductImageDeleteView(_AdminProductImageAPIView):
+    def post(self, request):
+        image_id = request.data.get("image_id")
+        if not image_id:
+            return Response({"detail": "image_id es obligatorio."}, status=status.HTTP_400_BAD_REQUEST)
+
+        try:
+            image = ProductImage.objects.get(id=image_id)
+        except ProductImage.DoesNotExist:
+            return Response({"detail": "Imagen no encontrada."}, status=status.HTTP_404_NOT_FOUND)
+
+        product = image.product
+        cloudinary_result = None
+        if image.source == ProductImage.SOURCE_CLOUDINARY and image.public_id:
+            try:
+                cloudinary_result = remove_cloudinary_asset(image.public_id, invalidate=True)
+            except Exception as exc:  # noqa: BLE001
+                logger.warning("Error eliminando imagen Cloudinary %s: %s", image.public_id, exc)
+                return Response({"detail": "No se pudo eliminar la imagen en Cloudinary."}, status=status.HTTP_502_BAD_GATEWAY)
+
+        image.delete()
+        if product:
+            product.sync_legacy_images_from_gallery(save=True)
+
+        return Response({"ok": True, "cloudinary": cloudinary_result})
+
+
+@method_decorator(csrf_exempt, name="dispatch")
+class CloudinaryUploadWebhookView(APIView):
+    permission_classes = [permissions.AllowAny]
+    authentication_classes = []
+
+    def post(self, request):
+        raw_body = request.body or b""
+        timestamp = request.headers.get("X-Cld-Timestamp", "")
+        signature = request.headers.get("X-Cld-Signature", "")
+
+        is_valid_signature = False
+        try:
+            is_valid_signature = verify_notification_signature(raw_body, timestamp, signature)
+        except CloudinaryConfigurationError:
+            return Response({"detail": "Cloudinary no configurado."}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+        payload = {}
+        try:
+            payload = json.loads(raw_body.decode("utf-8") or "{}")
+        except json.JSONDecodeError:
+            payload = {}
+
+        notification_type = (payload.get("notification_type") or "").strip() or ProductImageWebhookEvent.EVENT_OTHER
+        normalized_type = notification_type if notification_type in {
+            ProductImageWebhookEvent.EVENT_UPLOAD,
+            ProductImageWebhookEvent.EVENT_DELETE,
+            ProductImageWebhookEvent.EVENT_EAGER,
+        } else ProductImageWebhookEvent.EVENT_OTHER
+
+        public_id = (payload.get("public_id") or "").strip()
+        event = ProductImageWebhookEvent.objects.create(
+            event_type=normalized_type,
+            public_id=public_id,
+            payload=payload,
+            is_valid_signature=is_valid_signature,
+        )
+
+        if not is_valid_signature:
+            event.error = "Firma inválida"
+            event.save(update_fields=["error"])
+            return Response({"detail": "invalid signature"}, status=status.HTTP_401_UNAUTHORIZED)
+
+        try:
+            if normalized_type == ProductImageWebhookEvent.EVENT_UPLOAD and public_id:
+                image = ProductImage.objects.filter(public_id=public_id).order_by("-id").first()
+                if image:
+                    image.status = ProductImage.STATUS_CONFIRMED
+                    image.confirmed_at = timezone.now()
+                    image.width = payload.get("width") or image.width
+                    image.height = payload.get("height") or image.height
+                    image.bytes = payload.get("bytes") or image.bytes
+                    image.format = payload.get("format") or image.format
+                    secure_url = payload.get("secure_url") or image.secure_url
+                    thumbnail_url = ""
+                    if secure_url and "/upload/" in secure_url:
+                        thumbnail_url = secure_url.replace(
+                            "/upload/",
+                            "/upload/c_fill,w_320,h_320,f_auto,q_auto/",
+                            1,
+                        )
+                    image.metadata = {
+                        **(image.metadata or {}),
+                        "thumbnail_url": thumbnail_url,
+                        "webhook": payload,
+                    }
+                    image.save(
+                        update_fields=[
+                            "status",
+                            "confirmed_at",
+                            "width",
+                            "height",
+                            "bytes",
+                            "format",
+                            "metadata",
+                        ]
+                    )
+            event.processed = True
+            event.processed_at = timezone.now()
+            event.save(update_fields=["processed", "processed_at"])
+        except Exception as exc:  # noqa: BLE001
+            event.error = str(exc)
+            event.save(update_fields=["error"])
+            logger.exception("Error procesando webhook de Cloudinary")
+            return Response({"detail": "processing error"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+        return Response({"ok": True}, status=status.HTTP_200_OK)
