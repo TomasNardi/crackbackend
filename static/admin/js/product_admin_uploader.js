@@ -440,6 +440,17 @@
       legacyField.parentElement.insertBefore(root, legacyField);
     }
 
+    if (imageFieldset) {
+      imageFieldset.classList.add('product-images-fieldset');
+    }
+
+    const imagesWrapper = root.closest('div.shadow-sm.rounded.aligned') || root.parentElement;
+    if (imagesWrapper) {
+      imagesWrapper.classList.remove('border');
+      imagesWrapper.style.borderWidth = '0';
+      imagesWrapper.style.borderStyle = 'none';
+    }
+
     ['id_image_url', 'id_image_url_2', 'id_image_url_3'].forEach((id) => {
       const input = getField(id);
       if (!input) return;

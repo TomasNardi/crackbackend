@@ -84,7 +84,7 @@ class ProductAdmin(ModelAdmin):
             "fields": ("certification_entity", "certification_grade"),
             "classes": ("fieldset-slabs",),
         }),
-        ("Referencias externas", {
+        ("Referencias externas (Opcional)", {
             "fields": ("pricecharting_url",),
         }),
     )
