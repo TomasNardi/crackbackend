@@ -45,6 +45,7 @@ class UserProfileSerializer(serializers.ModelSerializer):
             "default_province",
             "default_zip",
             "is_collector",
+            "is_staff",
             "date_joined",
         )
-        read_only_fields = ("id", "email", "date_joined", "is_collector")
+        read_only_fields = ("id", "email", "date_joined", "is_collector", "is_staff")
