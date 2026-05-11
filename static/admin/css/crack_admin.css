@@ -145,6 +145,7 @@ textarea:focus {
 body.app-auth.model-group.change-form .form-row.field-permissions {
   width: 100% !important;
   max-width: none !important;
+  margin-top: 1rem;
 }
 
 body.app-auth.model-group.change-form .form-row.field-permissions .related-widget-wrapper,
@@ -154,7 +155,22 @@ body.app-auth.model-group.change-form .form-row.field-permissions .selector {
 }
 
 body.app-auth.model-group.change-form .form-row.field-permissions .selector {
-  min-width: 920px;
+  display: flex;
+  align-items: stretch;
+  gap: 0.75rem;
+  min-width: 0;
+  width: 100% !important;
+}
+
+body.app-auth.model-group.change-form .form-row.field-permissions .selector .selector-available,
+body.app-auth.model-group.change-form .form-row.field-permissions .selector .selector-chosen {
+  flex: 1 1 0;
+  min-width: 0;
+}
+
+body.app-auth.model-group.change-form .form-row.field-permissions .selector .selector-chooser {
+  flex: 0 0 auto;
+  align-self: center;
 }
 
 body.app-auth.model-group.change-form .form-row.field-permissions .selector select,
@@ -163,5 +179,97 @@ body.app-auth.model-group.change-form .form-row.field-permissions .selector-filt
 }
 
 body.app-auth.model-group.change-form .form-row.field-permissions .selector select {
-  min-height: 360px;
+  min-height: 380px;
+}
+
+body.app-auth.model-group.change-form .form-row.field-permissions .selector-filter input {
+  max-width: none !important;
+}
+
+body.app-auth.model-group.change-form .form-row.field-permissions .selector-available h2,
+body.app-auth.model-group.change-form .form-row.field-permissions .selector-chosen h2 {
+  white-space: normal;
+}
+
+@media (max-width: 1280px) {
+  body.app-auth.model-group.change-form .form-row.field-permissions .selector {
+    flex-direction: column;
+  }
+
+  body.app-auth.model-group.change-form .form-row.field-permissions .selector .selector-chooser {
+    display: flex;
+    justify-content: center;
+    gap: 0.5rem;
+    margin: 0.5rem 0;
+  }
+}
+
+@media (max-width: 768px) {
+  body.app-auth.model-group.change-form .form-row.field-permissions {
+    padding-inline: 0;
+  }
+
+  body.app-auth.model-group.change-form .form-row.field-permissions .selector select {
+    min-height: 300px;
+  }
+
+  body.app-auth.model-group.change-form .form-row.field-permissions .selector .selector-filter {
+    width: 100%;
+  }
+}
+
+/* Fallback robusto para Group permissions (Unfold puede cambiar body classes) */
+.field-permissions {
+  width: 100% !important;
+  max-width: none !important;
+}
+
+.field-permissions .selector {
+  display: grid !important;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+  gap: 0.75rem;
+  width: 100% !important;
+  max-width: none !important;
+}
+
+.field-permissions .selector .selector-available,
+.field-permissions .selector .selector-chosen {
+  min-width: 0;
+}
+
+.field-permissions .selector-chooser {
+  align-self: center;
+}
+
+.field-permissions #id_permissions_from,
+.field-permissions #id_permissions_to {
+  width: 100% !important;
+  min-height: 380px;
+}
+
+.field-permissions .selector-filter,
+.field-permissions .selector-filter input,
+.field-permissions #id_permissions_input {
+  width: 100% !important;
+  max-width: none !important;
+}
+
+@media (max-width: 1280px) {
+  .field-permissions .selector {
+    grid-template-columns: 1fr;
+  }
+
+  .field-permissions .selector-chooser {
+    display: flex;
+    justify-content: center;
+    gap: 0.5rem;
+    margin: 0.5rem 0;
+  }
+}
+
+@media (max-width: 768px) {
+  .field-permissions #id_permissions_from,
+  .field-permissions #id_permissions_to {
+    min-height: 280px;
+  }
 }

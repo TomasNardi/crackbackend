@@ -1,0 +1,60 @@
+/* Group admin - permissions widget responsive layout */
+
+.app-auth.model-group .field-permissions,
+.app-auth.model-group .form-row.field-permissions {
+  width: 100% !important;
+  max-width: none !important;
+}
+
+.app-auth.model-group .field-permissions .selector,
+.app-auth.model-group .form-row.field-permissions .selector {
+  width: 100% !important;
+  max-width: none !important;
+  display: grid !important;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+  gap: 0.875rem;
+  align-items: stretch;
+}
+
+.app-auth.model-group .selector .selector-available,
+.app-auth.model-group .selector .selector-chosen {
+  min-width: 0;
+}
+
+.app-auth.model-group .selector .selector-chooser {
+  align-self: center;
+}
+
+.app-auth.model-group #id_permissions_from,
+.app-auth.model-group #id_permissions_to {
+  width: 100% !important;
+  min-height: 420px;
+}
+
+.app-auth.model-group .selector-filter,
+.app-auth.model-group .selector-filter input,
+.app-auth.model-group #id_permissions_input {
+  width: 100% !important;
+  max-width: none !important;
+}
+
+@media (max-width: 1200px) {
+  .app-auth.model-group .field-permissions .selector,
+  .app-auth.model-group .form-row.field-permissions .selector {
+    grid-template-columns: 1fr;
+  }
+
+  .app-auth.model-group .selector .selector-chooser {
+    display: flex;
+    justify-content: center;
+    gap: 0.5rem;
+    margin: 0.5rem 0;
+  }
+}
+
+@media (max-width: 768px) {
+  .app-auth.model-group #id_permissions_from,
+  .app-auth.model-group #id_permissions_to {
+    min-height: 280px;
+  }
+}

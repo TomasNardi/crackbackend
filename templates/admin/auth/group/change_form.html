@@ -1,0 +1,152 @@
+{% extends "admin/change_form.html" %}
+
+{% block extrastyle %}
+{{ block.super }}
+<style>
+  /* Solo Group change form: bloques de permisos grandes y legibles */
+  .form-row.field-permissions,
+  .field-permissions {
+    width: 100% !important;
+    max-width: none !important;
+    padding: 1rem 1rem 0.75rem !important;
+  }
+
+  .form-row.field-permissions .selector,
+  .field-permissions .selector {
+    width: 100% !important;
+    max-width: 1320px !important;
+    margin: 0 auto !important;
+    display: grid !important;
+    grid-template-columns: minmax(360px, 1fr) 72px minmax(360px, 1fr);
+    gap: 1.1rem;
+    align-items: stretch;
+  }
+
+  .field-permissions .selector .selector-available,
+  .field-permissions .selector .selector-chosen {
+    float: none !important;
+    width: auto !important;
+    margin: 0 !important;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    border: 1px solid #e8e4dd;
+    border-radius: 0.7rem;
+    overflow: hidden;
+    background: #fff;
+  }
+
+  .field-permissions .selector .selector-chooser {
+    float: none !important;
+    width: 72px !important;
+    align-self: center;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    gap: 0.55rem;
+    margin: 0 !important;
+    padding: 0 !important;
+  }
+
+  .field-permissions .selector .selector-chooser li {
+    margin: 0 !important;
+  }
+
+  .field-permissions .selector .selector-chooser a {
+    width: 46px !important;
+    height: 46px !important;
+    border-radius: 999px !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    border: 1px solid #d8d2c6 !important;
+    background: #fff !important;
+    color: #7a736b !important;
+    font-size: 26px !important;
+    line-height: 1 !important;
+    text-decoration: none !important;
+  }
+
+  .field-permissions .selector .selector-chooser a:hover,
+  .field-permissions .selector .selector-chooser a:focus {
+    background: #f6f2ea !important;
+    color: #b8851f !important;
+    border-color: #cfa654 !important;
+  }
+
+  #id_permissions_from,
+  #id_permissions_to {
+    width: 100% !important;
+    min-height: 520px !important;
+    font-size: 16px !important;
+    line-height: 1.45 !important;
+    border: 0 !important;
+    border-radius: 0 !important;
+    padding: 0.35rem 0.45rem !important;
+  }
+
+  .field-permissions .selector-filter,
+  .field-permissions .selector-filter input,
+  #id_permissions_input {
+    width: 100% !important;
+    max-width: none !important;
+    font-size: 16px !important;
+    padding: 0.7rem 0.8rem !important;
+  }
+
+  .field-permissions .selector-filter {
+    margin: 0 !important;
+    padding: 0.7rem !important;
+    border-bottom: 1px solid #ece7df !important;
+    background: #fbfaf8 !important;
+  }
+
+  .field-permissions .selector-available h2,
+  .field-permissions .selector-chosen h2 {
+    font-size: 17px !important;
+    font-weight: 700 !important;
+    line-height: 1.35 !important;
+    margin: 0 !important;
+    padding: 0.8rem 0.9rem 0.35rem !important;
+    white-space: normal;
+  }
+
+  .field-permissions .help,
+  .field-permissions + .help,
+  .help {
+    font-size: 15px !important;
+    line-height: 1.5 !important;
+  }
+
+  @media (max-width: 1280px) {
+    .form-row.field-permissions .selector,
+    .field-permissions .selector {
+      grid-template-columns: 1fr;
+      max-width: 100% !important;
+    }
+
+    .field-permissions .selector .selector-chooser {
+      display: flex;
+      flex-direction: row;
+      justify-content: center;
+      gap: 0.6rem;
+      width: 100% !important;
+      margin: 0.55rem 0;
+    }
+  }
+
+  @media (max-width: 768px) {
+    #id_permissions_from,
+    #id_permissions_to {
+      min-height: 320px !important;
+      font-size: 15px !important;
+    }
+
+    .field-permissions .selector-filter input,
+    #id_permissions_input {
+      font-size: 15px !important;
+    }
+  }
+</style>
+{% endblock %}
