@@ -1,43 +1,64 @@
-class User: 
-    
-    user_id = 0 
-    
-    def __init__(self, name, apellido='troll'):
-        self.name = name
-        self.apellido = apellido
-        
-        User.user_id += 1 
-        self.id = User.user_id
-        
-        self.__gender = 'En desarrollo'
-        
-    @classmethod
-    def instancia(cls, name):
-        return cls(name)
-    
-    # getter
-    @property 
-    def gender(self): 
-        return self.__gender
-    
-    # setter
-    @gender.setter
-    def gender(self, value): 
-        if value == 'masculino': 
-            value = 'femeninio'
-        self.__gender = value
-        
+class Celular:
 
-usu1 = User('tomas', 'nardi')
+    def __init__(self, marca, modelo):
 
-print(usu1.gender)
+        self.marca = marca
+        # atributo PUBLICO
+        # cualquiera puede leer/modificar
 
-usu1.gender = 'masculino'
+        self._conexion = 'mysql'
+        # atributo PROTEGIDO
+        # uso interno de la clase (convención)
 
-print(usu1.gender)
-print('-----'*10)
-usu2 = User.instancia('test')
+        self.__imei = '123456'
+        # atributo PRIVADO
+        # más encapsulado
 
-print(usu2.name , usu2.apellido , usu2.user_id , usu2.gender)
-usu2.gender = 'masculino'
-print(usu2.name , usu2.apellido , usu2.user_id , usu2.gender)
+
+class Celular_comprar(Celular):
+
+    def __init__(self, marca, modelo, metodo_pago):
+
+        super().__init__(marca, modelo)
+
+        self.metodo = metodo_pago
+        # property publica
+        # llama al setter
+
+    @property
+    def metodo(self):
+
+        return self.__metodo
+        # devuelve atributo privado real
+
+    @metodo.setter
+    def metodo(self, value):
+
+        if value not in ['tarjeta', 'efectivo']:
+            raise ValueError('Metodo invalido')
+
+        self.__metodo = value
+        # atributo privado interno
+
+
+cel_1 = Celular_comprar('samsung', 's22', 'tarjeta')
+
+cel_1.metodo = 'efectivo'
+
+print(cel_1.metodo)
+print(cel_1.marca)
+print(cel_1._conexion)
+
+
+
+def funcion(x):
+    def funcion_modificada():
+        print('decorador')
+        x()
+    return funcion_modificada
+
+@funcion
+def saludarte():
+    print('Hola')
+
+saludarte()

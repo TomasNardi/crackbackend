@@ -90,7 +90,7 @@ class ProductAdmin(ModelAdmin):
     )
 
     def has_delete_permission(self, request, obj=None):
-        return request.user.is_superuser
+        return request.user.has_perm("products.delete_product")
 
     def save_model(self, request, obj, form, change):
         super().save_model(request, obj, form, change)

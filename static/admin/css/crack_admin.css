@@ -140,3 +140,28 @@ textarea:focus {
 ::-webkit-scrollbar-track { background: #FAFAF7; }
 ::-webkit-scrollbar-thumb { background: #D4CFC6; border-radius: 2px; }
 ::-webkit-scrollbar-thumb:hover { background: #C8972E; }
+
+/* ── Auth group permissions layout ── */
+body.app-auth.model-group.change-form .form-row.field-permissions {
+  width: 100% !important;
+  max-width: none !important;
+}
+
+body.app-auth.model-group.change-form .form-row.field-permissions .related-widget-wrapper,
+body.app-auth.model-group.change-form .form-row.field-permissions .selector {
+  width: 100% !important;
+  max-width: none !important;
+}
+
+body.app-auth.model-group.change-form .form-row.field-permissions .selector {
+  min-width: 920px;
+}
+
+body.app-auth.model-group.change-form .form-row.field-permissions .selector select,
+body.app-auth.model-group.change-form .form-row.field-permissions .selector-filter input {
+  width: 100% !important;
+}
+
+body.app-auth.model-group.change-form .form-row.field-permissions .selector select {
+  min-height: 360px;
+}
