@@ -1,13 +1,23 @@
 from django import forms
 from django.contrib import admin
-from django.shortcuts import redirect
+from django.contrib.admin import SimpleListFilter
+from django.shortcuts import redirect, render
 from django.utils import timezone
 from django.urls import reverse, path
 from django.http import HttpResponse, HttpResponseRedirect
 from django.utils.html import format_html
 from django.contrib import messages
 from unfold.admin import ModelAdmin, TabularInline
-from .models import Order, OrderItem, MercadoPagoPayment, DiscountCode, SuggestedProductsCarousel
+from .models import (
+    Order,
+    OrderItem,
+    MercadoPagoPayment,
+    DiscountCode,
+    SuggestedProductsCarousel,
+    ShippingConfig,
+    Shipment,
+    ShippingOrder,
+)
 from .pdf_generator import generate_order_pdf
 
 
@@ -40,6 +50,23 @@ class MercadoPagoPaymentInline(TabularInline):
         "preference_id", "payment_id", "status", "is_paid",
         "payment_method", "payment_type", "external_reference",
         "transaction_amount", "net_received_amount", "expires_at", "expired_at", "created_at",
+    )
+
+
+class ShipmentInline(TabularInline):
+    model = Shipment
+    extra = 0
+    max_num = 1
+    fields = ("tracking_code", "status", "shipped_at", "created_at")
+    readonly_fields = ("created_at",)
+
+
+class ShipmentQuickUpdateForm(forms.Form):
+    tracking_code = forms.CharField(
+        label="Código de seguimiento",
+        max_length=120,
+        required=True,
+        widget=forms.TextInput(attrs={"placeholder": "Ej: PAQ123456789AR"}),
     )
 
 
@@ -88,9 +115,9 @@ class OrderAdmin(ModelAdmin):
     list_display = (
         "order_code", "customer_name", "customer_email",
         "total", "payment_method", "payment_status_display", "shipping_type",
-        "pdf_download_button", "created_at_ar",
+        "shipping_hub_button", "pdf_download_button", "created_at_ar",
     )
-    list_filter = ("payment_method", "shipping_type")
+    list_filter = ("payment_method", "shipping_type", "shipping_method", "shipping_status")
     search_fields = (
         "order_code", "customer_name", "customer_email", "discount_code",
         "mp_preference_id",
@@ -166,6 +193,28 @@ class OrderAdmin(ModelAdmin):
             url, color,
         )
 
+    @admin.display(description="Envíos")
+    def shipping_hub_button(self, obj):
+        if not obj.has_shipping or obj.shipping_type == Order.SHIPPING_PICKUP:
+            return format_html('<span style="color:#999;">—</span>')
+
+        if obj.shipping_status == Order.SHIPPING_STATUS_SHIPPED:
+            return format_html(
+                '<span style="'
+                'background:#2ea44f;color:#fff;padding:5px 12px;border-radius:4px;'
+                'font-size:12px;font-weight:600;display:inline-block;">🚚 Enviado</span>'
+            )
+
+        url = reverse("admin:orders_order_shipping_popup", args=[obj.pk])
+        return format_html(
+            '<a href="{}" onclick="window.open(this.href, \'shipping-popup-{}\', \'width=560,height=520,resizable=yes,scrollbars=yes\'); return false;" style="'
+            'background:#2d6cdf;color:#fff;padding:5px 12px;border-radius:4px;'
+            'font-size:12px;font-weight:600;text-decoration:none;display:inline-block;"'
+            'title="Cargar envío de esta orden">Cargar envío</a>',
+            url,
+            obj.pk,
+        )
+
     def get_urls(self):
         urls = super().get_urls()
         custom = [
@@ -179,8 +228,48 @@ class OrderAdmin(ModelAdmin):
                 self.admin_site.admin_view(self.pdf_download_view),
                 name="orders_order_pdf_download",
             ),
+            path(
+                "<int:order_id>/shipping-popup/",
+                self.admin_site.admin_view(self.shipping_popup_view),
+                name="orders_order_shipping_popup",
+            ),
         ]
         return custom + urls
+
+    def shipping_popup_view(self, request, order_id):
+        try:
+            order = Order.objects.get(pk=order_id)
+        except Order.DoesNotExist:
+            return HttpResponse("Orden no encontrada.", status=404)
+
+        if order.shipping_type == Order.SHIPPING_PICKUP:
+            return HttpResponse("Esta orden es retiro en persona y no requiere despacho.", status=400)
+
+        shipment, _ = Shipment.objects.get_or_create(order=order, defaults={"status": Shipment.STATUS_PENDING})
+
+        if request.method == "POST":
+            form = ShipmentQuickUpdateForm(request.POST)
+            if form.is_valid():
+                shipment.tracking_code = form.cleaned_data["tracking_code"].strip()
+                shipment.status = Shipment.STATUS_SHIPPED
+                shipment.save(update_fields=["tracking_code", "status", "shipped_at"])
+
+                return HttpResponse(
+                    "<script>"
+                    "if (window.opener) { window.opener.location.reload(); }"
+                    "window.close();"
+                    "</script>"
+                )
+        else:
+            form = ShipmentQuickUpdateForm(initial={"tracking_code": shipment.tracking_code})
+
+        context = {
+            "title": "Cargar envío",
+            "order": order,
+            "shipment": shipment,
+            "form": form,
+        }
+        return render(request, "admin/orders/shipping_popup.html", context)
 
     def mark_cash_paid_view(self, request, order_id):
         try:
@@ -319,6 +408,157 @@ class MercadoPagoPaymentAdmin(ModelAdmin):
 
     def has_add_permission(self, request):
         return False
+
+
+@admin.register(ShippingConfig)
+class ShippingConfigAdmin(ModelAdmin):
+    list_display = ("key", "price", "updated_at")
+    list_editable = ("price",)
+    search_fields = ("key",)
+    ordering = ("key",)
+
+
+@admin.register(Shipment)
+class ShipmentAdmin(ModelAdmin):
+    list_display = ("order", "tracking_code", "status", "shipped_at", "created_at")
+    list_filter = ("status",)
+    search_fields = ("order__order_code", "order__customer_name", "tracking_code")
+    readonly_fields = ("created_at",)
+
+
+class ShippingDispatchFilter(SimpleListFilter):
+    title = "Despacho"
+    parameter_name = "dispatch_state"
+
+    def lookups(self, request, model_admin):
+        return [
+            ("pending", "No despachados"),
+            ("shipped", "Enviados"),
+        ]
+
+    def queryset(self, request, queryset):
+        value = self.value()
+        if value == "pending":
+            return queryset.filter(shipping_status=Order.SHIPPING_STATUS_PENDING)
+        if value == "shipped":
+            return queryset.filter(shipping_status=Order.SHIPPING_STATUS_SHIPPED)
+        return queryset
+
+
+class ShippingModeFilter(SimpleListFilter):
+    title = "Modalidad"
+    parameter_name = "shipping_mode"
+
+    def lookups(self, request, model_admin):
+        return [
+            ("express", "Express"),
+            ("home", "Domicilio"),
+            ("branch", "Sucursal"),
+        ]
+
+    def queryset(self, request, queryset):
+        value = self.value()
+        if value == "express":
+            return queryset.filter(shipping_method=Order.SHIPPING_METHOD_BRANCH_EXPRESS)
+        if value == "home":
+            return queryset.filter(shipping_method=Order.SHIPPING_METHOD_HOME)
+        if value == "branch":
+            return queryset.filter(
+                shipping_method__in=[
+                    Order.SHIPPING_METHOD_BRANCH_NORMAL,
+                    Order.SHIPPING_METHOD_BRANCH_EXPRESS,
+                ]
+            )
+        return queryset
+
+
+@admin.register(ShippingOrder)
+class ShippingOrderAdmin(ModelAdmin):
+    list_display = (
+        "order_link",
+        "customer_name",
+        "shipping_method_display",
+        "shipping_status_display",
+        "tracking_code",
+        "created_at_ar",
+        "shipped_at_display",
+    )
+    list_filter = (ShippingDispatchFilter, ShippingModeFilter, "shipping_method", "shipping_status")
+    search_fields = ("order_code", "customer_name", "customer_email", "shipment__tracking_code")
+    ordering = ("-created_at",)
+    readonly_fields = (
+        "order_code",
+        "created_at",
+        "updated_at",
+        "mp_preference_id",
+        "shipping_method",
+        "shipping_status",
+        "shipping_price",
+        "has_shipping",
+    )
+    inlines = [ShipmentInline]
+
+    fieldsets = (
+        ("Orden", {"fields": ("order_code", "customer_name", "customer_email", "created_at")}),
+        (
+            "Envío",
+            {
+                "fields": (
+                    "has_shipping",
+                    "shipping_method",
+                    "shipping_status",
+                    "shipping_price",
+                    "shipping_address",
+                    "shipping_city",
+                    "shipping_province",
+                    "shipping_zip",
+                    "shipping_branch",
+                )
+            },
+        ),
+    )
+
+    def get_queryset(self, request):
+        return (
+            super()
+            .get_queryset(request)
+            .filter(has_shipping=True)
+            .select_related("shipment")
+            .order_by("-created_at")
+        )
+
+    def has_add_permission(self, request):
+        return False
+
+    @admin.display(description="Orden", ordering="id")
+    def order_link(self, obj):
+        url = reverse("admin:orders_order_change", args=[obj.pk])
+        return format_html('<a href="{}">#{}</a>', url, obj.order_code)
+
+    @admin.display(description="Código seguimiento")
+    def tracking_code(self, obj):
+        shipment = getattr(obj, "shipment", None)
+        return shipment.tracking_code if shipment and shipment.tracking_code else "—"
+
+    @admin.display(description="Método envío", ordering="shipping_method")
+    def shipping_method_display(self, obj):
+        return obj.get_shipping_method_display()
+
+    @admin.display(description="Estado", ordering="shipping_status")
+    def shipping_status_display(self, obj):
+        return obj.get_shipping_status_display()
+
+    @admin.display(description="Fecha compra", ordering="created_at")
+    def created_at_ar(self, obj):
+        local = timezone.localtime(obj.created_at)
+        return local.strftime("%d/%m/%Y %H:%M")
+
+    @admin.display(description="Fecha despacho")
+    def shipped_at_display(self, obj):
+        shipment = getattr(obj, "shipment", None)
+        if not shipment or not shipment.shipped_at:
+            return "—"
+        return timezone.localtime(shipment.shipped_at).strftime("%d/%m/%Y %H:%M")
 
 
 @admin.register(SuggestedProductsCarousel)

@@ -1,64 +1,61 @@
-class Celular:
+class Mobile:
+    SIZES = ["s", "m", "l"]
 
-    def __init__(self, marca, modelo):
+    def __init__(self, brand, size):
+        self._material = 'Metal and Plastic'
 
-        self.marca = marca
-        # atributo PUBLICO
-        # cualquiera puede leer/modificar
-
-        self._conexion = 'mysql'
-        # atributo PROTEGIDO
-        # uso interno de la clase (convención)
-
-        self.__imei = '123456'
-        # atributo PRIVADO
-        # más encapsulado
-
-
-class Celular_comprar(Celular):
-
-    def __init__(self, marca, modelo, metodo_pago):
-
-        super().__init__(marca, modelo)
-
-        self.metodo = metodo_pago
-        # property publica
-        # llama al setter
+        self.brand = brand
+        self.size = size
 
     @property
-    def metodo(self):
+    def size(self):
+        return self._size
 
-        return self.__metodo
-        # devuelve atributo privado real
+    @size.setter
+    def size(self, value):
+        if value in Mobile.SIZES:
+            self._size = value
+        else:
+            raise Exception("Invalid size")
 
-    @metodo.setter
-    def metodo(self, value):
+    @property
+    def brand(self):
+        return self.__brand
 
-        if value not in ['tarjeta', 'efectivo']:
-            raise ValueError('Metodo invalido')
+    @brand.setter
+    def brand(self, value):
+        if len(value.strip()) < 2:
+            raise Exception("Invalid brand")
 
-        self.__metodo = value
-        # atributo privado interno
-
-
-cel_1 = Celular_comprar('samsung', 's22', 'tarjeta')
-
-cel_1.metodo = 'efectivo'
-
-print(cel_1.metodo)
-print(cel_1.marca)
-print(cel_1._conexion)
+        self.__brand = value
 
 
+class Order(Mobile):
 
-def funcion(x):
-    def funcion_modificada():
-        print('decorador')
-        x()
-    return funcion_modificada
+    PAYMENT_METHODS = ["Credit Card", "Debit Card", "Cash"]
 
-@funcion
-def saludarte():
-    print('Hola')
+    def __init__(self, brand, size, method):
+        super().__init__(brand, size)
 
-saludarte()
+        self.method = method
+
+    @property
+    def method(self):
+        return self.__method
+
+    @method.setter
+    def method(self, value):
+        if value in Order.PAYMENT_METHODS:
+            self.__method = value
+        else:
+            raise Exception('Invalid payment info')
+
+
+usu1 = Order('Samsung', "m", "Credit Card")
+
+print(
+    f'Size: {usu1.size}, '
+    f'Brand: {usu1.brand}, '
+    f'Material: {usu1._material}, '
+    f'Payment: {usu1.method}'
+)

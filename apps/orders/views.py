@@ -32,6 +32,7 @@ from .services import (
     reconcile_merchant_order_event,
     reconcile_payment,
 )
+from .services.shipping_service import get_checkout_shipping_prices
 
 logger = logging.getLogger(__name__)
 
@@ -332,6 +333,7 @@ class PaymentConfigView(APIView):
                 "mercadopago_public_key": settings.MERCADOPAGO_PUBLIC_KEY,
                 "cash_discount_enabled": config.cash_discount_enabled,
                 "cash_discount_percent": float(config.cash_discount_percent),
+                "shipping_prices": get_checkout_shipping_prices(),
             },
             status=status.HTTP_200_OK,
         )

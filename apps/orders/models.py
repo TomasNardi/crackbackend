@@ -154,6 +154,29 @@ class Order(models.Model):
         (SHIPPING_PICKUP, "Retiro en local"),
     ]
 
+    SHIPPING_METHOD_BRANCH_NORMAL = "branch_normal"
+    SHIPPING_METHOD_BRANCH_EXPRESS = "branch_express"
+    SHIPPING_METHOD_HOME = "home"
+    SHIPPING_METHOD_CHOICES = [
+        (SHIPPING_METHOD_BRANCH_NORMAL, "Sucursal Normal"),
+        (SHIPPING_METHOD_BRANCH_EXPRESS, "Sucursal Express"),
+        (SHIPPING_METHOD_HOME, "Domicilio"),
+    ]
+
+    SHIPPING_ZONE_BA = "ba"
+    SHIPPING_ZONE_PROVINCE = "province"
+    SHIPPING_ZONE_CHOICES = [
+        (SHIPPING_ZONE_BA, "Buenos Aires"),
+        (SHIPPING_ZONE_PROVINCE, "Provincia"),
+    ]
+
+    SHIPPING_STATUS_PENDING = "pending"
+    SHIPPING_STATUS_SHIPPED = "shipped"
+    SHIPPING_STATUS_CHOICES = [
+        (SHIPPING_STATUS_PENDING, "Pendiente"),
+        (SHIPPING_STATUS_SHIPPED, "Despachado"),
+    ]
+
     # Código legible único para el cliente (ej: A9K3X2)
     order_code = models.CharField(
         "Código de orden", max_length=8, unique=True, db_index=True, blank=True,
@@ -177,6 +200,28 @@ class Order(models.Model):
         "Sucursal", max_length=255, blank=True, help_text="Sucursal de correo si aplica"
     )
     shipping_cost = models.DecimalField("Costo envío", max_digits=10, decimal_places=2, default=0)
+    shipping_method = models.CharField(
+        "Método de envío",
+        max_length=20,
+        choices=SHIPPING_METHOD_CHOICES,
+        blank=True,
+        default="",
+    )
+    shipping_zone = models.CharField(
+        "Zona envío",
+        max_length=20,
+        choices=SHIPPING_ZONE_CHOICES,
+        blank=True,
+        default="",
+    )
+    shipping_price = models.DecimalField("Precio envío", max_digits=10, decimal_places=2, default=0)
+    has_shipping = models.BooleanField("Tiene envío", default=False)
+    shipping_status = models.CharField(
+        "Estado envío",
+        max_length=20,
+        choices=SHIPPING_STATUS_CHOICES,
+        default=SHIPPING_STATUS_PENDING,
+    )
 
     # Descuento aplicado
     discount_code = models.CharField("Código descuento", max_length=20, blank=True)
@@ -231,10 +276,102 @@ class Order(models.Model):
     def save(self, *args, **kwargs):
         if not self.order_code:
             self.order_code = _generate_order_code()
+        # Compatibilidad: mantener ambos campos históricos y nuevos sincronizados.
+        if self.shipping_price != self.shipping_cost:
+            if self.shipping_price and not self.shipping_cost:
+                self.shipping_cost = self.shipping_price
+            elif self.shipping_cost and not self.shipping_price:
+                self.shipping_price = self.shipping_cost
+
+        if not self.shipping_method:
+            if self.shipping_type == self.SHIPPING_PICKUP:
+                self.shipping_method = self.SHIPPING_METHOD_BRANCH_NORMAL
+            elif self.shipping_type == self.SHIPPING_HOME:
+                self.shipping_method = self.SHIPPING_METHOD_HOME
+
+        if not self.has_shipping:
+            self.has_shipping = bool(
+                self.shipping_method
+                or self.shipping_address
+                or self.shipping_branch
+                or self.shipping_price
+                or self.shipping_cost
+            )
         super().save(*args, **kwargs)
 
     def __str__(self):
         return f"Orden #{self.id} [{self.order_code}] — {self.customer_name} ({self.get_status_display()})"
+
+
+class ShippingConfig(models.Model):
+    """Configuración editable de tarifas de envío por zona/método."""
+
+    KEY_BRANCH_NORMAL_BA = "branch_normal_ba"
+    KEY_BRANCH_EXPRESS_BA = "branch_express_ba"
+    KEY_BRANCH_NORMAL_PROVINCE = "branch_normal_province"
+    KEY_BRANCH_EXPRESS_PROVINCE = "branch_express_province"
+    KEY_HOME_BA = "home_ba"
+    KEY_HOME_PROVINCE = "home_province"
+
+    KEY_CHOICES = [
+        (KEY_BRANCH_NORMAL_BA, "Sucursal Normal BA"),
+        (KEY_BRANCH_EXPRESS_BA, "Sucursal Express BA"),
+        (KEY_BRANCH_NORMAL_PROVINCE, "Sucursal Normal Provincia"),
+        (KEY_BRANCH_EXPRESS_PROVINCE, "Sucursal Express Provincia"),
+        (KEY_HOME_BA, "Domicilio BA"),
+        (KEY_HOME_PROVINCE, "Domicilio Provincia"),
+    ]
+
+    key = models.CharField("Clave", max_length=64, unique=True, choices=KEY_CHOICES)
+    price = models.DecimalField("Precio", max_digits=10, decimal_places=2)
+    updated_at = models.DateTimeField("Actualizado", auto_now=True)
+
+    class Meta:
+        verbose_name = "Configuración de envío"
+        verbose_name_plural = "Configuraciones de envíos"
+        ordering = ["key"]
+
+    def __str__(self):
+        return f"{self.get_key_display()} - ${self.price}"
+
+
+class Shipment(models.Model):
+    """Seguimiento desacoplado de despacho de una orden con envío."""
+
+    STATUS_PENDING = "pending"
+    STATUS_SHIPPED = "shipped"
+    STATUS_CHOICES = [
+        (STATUS_PENDING, "Pendiente"),
+        (STATUS_SHIPPED, "Despachado"),
+    ]
+
+    order = models.OneToOneField(
+        Order,
+        on_delete=models.CASCADE,
+        related_name="shipment",
+        verbose_name="Orden",
+    )
+    tracking_code = models.CharField("Código de seguimiento", max_length=120, blank=True)
+    status = models.CharField("Estado", max_length=20, choices=STATUS_CHOICES, default=STATUS_PENDING)
+    shipped_at = models.DateTimeField("Fecha de despacho", null=True, blank=True)
+    created_at = models.DateTimeField("Creado", auto_now_add=True)
+
+    class Meta:
+        verbose_name = "Despacho"
+        verbose_name_plural = "Despachos"
+        ordering = ["-created_at"]
+
+    def __str__(self):
+        return f"Shipment #{self.id} - Orden {self.order.order_code}"
+
+
+class ShippingOrder(Order):
+    """Proxy para administrar logística en una solapa separada del admin."""
+
+    class Meta:
+        proxy = True
+        verbose_name = "Envío"
+        verbose_name_plural = "Envíos"
 
 
 class OrderItem(models.Model):

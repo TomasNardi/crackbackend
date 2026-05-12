@@ -22,6 +22,7 @@ from reportlab.platypus import (
     PageBreak, Image, KeepTogether
 )
 from reportlab.lib.enums import TA_CENTER, TA_RIGHT, TA_LEFT, TA_JUSTIFY
+from apps.orders.services.shipping_service import get_shipping_method_label
 
 
 # Colores de CRACK TCG (Gold/Brown palette)
@@ -252,6 +253,15 @@ def generate_order_pdf(order):
             if mp_payment.last_validated_at:
                 validated_at = timezone.localtime(mp_payment.last_validated_at).strftime("%d/%m/%Y %H:%M")
 
+            shipment = getattr(order, "shipment", None)
+            tracking_code = shipment.tracking_code if shipment and shipment.tracking_code else ""
+            if order.shipping_type == "pickup":
+                shipping_payment_hint = "<b>Envío:</b> PickUp"
+            elif tracking_code:
+                shipping_payment_hint = f"<b>Código Seguimiento:</b> {tracking_code}"
+            else:
+                shipping_payment_hint = "<b>Código Seguimiento:</b> —"
+
             payment_info_data = [
                 [
                     Paragraph(f"<b>Estado MP (webhook):</b> {_mp_status_label(mp_payment.status)}", styles["Normal"]),
@@ -263,7 +273,7 @@ def generate_order_pdf(order):
                 ],
                 [
                     Paragraph(f"<b>Monto transacción:</b> ${mp_payment.transaction_amount:.2f}", styles["Normal"]),
-                    Paragraph("", styles["Normal"]),
+                    Paragraph(shipping_payment_hint, styles["Normal"]),
                 ],
                 [
                     Paragraph(f"<b>Fecha aprobación:</b> {approved_at}", styles["Normal"]),
@@ -333,9 +343,13 @@ def generate_order_pdf(order):
     # ==================== TOTALES ====================
     totals_data = []
     
-    # Subtotal
+    shipping_amount = getattr(order, "shipping_price", None)
+    if shipping_amount is None:
+        shipping_amount = order.shipping_cost
+
+    # Subtotal productos
     totals_data.append([
-        Paragraph("<b>Subtotal:</b>", ParagraphStyle("Right", parent=styles["Normal"], alignment=TA_RIGHT)),
+        Paragraph("<b>Subtotal productos:</b>", ParagraphStyle("Right", parent=styles["Normal"], alignment=TA_RIGHT)),
         Paragraph(f"${order.subtotal:.2f}", ParagraphStyle("Right", parent=styles["Normal"], alignment=TA_RIGHT)),
     ])
     
@@ -354,10 +368,10 @@ def generate_order_pdf(order):
         ])
     
     # Envío
-    if order.shipping_cost > 0:
+    if shipping_amount > 0:
         totals_data.append([
-            Paragraph(f"<b>Envío:</b>", ParagraphStyle("Right", parent=styles["Normal"], alignment=TA_RIGHT)),
-            Paragraph(f"${order.shipping_cost:.2f}", ParagraphStyle("Right", parent=styles["Normal"], alignment=TA_RIGHT)),
+            Paragraph(f"<b>Costo de envío:</b>", ParagraphStyle("Right", parent=styles["Normal"], alignment=TA_RIGHT)),
+            Paragraph(f"${shipping_amount:.2f}", ParagraphStyle("Right", parent=styles["Normal"], alignment=TA_RIGHT)),
         ])
     
     # TOTAL (resaltado)
@@ -385,15 +399,28 @@ def generate_order_pdf(order):
     story.append(Paragraph("<b style='color: #2C1810; font-size: 12px;'>INFORMACIÓN DE ENVÍO</b>", styles["Normal"]))
     story.append(Spacer(1, 0.08 * inch))
     
+    shipping_zone = getattr(order, "shipping_zone", "") or ""
+    shipping_method = getattr(order, "shipping_method", "") or ""
+    shipping_method_text = get_shipping_method_label(shipping_method, shipping_zone)
     shipping_type_text = order.get_shipping_type_display()
     shipping_address_text = order.shipping_address or "Por confirmar"
+
+    shipment = getattr(order, "shipment", None)
+    tracking_code = ""
+    if shipment and shipment.tracking_code:
+        tracking_code = shipment.tracking_code
     
     if order.shipping_type == "pickup":
-        shipping_info = f"<b>Tipo:</b> {shipping_type_text}"
+        shipping_info = (
+            f"<b>Método de envío:</b> {shipping_method_text}"
+            f"<br/><b>Tipo:</b> {shipping_type_text}"
+            f"<br/><b>Envío:</b> PickUp"
+        )
         if order.shipping_branch:
             shipping_info += f"<br/><b>Sucursal:</b> {order.shipping_branch}"
     else:
         shipping_info = f"""
+        <b>Método de envío:</b> {shipping_method_text}<br/>
         <b>Tipo:</b> {shipping_type_text}<br/>
         <b>Dirección:</b> {shipping_address_text}<br/>
         <b>Ciudad:</b> {order.shipping_city or '—'}<br/>
@@ -402,6 +429,9 @@ def generate_order_pdf(order):
         """
         if order.paqar_tracking_number:
             shipping_info += f"<br/><b>Tracking (Paq.ar):</b> {order.paqar_tracking_number}"
+
+    if tracking_code:
+        shipping_info += f"<br/><b>Código Seguimiento:</b> {tracking_code}"
     
     shipping_table_data = [[Paragraph(shipping_info, styles["Normal"])]]
     shipping_table = Table(shipping_table_data, colWidths=[6.5 * inch])

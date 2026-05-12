@@ -9,6 +9,7 @@ class OrdersConfig(AppConfig):
     verbose_name = "Órdenes"
 
     def ready(self):
+        import apps.orders.signals  # noqa: F401
         post_migrate.connect(_ensure_mp_expiration_schedule, sender=self)
 
 

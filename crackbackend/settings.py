@@ -624,6 +624,12 @@ UNFOLD = {
                         "link": "/admin/core/contactmessage/",
                         "permission": admin_has_perm("core.view_contactmessage"),
                     },
+                    {
+                        "title": "Envíos",
+                        "icon": "local_shipping",
+                        "link": "/admin/orders/shippingconfig/",
+                        "permission": admin_has_perm("orders.view_shippingconfig"),
+                    },
                 ],
             },
             {

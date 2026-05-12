@@ -93,14 +93,15 @@ def create_checkout_preference(order, frontend_url_override: str = ""):
         for item in order.items.all()
     ]
 
-    if order.shipping_cost and Decimal(order.shipping_cost) > 0:
+    shipping_amount = order.shipping_price if getattr(order, "shipping_price", None) is not None else order.shipping_cost
+    if shipping_amount and Decimal(shipping_amount) > 0:
         items.append(
             {
                 "id": "shipping",
                 "title": "Costo de envío",
                 "quantity": 1,
                 "currency_id": "ARS",
-                "unit_price": float(order.shipping_cost),
+                "unit_price": float(shipping_amount),
             }
         )
 

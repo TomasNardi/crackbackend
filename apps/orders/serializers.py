@@ -9,7 +9,8 @@ from django.db import transaction
 from rest_framework import serializers
 from apps.products.models import Product
 from apps.core.models import SiteConfig, EmailSubscription
-from .models import Order, OrderItem, MercadoPagoPayment, DiscountCode
+from .models import Order, OrderItem, MercadoPagoPayment, DiscountCode, Shipment
+from .services.shipping_service import normalize_shipping_zone, resolve_shipping_price
 
 
 UNIQUE_ORDER_CATEGORIES = {"single", "singles", "slab", "slabs"}
@@ -39,6 +40,8 @@ class OrderCreateSerializer(serializers.Serializer):
     customer_email = serializers.EmailField()
     customer_phone = serializers.CharField(max_length=30, required=False, allow_blank=True)
     shipping_type = serializers.ChoiceField(choices=Order.SHIPPING_CHOICES, default=Order.SHIPPING_HOME)
+    shipping_method = serializers.ChoiceField(choices=Order.SHIPPING_METHOD_CHOICES, required=False)
+    shipping_zone = serializers.ChoiceField(choices=Order.SHIPPING_ZONE_CHOICES, required=False)
     shipping_address = serializers.CharField(max_length=500, required=False, allow_blank=True)
     shipping_city = serializers.CharField(max_length=100, required=False, allow_blank=True)
     shipping_province = serializers.CharField(max_length=100, required=False, allow_blank=True)
@@ -100,15 +103,37 @@ class OrderCreateSerializer(serializers.Serializer):
         return errors
 
     def _validate_shipping(self, data):
+        shipping_method = data.get("shipping_method")
         shipping_type = data.get("shipping_type", Order.SHIPPING_HOME)
 
-        if shipping_type == Order.SHIPPING_HOME:
+        # Compatibilidad con clientes viejos: mapear shipping_type a shipping_method.
+        if not shipping_method:
+            if shipping_type == Order.SHIPPING_PICKUP:
+                shipping_method = Order.SHIPPING_METHOD_BRANCH_NORMAL
+            else:
+                shipping_method = Order.SHIPPING_METHOD_HOME
+
+        is_home = shipping_method == Order.SHIPPING_METHOD_HOME
+        data["shipping_method"] = shipping_method
+        data["shipping_type"] = Order.SHIPPING_HOME if is_home else Order.SHIPPING_PICKUP
+
+        shipping_zone = normalize_shipping_zone(
+            shipping_province=data.get("shipping_province", ""),
+            explicit_zone=data.get("shipping_zone", ""),
+        )
+        data["shipping_zone"] = shipping_zone
+
+        if is_home:
             required_fields = {
                 "shipping_address": "La dirección es obligatoria para envío a domicilio.",
                 "shipping_city": "La ciudad es obligatoria para envío a domicilio.",
                 "shipping_province": "La provincia es obligatoria para envío a domicilio.",
                 "shipping_zip": "El código postal es obligatorio para envío a domicilio.",
             }
+            if shipping_method == Order.SHIPPING_METHOD_BRANCH_EXPRESS:
+                raise serializers.ValidationError(
+                    {"shipping_method": "Domicilio no tiene modalidad express."}
+                )
         else:
             required_fields = {
                 "shipping_branch": "La sucursal es obligatoria para retiro en punto.",
@@ -191,8 +216,14 @@ class OrderCreateSerializer(serializers.Serializer):
                     cash_discount_percent = Decimal(config.cash_discount_percent)
                     cash_discount_amount = (subtotal - discount_value) * cash_discount_percent / Decimal("100")
 
-            shipping_cost = Decimal("0")
-            total = subtotal - discount_value - cash_discount_amount + shipping_cost
+            shipping_method = validated_data.get("shipping_method", Order.SHIPPING_METHOD_HOME)
+            shipping_zone = validated_data.get("shipping_zone", Order.SHIPPING_ZONE_PROVINCE)
+            try:
+                shipping_price = resolve_shipping_price(shipping_method, shipping_zone)
+            except Exception as exc:
+                raise serializers.ValidationError({"shipping_method": str(exc)}) from exc
+
+            total = subtotal - discount_value - cash_discount_amount + shipping_price
             total = max(total, Decimal("0"))
 
             order = Order.objects.create(
@@ -200,12 +231,17 @@ class OrderCreateSerializer(serializers.Serializer):
                 customer_email=validated_data["customer_email"],
                 customer_phone=validated_data.get("customer_phone", ""),
                 shipping_type=validated_data.get("shipping_type", Order.SHIPPING_HOME),
+                shipping_method=shipping_method,
+                shipping_zone=shipping_zone,
                 shipping_address=validated_data.get("shipping_address", ""),
                 shipping_city=validated_data.get("shipping_city", ""),
                 shipping_province=validated_data.get("shipping_province", ""),
                 shipping_zip=validated_data.get("shipping_zip", ""),
                 shipping_branch=validated_data.get("shipping_branch", ""),
-                shipping_cost=shipping_cost,
+                shipping_cost=shipping_price,
+                shipping_price=shipping_price,
+                has_shipping=True,
+                shipping_status=Order.SHIPPING_STATUS_PENDING,
                 payment_method=payment_method,
                 discount_code=discount_code.code.upper() if discount_code else "",
                 discount_type=discount_type,
@@ -215,6 +251,8 @@ class OrderCreateSerializer(serializers.Serializer):
                 subtotal=subtotal,
                 total=total,
             )
+
+            Shipment.objects.create(order=order, status=Shipment.STATUS_PENDING)
 
             for item in items_to_create:
                 OrderItem.objects.create(order=order, **item)
@@ -260,6 +298,7 @@ class OrderReadSerializer(serializers.ModelSerializer):
             "customer_name", "customer_email", "customer_phone",
             "shipping_type", "shipping_address", "shipping_city",
             "shipping_province", "shipping_zip", "shipping_cost",
+            "shipping_method", "shipping_zone", "shipping_price", "has_shipping", "shipping_status",
             "payment_method", "cash_discount_percent", "cash_discount_amount",
             "discount_code", "discount_amount",
             "subtotal", "total", "status",

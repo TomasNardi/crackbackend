@@ -138,3 +138,25 @@ def send_refund_notification(order_id: int) -> None:
         subject=f"Confirmación de devolución de compra {order.order_code} — CRACK TCG",
         html=html,
     )
+
+
+def send_shipment_notification(order_id: int, tracking_code: str) -> None:
+    """Email al cliente cuando su orden fue despachada."""
+    from .models import Order
+
+    order = Order.objects.get(id=order_id)
+    site_url = _resolve_public_site_url()
+
+    context = {
+        "order": order,
+        "tracking_code": tracking_code,
+        "logo_url": f"{site_url}/brand/logo2.png",
+    }
+
+    html = render_to_string("emails/order_shipped_notification.html", context)
+
+    _send(
+        to=[order.customer_email],
+        subject="Tu compra está en camino",
+        html=html,
+    )
