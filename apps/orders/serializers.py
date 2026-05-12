@@ -40,7 +40,11 @@ class OrderCreateSerializer(serializers.Serializer):
     customer_email = serializers.EmailField()
     customer_phone = serializers.CharField(max_length=30, required=False, allow_blank=True)
     shipping_type = serializers.ChoiceField(choices=Order.SHIPPING_CHOICES, default=Order.SHIPPING_HOME)
-    shipping_method = serializers.ChoiceField(choices=Order.SHIPPING_METHOD_CHOICES, required=False)
+    shipping_method = serializers.ChoiceField(
+        choices=Order.SHIPPING_METHOD_CHOICES,
+        required=False,
+        allow_blank=True,
+    )
     shipping_zone = serializers.ChoiceField(choices=Order.SHIPPING_ZONE_CHOICES, required=False)
     shipping_address = serializers.CharField(max_length=500, required=False, allow_blank=True)
     shipping_city = serializers.CharField(max_length=100, required=False, allow_blank=True)
@@ -109,21 +113,27 @@ class OrderCreateSerializer(serializers.Serializer):
         # Compatibilidad con clientes viejos: mapear shipping_type a shipping_method.
         if not shipping_method:
             if shipping_type == Order.SHIPPING_PICKUP:
-                shipping_method = Order.SHIPPING_METHOD_BRANCH_NORMAL
+                shipping_method = Order.SHIPPING_METHOD_STORE_PICKUP
             else:
                 shipping_method = Order.SHIPPING_METHOD_HOME
 
         is_home = shipping_method == Order.SHIPPING_METHOD_HOME
+        is_store_pickup = shipping_method == Order.SHIPPING_METHOD_STORE_PICKUP
         data["shipping_method"] = shipping_method
         data["shipping_type"] = Order.SHIPPING_HOME if is_home else Order.SHIPPING_PICKUP
 
-        shipping_zone = normalize_shipping_zone(
-            shipping_province=data.get("shipping_province", ""),
-            explicit_zone=data.get("shipping_zone", ""),
-        )
-        data["shipping_zone"] = shipping_zone
+        if is_store_pickup:
+            data["shipping_zone"] = ""
+        else:
+            shipping_zone = normalize_shipping_zone(
+                shipping_province=data.get("shipping_province", ""),
+                explicit_zone=data.get("shipping_zone", ""),
+            )
+            data["shipping_zone"] = shipping_zone
 
-        if is_home:
+        if is_store_pickup:
+            required_fields = {}
+        elif is_home:
             required_fields = {
                 "shipping_address": "La dirección es obligatoria para envío a domicilio.",
                 "shipping_city": "La ciudad es obligatoria para envío a domicilio.",
@@ -218,10 +228,14 @@ class OrderCreateSerializer(serializers.Serializer):
 
             shipping_method = validated_data.get("shipping_method", Order.SHIPPING_METHOD_HOME)
             shipping_zone = validated_data.get("shipping_zone", Order.SHIPPING_ZONE_PROVINCE)
-            try:
-                shipping_price = resolve_shipping_price(shipping_method, shipping_zone)
-            except Exception as exc:
-                raise serializers.ValidationError({"shipping_method": str(exc)}) from exc
+            if shipping_method == Order.SHIPPING_METHOD_STORE_PICKUP:
+                shipping_price = Decimal("0")
+                shipping_zone = ""
+            else:
+                try:
+                    shipping_price = resolve_shipping_price(shipping_method, shipping_zone)
+                except Exception as exc:
+                    raise serializers.ValidationError({"shipping_method": str(exc)}) from exc
 
             total = subtotal - discount_value - cash_discount_amount + shipping_price
             total = max(total, Decimal("0"))
@@ -240,7 +254,7 @@ class OrderCreateSerializer(serializers.Serializer):
                 shipping_branch=validated_data.get("shipping_branch", ""),
                 shipping_cost=shipping_price,
                 shipping_price=shipping_price,
-                has_shipping=True,
+                has_shipping=shipping_method != Order.SHIPPING_METHOD_STORE_PICKUP,
                 shipping_status=Order.SHIPPING_STATUS_PENDING,
                 payment_method=payment_method,
                 discount_code=discount_code.code.upper() if discount_code else "",

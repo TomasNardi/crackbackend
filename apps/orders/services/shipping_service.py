@@ -82,6 +82,8 @@ def resolve_shipping_price(shipping_method: str, shipping_zone: str) -> Decimal:
 
 
 def get_shipping_method_label(shipping_method: str, shipping_zone: str) -> str:
+    if shipping_method == Order.SHIPPING_METHOD_STORE_PICKUP:
+        return "PickUp en tienda"
     zone_label = "BA" if shipping_zone == Order.SHIPPING_ZONE_BA else "Provincia"
     if shipping_method == Order.SHIPPING_METHOD_BRANCH_NORMAL:
         return f"Sucursal Normal {zone_label}"

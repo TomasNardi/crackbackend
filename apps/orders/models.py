@@ -157,10 +157,12 @@ class Order(models.Model):
     SHIPPING_METHOD_BRANCH_NORMAL = "branch_normal"
     SHIPPING_METHOD_BRANCH_EXPRESS = "branch_express"
     SHIPPING_METHOD_HOME = "home"
+    SHIPPING_METHOD_STORE_PICKUP = "pickup_store"
     SHIPPING_METHOD_CHOICES = [
         (SHIPPING_METHOD_BRANCH_NORMAL, "Sucursal Normal"),
         (SHIPPING_METHOD_BRANCH_EXPRESS, "Sucursal Express"),
         (SHIPPING_METHOD_HOME, "Domicilio"),
+        (SHIPPING_METHOD_STORE_PICKUP, "PickUp en tienda"),
     ]
 
     SHIPPING_ZONE_BA = "ba"
@@ -285,7 +287,7 @@ class Order(models.Model):
 
         if not self.shipping_method:
             if self.shipping_type == self.SHIPPING_PICKUP:
-                self.shipping_method = self.SHIPPING_METHOD_BRANCH_NORMAL
+                self.shipping_method = self.SHIPPING_METHOD_STORE_PICKUP
             elif self.shipping_type == self.SHIPPING_HOME:
                 self.shipping_method = self.SHIPPING_METHOD_HOME
 
