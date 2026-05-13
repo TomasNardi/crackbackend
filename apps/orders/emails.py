@@ -167,7 +167,21 @@ def _build_order_email_context(order) -> dict:
         "mp_payment_type": getattr(mp_payment, "payment_type", "") or None,
         "brand_image_url": f"{site_url}/brand/mantenimientofoto.png",
         "whatsapp_url": "https://wa.me/541150588131",
+        "discount_code_display": _format_discount_code(order),
     }
+
+
+def _format_discount_code(order):
+    """Generates a formatted discount code with value."""
+    if order.discount_code:
+        if order.discount_amount:
+            discount_value = f"(-{_format_money(order.discount_amount)})"
+        elif order.discount_percent:
+            discount_value = f"({order.discount_percent:.0f}%)"
+        else:
+            discount_value = ""
+        return f"Código {order.discount_code} {discount_value}"
+    return None
 
 
 def _resolve_public_site_url() -> str:
@@ -250,7 +264,9 @@ def send_shipment_notification(order_id: int, tracking_code: str) -> None:
     context = {
         "order": order,
         "tracking_code": tracking_code,
-        "logo_url": f"{site_url}/brand/logo2.png",
+        "brand_image_url": f"{site_url}/brand/mantenimientofoto.png",
+        "whatsapp_url": "https://wa.me/541150588131",
+        "shipped_at": timezone.localtime(timezone.now()).strftime("%d/%m/%Y %H:%M"),
     }
 
     html = render_to_string("emails/order_shipped_notification.html", context)
