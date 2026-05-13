@@ -78,13 +78,24 @@ def _resolve_public_site_url() -> str:
 def send_order_confirmation(order_id: int) -> None:
     """Email al cliente confirmando su pedido."""
     from .models import Order
+    from .services.shipping_service import get_shipping_method_label
+    
     order = Order.objects.prefetch_related("items").get(id=order_id)
-
+    
+    shipping_method = getattr(order, "shipping_method", "") or ""
+    shipping_zone = getattr(order, "shipping_zone", "") or ""
+    shipping_price = getattr(order, "shipping_price", None)
+    if shipping_price is None:
+        shipping_price = order.shipping_cost
+    
     context = {
         "order": order,
         "items": _build_items_context(order),
         "total": f"${order.total:,.0f}",
         "discount_amount": f"${order.discount_amount:,.0f}" if order.discount_amount else None,
+        "shipping_method_label": get_shipping_method_label(shipping_method, shipping_zone),
+        "shipping_price": f"${shipping_price:,.0f}" if shipping_price else "Gratis",
+        "order_code": order.order_code,
     }
 
     html = render_to_string("emails/order_confirmation.html", context)

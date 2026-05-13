@@ -23,6 +23,7 @@ from reportlab.platypus import (
 )
 from reportlab.lib.enums import TA_CENTER, TA_RIGHT, TA_LEFT, TA_JUSTIFY
 from apps.orders.services.shipping_service import get_shipping_method_label
+from apps.orders.models import Order
 
 
 # Colores de CRACK TCG (Gold/Brown palette)
@@ -432,6 +433,15 @@ def generate_order_pdf(order):
 
     if tracking_code:
         shipping_info += f"<br/><b>Código Seguimiento:</b> {tracking_code}"
+    
+    # Para pagos en efectivo, agregar nota importante
+    if order.payment_method == Order.PAYMENT_CASH:
+        shipping_info += (
+            f"<br/><br/><b style='color:#D84315;'>Pago en efectivo:</b> "
+            f"Recibirás un email con instrucciones de pago. Una vez acreditado, "
+            f"procederemos a despachar tu orden en 24–72 hs hábiles. "
+            f"Tu código de seguimiento se actualizará cuando se despache."
+        )
     
     shipping_table_data = [[Paragraph(shipping_info, styles["Normal"])]]
     shipping_table = Table(shipping_table_data, colWidths=[6.5 * inch])
