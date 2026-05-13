@@ -63,14 +63,26 @@ def _send(to: list[str], subject: str, html: str) -> bool:
 
 def _build_items_context(order) -> list[dict]:
     """Convierte los items de la orden en una lista de dicts con valores ya formateados."""
-    return [
-        {
+    items = []
+    for item in order.items.all():
+        # Buscar el producto original para obtener el precio anterior y el descuento
+        product = getattr(item, "product", None)
+        price_before = None
+        discount_percent = 0
+        if product:
+            price_before = getattr(product, "price_ars", None)
+            discount_percent = getattr(product, "discount_percent", 0)
+        # Si no hay producto (borrado), usar el precio actual
+        if not price_before:
+            price_before = item.unit_price
+        items.append({
             "name": item.product_name,
             "qty": item.quantity,
             "price": f"${item.unit_price:,.0f}",
-        }
-        for item in order.items.all()
-    ]
+            "price_before": f"${price_before:,.0f}" if price_before and price_before != item.unit_price else None,
+            "discount_percent": discount_percent if discount_percent else None,
+        })
+    return items
 
 
 def _format_money(amount: Decimal | int | float | None) -> str:
