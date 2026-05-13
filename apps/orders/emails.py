@@ -13,6 +13,7 @@ Destinatario tienda: STORE_EMAIL (siempre recibe copia de cada orden)
 """
 
 import logging
+from decimal import Decimal
 from django.conf import settings
 from django.template.loader import render_to_string
 from django.utils import timezone
@@ -25,6 +26,18 @@ STORE_EMAIL = "cracktcg@gmail.com"
 
 # Remitente — en sandbox usá onboarding@resend.dev; en producción configurá RESEND_FROM_EMAIL
 FROM_EMAIL = getattr(settings, "RESEND_FROM_EMAIL", "onboarding@resend.dev")
+
+MP_STATUS_LABELS = {
+    "approved": "Aprobado",
+    "authorized": "Autorizado",
+    "in_process": "En proceso",
+    "pending": "Pendiente",
+    "rejected": "Rechazado",
+    "cancelled": "Cancelado",
+    "refunded": "Devolución",
+    "charged_back": "Contracargo",
+    "expired": "Checkout vencido",
+}
 
 
 def _send(to: list[str], subject: str, html: str) -> bool:
@@ -60,6 +73,84 @@ def _build_items_context(order) -> list[dict]:
     ]
 
 
+def _format_money(amount: Decimal | int | float | None) -> str:
+    value = amount if amount is not None else Decimal("0")
+    return f"${value:,.0f}"
+
+
+def _resolve_payment_status(order) -> tuple[str, object | None]:
+    """Retorna etiqueta de estado de pago y último pago MP (si aplica)."""
+    from .models import Order
+
+    if order.status == Order.STATUS_REFUNDED:
+        return "Devolución", None
+    if order.status == Order.STATUS_CANCELLED:
+        return "Cancelada", None
+
+    if order.payment_method == Order.PAYMENT_CASH:
+        if order.status == Order.STATUS_PAID:
+            return "Pagada", None
+        return "Pendiente", None
+
+    mp_payment = order.mp_payments.order_by("-updated_at", "-created_at").first()
+    if not mp_payment:
+        return "Sin novedades", None
+
+    status_key = (mp_payment.status or "").strip().lower()
+    return MP_STATUS_LABELS.get(status_key, mp_payment.status or "Sin estado"), mp_payment
+
+
+def _build_order_email_context(order) -> dict:
+    """Genera contexto estándar compartido por emails de orden."""
+    from .models import Order
+    from .services.shipping_service import get_shipping_method_label
+
+    shipping_method = getattr(order, "shipping_method", "") or ""
+    shipping_zone = getattr(order, "shipping_zone", "") or ""
+    shipping_price = getattr(order, "shipping_price", None)
+    if shipping_price is None:
+        shipping_price = order.shipping_cost
+
+    has_shipping_charge = bool(shipping_price) and order.shipping_type != Order.SHIPPING_PICKUP
+    shipping_cost_display = _format_money(shipping_price) if has_shipping_charge else "No aplica (retiro en tienda)"
+    shipping_price_display = _format_money(shipping_price) if has_shipping_charge else "Sin costo"
+
+    payment_status_display, mp_payment = _resolve_payment_status(order)
+    site_url = _resolve_public_site_url()
+    is_cash = order.payment_method == Order.PAYMENT_CASH
+    is_mp = order.payment_method == Order.PAYMENT_MERCADOPAGO
+
+    cash_discount_amount = getattr(order, "cash_discount_amount", Decimal("0")) or Decimal("0")
+    cash_discount_percent = getattr(order, "cash_discount_percent", Decimal("0")) or Decimal("0")
+
+    return {
+        "order": order,
+        "items": _build_items_context(order),
+        "order_code": order.order_code,
+        "created_at": timezone.localtime(order.created_at).strftime("%d/%m/%Y %H:%M"),
+        "subtotal": _format_money(order.subtotal),
+        "coupon_discount_amount": _format_money(order.discount_amount) if order.discount_amount else None,
+        "cash_discount_amount": _format_money(cash_discount_amount) if cash_discount_amount else None,
+        "cash_discount_percent": f"{cash_discount_percent:.0f}%" if cash_discount_percent else None,
+        "shipping_price": shipping_price_display,
+        "shipping_cost_display": shipping_cost_display,
+        "shipping_method_label": get_shipping_method_label(shipping_method, shipping_zone),
+        "shipping_type_label": order.get_shipping_type_display(),
+        "is_pickup": order.shipping_type == Order.SHIPPING_PICKUP,
+        "has_shipping_charge": has_shipping_charge,
+        "total": _format_money(order.total),
+        "payment_method_display": order.get_payment_method_display(),
+        "payment_status_display": payment_status_display,
+        "is_cash_payment": is_cash,
+        "is_mercadopago_payment": is_mp,
+        "mp_payment_id": getattr(mp_payment, "payment_id", "") or None,
+        "mp_payment_method": getattr(mp_payment, "payment_method", "") or None,
+        "mp_payment_type": getattr(mp_payment, "payment_type", "") or None,
+        "brand_image_url": f"{site_url}/brand/mantenimientofoto.png",
+        "whatsapp_url": "https://wa.me/541150588131",
+    }
+
+
 def _resolve_public_site_url() -> str:
     """Resuelve URL pública del frontend para links e imágenes en emails."""
     frontend_url = str(getattr(settings, "FRONTEND_URL", "") or "").strip()
@@ -78,27 +169,10 @@ def _resolve_public_site_url() -> str:
 def send_order_confirmation(order_id: int) -> None:
     """Email al cliente confirmando su pedido."""
     from .models import Order
-    from .services.shipping_service import get_shipping_method_label
-    
+
     order = Order.objects.prefetch_related("items").get(id=order_id)
-    
-    shipping_method = getattr(order, "shipping_method", "") or ""
-    shipping_zone = getattr(order, "shipping_zone", "") or ""
-    shipping_price = getattr(order, "shipping_price", None)
-    if shipping_price is None:
-        shipping_price = order.shipping_cost
-    
-    context = {
-        "order": order,
-        "items": _build_items_context(order),
-        "subtotal": f"${order.subtotal:,.0f}",
-        "discount_amount": f"${order.discount_amount:,.0f}" if order.discount_amount else None,
-        "shipping_price": f"${shipping_price:,.0f}" if shipping_price else "Gratis",
-        "shipping_method_label": get_shipping_method_label(shipping_method, shipping_zone),
-        "total": f"${order.total:,.0f}",
-        "payment_method_display": order.get_payment_method_display(),
-        "order_code": order.order_code,
-    }
+
+    context = _build_order_email_context(order)
 
     html = render_to_string("emails/order_confirmation.html", context)
 
@@ -112,27 +186,9 @@ def send_order_confirmation(order_id: int) -> None:
 def send_new_order_notification(order_id: int) -> None:
     """Notificación interna a la tienda cuando llega un pedido nuevo."""
     from .models import Order
-    from .services.shipping_service import get_shipping_method_label
-    
-    order = Order.objects.prefetch_related("items").get(id=order_id)
-    
-    shipping_method = getattr(order, "shipping_method", "") or ""
-    shipping_zone = getattr(order, "shipping_zone", "") or ""
-    shipping_price = getattr(order, "shipping_price", None)
-    if shipping_price is None:
-        shipping_price = order.shipping_cost
 
-    context = {
-        "order": order,
-        "items": _build_items_context(order),
-        "subtotal": f"${order.subtotal:,.0f}",
-        "discount_amount": f"${order.discount_amount:,.0f}" if order.discount_amount else None,
-        "shipping_price": f"${shipping_price:,.0f}" if shipping_price else "Gratis",
-        "shipping_method_label": get_shipping_method_label(shipping_method, shipping_zone),
-        "total": f"${order.total:,.0f}",
-        "payment_method_display": order.get_payment_method_display(),
-        "created_at": timezone.localtime(order.created_at).strftime("%d/%m/%Y %H:%M"),
-    }
+    order = Order.objects.prefetch_related("items").get(id=order_id)
+    context = _build_order_email_context(order)
 
     html = render_to_string("emails/new_order_notification.html", context)
 

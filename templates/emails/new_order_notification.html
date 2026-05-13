@@ -24,7 +24,7 @@
           <!-- ── HEADER ── -->
           <tr>
             <td align="center" style="background-color:#1a1a1a;padding:24px 40px;">
-              <span style="font-family:Georgia,'Times New Roman',serif;font-size:28px;font-weight:900;letter-spacing:8px;color:#ffffff;text-transform:uppercase;">CRACK</span><span style="font-family:Georgia,'Times New Roman',serif;font-size:28px;font-weight:900;color:#C8972E;">.</span>
+              <img src="{{ brand_image_url }}" alt="CRACK TCG" width="150" style="display:block;width:150px;max-width:150px;height:auto;border:0;outline:none;text-decoration:none;margin:0 auto;" />
               <p style="margin:12px 0 0;font-family:Arial,sans-serif;font-size:9px;color:#888888;letter-spacing:3px;text-transform:uppercase;">Panel Interno</p>
             </td>
           </tr>
@@ -90,6 +90,26 @@
                     </p>
                   </td>
                 </tr>
+                <tr>
+                  <td style="padding-top:10px;">
+                    <p style="margin:0 0 2px;font-family:Arial,sans-serif;font-size:10px;font-weight:700;color:#999999;text-transform:uppercase;letter-spacing:0.5px;">Método de pago</p>
+                    <p style="margin:0;font-family:Arial,sans-serif;font-size:13px;color:#1a1a1a;line-height:1.5;">{{ payment_method_display }}</p>
+                  </td>
+                </tr>
+                <tr>
+                  <td style="padding-top:10px;">
+                    <p style="margin:0 0 2px;font-family:Arial,sans-serif;font-size:10px;font-weight:700;color:#999999;text-transform:uppercase;letter-spacing:0.5px;">Estado de pago</p>
+                    <p style="margin:0;font-family:Arial,sans-serif;font-size:13px;color:#1a1a1a;line-height:1.5;">{{ payment_status_display }}</p>
+                  </td>
+                </tr>
+                {% if is_mercadopago_payment and mp_payment_id %}
+                <tr>
+                  <td style="padding-top:10px;">
+                    <p style="margin:0 0 2px;font-family:Arial,sans-serif;font-size:10px;font-weight:700;color:#999999;text-transform:uppercase;letter-spacing:0.5px;">ID de pago MP</p>
+                    <p style="margin:0;font-family:Arial,sans-serif;font-size:13px;color:#1a1a1a;line-height:1.5;">{{ mp_payment_id }}</p>
+                  </td>
+                </tr>
+                {% endif %}
               </table>
             </td>
           </tr>
@@ -124,15 +144,24 @@
                   <td style="padding:8px 0;font-family:Arial,sans-serif;font-size:13px;color:#1a1a1a;">Subtotal productos</td>
                   <td align="right" style="padding:8px 0;font-family:Arial,sans-serif;font-size:13px;color:#1a1a1a;">{{ subtotal }}</td>
                 </tr>
-                {% if discount_amount %}
+                {% if coupon_discount_amount %}
                 <tr style="border-bottom:1px solid #f0ece4;">
                   <td style="padding:8px 0;font-family:Arial,sans-serif;font-size:13px;color:#16a34a;">Descuento ({{ order.discount_code }})</td>
-                  <td align="right" style="padding:8px 0;font-family:Arial,sans-serif;font-size:13px;font-weight:600;color:#16a34a;">-{{ discount_amount }}</td>
+                  <td align="right" style="padding:8px 0;font-family:Arial,sans-serif;font-size:13px;font-weight:600;color:#16a34a;">-{{ coupon_discount_amount }}</td>
+                </tr>
+                {% endif %}
+                {% if cash_discount_amount %}
+                <tr style="border-bottom:1px solid #f0ece4;">
+                  <td style="padding:8px 0;font-family:Arial,sans-serif;font-size:13px;color:#16a34a;">
+                    Descuento pago efectivo
+                    {% if cash_discount_percent %}({{ cash_discount_percent }}){% endif %}
+                  </td>
+                  <td align="right" style="padding:8px 0;font-family:Arial,sans-serif;font-size:13px;font-weight:600;color:#16a34a;">-{{ cash_discount_amount }}</td>
                 </tr>
                 {% endif %}
                 <tr style="border-bottom:1px solid #f0ece4;">
                   <td style="padding:8px 0;font-family:Arial,sans-serif;font-size:13px;color:#1a1a1a;">Costo de envío</td>
-                  <td align="right" style="padding:8px 0;font-family:Arial,sans-serif;font-size:13px;font-weight:600;color:#1a1a1a;">{{ shipping_price }}</td>
+                  <td align="right" style="padding:8px 0;font-family:Arial,sans-serif;font-size:13px;font-weight:600;color:#1a1a1a;">{{ shipping_cost_display }}</td>
                 </tr>
                 <tr>
                   <td style="padding:12px 0 0;font-family:Arial,sans-serif;font-size:14px;font-weight:800;color:#1a1a1a;text-transform:uppercase;letter-spacing:1px;">Total a cobrar</td>
@@ -147,6 +176,19 @@
             <td style="padding:24px 40px;border-bottom:1px solid #e8e4dd;background-color:#f8f6f2;">
               <p style="margin:0 0 2px;font-family:Arial,sans-serif;font-size:10px;font-weight:700;color:#6b6560;text-transform:uppercase;letter-spacing:1px;">Método de pago</p>
               <p style="margin:0;font-family:Arial,sans-serif;font-size:14px;font-weight:600;color:#1a1a1a;">{{ payment_method_display }}</p>
+            </td>
+          </tr>
+
+          <!-- ── CTA WhatsApp ── -->
+          <tr>
+            <td align="center" style="padding:24px 40px;border-bottom:1px solid #e8e4dd;background-color:#ffffff;">
+              <table border="0" cellpadding="0" cellspacing="0">
+                <tr>
+                  <td align="center" style="background-color:#C8972E;border-radius:6px;">
+                    <a href="{{ whatsapp_url }}" target="_blank" rel="noopener noreferrer" style="display:inline-block;padding:12px 24px;font-family:Arial,sans-serif;font-size:12px;font-weight:700;color:#1a1a1a;text-decoration:none;letter-spacing:0.3px;">Contactar a CRACK TCG</a>
+                  </td>
+                </tr>
+              </table>
             </td>
           </tr>
 
