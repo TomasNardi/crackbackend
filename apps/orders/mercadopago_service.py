@@ -58,6 +58,28 @@ def _sdk():
     return mercadopago.SDK(token)
 
 
+def _decimal_amount(value) -> Decimal:
+    return Decimal(str(value or "0"))
+
+
+def _build_checkout_items(order):
+    item_quantity = sum((item.quantity or 0) for item in order.items.all())
+    item_title = f"Pedido CRACK TCG #{order.order_code}"
+    if item_quantity > 1:
+        item_title = f"{item_title} ({item_quantity} productos)"
+
+    return [
+        {
+            "id": f"order-{order.id}",
+            "title": item_title,
+            "description": "Total final de la orden, incluyendo envio y descuentos aplicados.",
+            "quantity": 1,
+            "currency_id": "ARS",
+            "unit_price": float(_decimal_amount(order.total)),
+        }
+    ]
+
+
 def create_checkout_preference(order, frontend_url_override: str = ""):
     """Crea una preferencia de Checkout Pro para una orden pendiente."""
     sdk = _sdk()
@@ -82,39 +104,8 @@ def create_checkout_preference(order, frontend_url_override: str = ""):
     failure_url = f"{frontend_url}/checkout/error?{return_qs}"
     pending_url = f"{frontend_url}/checkout/pendiente?{return_qs}"
 
-    items = [
-        {
-            "id": str(item.product_id or ""),
-            "title": item.product_name,
-            "quantity": item.quantity,
-            "currency_id": "ARS",
-            "unit_price": float(item.unit_price),
-        }
-        for item in order.items.all()
-    ]
-
     shipping_amount = order.shipping_price if getattr(order, "shipping_price", None) is not None else order.shipping_cost
-    if shipping_amount and Decimal(shipping_amount) > 0:
-        items.append(
-            {
-                "id": "shipping",
-                "title": "Costo de envío",
-                "quantity": 1,
-                "currency_id": "ARS",
-                "unit_price": float(shipping_amount),
-            }
-        )
-
-    if order.discount_amount and Decimal(order.discount_amount) > 0:
-        items.append(
-            {
-                "id": "discount",
-                "title": "Descuento aplicado",
-                "quantity": 1,
-                "currency_id": "ARS",
-                "unit_price": -float(order.discount_amount),
-            }
-        )
+    items = _build_checkout_items(order)
 
     payload = {
         "items": items,
@@ -134,6 +125,10 @@ def create_checkout_preference(order, frontend_url_override: str = ""):
             "order_id": order.id,
             "order_code": order.order_code,
             "shipping_type": order.shipping_type,
+            "subtotal": str(_decimal_amount(order.subtotal)),
+            "shipping_amount": str(_decimal_amount(shipping_amount)),
+            "discount_amount": str(_decimal_amount(order.discount_amount)),
+            "total_amount": str(_decimal_amount(order.total)),
         },
     }
 
