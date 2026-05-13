@@ -256,8 +256,7 @@
                 {% if coupon_discount_amount %}
                 <tr style="border-bottom:1px solid #1e1e1e;">
                   <td colspan="2" style="padding:12px 0;font-family:Arial,sans-serif;font-size:12px;color:#4ade80;">
-                    Descuento aplicado
-                    <span style="background-color:#052e16;color:#4ade80;font-size:10px;font-weight:700;padding:2px 8px;border-radius:4px;margin-left:8px;letter-spacing:1px;">{{ order.discount_code }}</span>
+                    {{ coupon_discount_code }}
                   </td>
                   <td align="right" style="padding:12px 0;font-family:Arial,sans-serif;font-size:13px;font-weight:600;color:#4ade80;white-space:nowrap;">&#8722;{{ coupon_discount_amount }}</td>
                 </tr>

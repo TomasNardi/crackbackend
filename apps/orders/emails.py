@@ -153,6 +153,15 @@ def _build_order_email_context(order) -> dict:
     cash_discount_amount = getattr(order, "cash_discount_amount", Decimal("0")) or Decimal("0")
     cash_discount_percent = getattr(order, "cash_discount_percent", Decimal("0")) or Decimal("0")
 
+    # Formato para mostrar el código y el valor del descuento
+    def format_discount_code(order):
+        if order.discount_code:
+            if order.discount_type == DiscountCode.DISCOUNT_PERCENT:
+                return f"Código {order.discount_code} ({order.discount_amount:.0f}%)"
+            elif order.discount_type == DiscountCode.DISCOUNT_FIXED:
+                return f"Código {order.discount_code} (-{_format_money(order.discount_amount)})"
+        return None
+
     return {
         "order": order,
         "items": _build_items_context(order),
@@ -160,6 +169,7 @@ def _build_order_email_context(order) -> dict:
         "created_at": timezone.localtime(order.created_at).strftime("%d/%m/%Y %H:%M"),
         "subtotal": _format_money(order.subtotal),
         "coupon_discount_amount": _format_money(order.discount_amount) if order.discount_amount else None,
+        "coupon_discount_code": format_discount_code(order),
         "cash_discount_amount": _format_money(cash_discount_amount) if cash_discount_amount else None,
         "cash_discount_percent": f"{cash_discount_percent:.0f}%" if cash_discount_percent else None,
         "shipping_price": shipping_price_display,
