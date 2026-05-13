@@ -75,7 +75,13 @@
                 <tr>
                   <td>
                     <p style="margin:0 0 2px;font-family:Arial,sans-serif;font-size:10px;font-weight:700;color:#999999;text-transform:uppercase;letter-spacing:0.5px;">Método de envío</p>
-                    <p style="margin:0;font-family:Arial,sans-serif;font-size:13px;font-weight:600;color:#1a1a1a;">{{ shipping_method_label }} · <span style="color:#C8972E;">{{ shipping_price }}</span></p>
+                    <p style="margin:0;font-family:Arial,sans-serif;font-size:13px;font-weight:600;color:#1a1a1a;">{{ shipping_method_label }} · {{ delivery_mode_label }}</p>
+                  </td>
+                </tr>
+                <tr>
+                  <td style="padding-top:10px;">
+                    <p style="margin:0 0 2px;font-family:Arial,sans-serif;font-size:10px;font-weight:700;color:#999999;text-transform:uppercase;letter-spacing:0.5px;">Monto de envío</p>
+                    <p style="margin:0;font-family:Arial,sans-serif;font-size:13px;color:#1a1a1a;line-height:1.5;">{{ shipping_cost_display }}</p>
                   </td>
                 </tr>
                 <tr>

@@ -107,18 +107,36 @@ def _build_order_email_context(order) -> dict:
 
     shipping_method = getattr(order, "shipping_method", "") or ""
     shipping_zone = getattr(order, "shipping_zone", "") or ""
-    shipping_price = getattr(order, "shipping_price", None)
-    if shipping_price is None:
-        shipping_price = order.shipping_cost
+    shipping_price_field = getattr(order, "shipping_price", Decimal("0")) or Decimal("0")
+    shipping_cost_field = getattr(order, "shipping_cost", Decimal("0")) or Decimal("0")
 
-    has_shipping_charge = bool(shipping_price) and order.shipping_type != Order.SHIPPING_PICKUP
-    shipping_cost_display = _format_money(shipping_price) if has_shipping_charge else "No aplica (retiro en tienda)"
-    shipping_price_display = _format_money(shipping_price) if has_shipping_charge else "Sin costo"
+    if shipping_price_field > 0:
+        shipping_amount = shipping_price_field
+    elif shipping_cost_field > 0:
+        shipping_amount = shipping_cost_field
+    else:
+        shipping_amount = shipping_price_field or shipping_cost_field or Decimal("0")
+
+    is_store_pickup = shipping_method == Order.SHIPPING_METHOD_STORE_PICKUP
+    has_shipping_charge = shipping_amount > 0
+    if is_store_pickup:
+        shipping_cost_display = "No aplica (retiro en tienda)"
+        shipping_price_display = "Sin costo"
+        delivery_mode_label = "Retiro en tienda"
+    else:
+        shipping_cost_display = _format_money(shipping_amount) if has_shipping_charge else "Gratis"
+        shipping_price_display = shipping_cost_display
+        delivery_mode_label = (
+            "Retiro en sucursal de correo"
+            if shipping_method in {Order.SHIPPING_METHOD_BRANCH_NORMAL, Order.SHIPPING_METHOD_BRANCH_EXPRESS}
+            else "Envío a domicilio"
+        )
 
     payment_status_display, mp_payment = _resolve_payment_status(order)
     site_url = _resolve_public_site_url()
     is_cash = order.payment_method == Order.PAYMENT_CASH
     is_mp = order.payment_method == Order.PAYMENT_MERCADOPAGO
+    payment_method_display = "Efectivo / Transferencia / Crypto" if is_cash else order.get_payment_method_display()
 
     cash_discount_amount = getattr(order, "cash_discount_amount", Decimal("0")) or Decimal("0")
     cash_discount_percent = getattr(order, "cash_discount_percent", Decimal("0")) or Decimal("0")
@@ -136,10 +154,11 @@ def _build_order_email_context(order) -> dict:
         "shipping_cost_display": shipping_cost_display,
         "shipping_method_label": get_shipping_method_label(shipping_method, shipping_zone),
         "shipping_type_label": order.get_shipping_type_display(),
+        "delivery_mode_label": delivery_mode_label,
         "is_pickup": order.shipping_type == Order.SHIPPING_PICKUP,
         "has_shipping_charge": has_shipping_charge,
         "total": _format_money(order.total),
-        "payment_method_display": order.get_payment_method_display(),
+        "payment_method_display": payment_method_display,
         "payment_status_display": payment_status_display,
         "is_cash_payment": is_cash,
         "is_mercadopago_payment": is_mp,
