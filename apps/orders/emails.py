@@ -114,7 +114,7 @@ def _resolve_payment_status(order) -> tuple[str, object | None]:
 
 def _build_order_email_context(order) -> dict:
     """Genera contexto estándar compartido por emails de orden."""
-    from .models import Order
+    from .models import DiscountCode, Order
     from .services.shipping_service import get_shipping_method_label
 
     shipping_method = getattr(order, "shipping_method", "") or ""
