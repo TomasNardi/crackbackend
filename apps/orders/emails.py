@@ -39,6 +39,24 @@ MP_STATUS_LABELS = {
     "expired": "Checkout vencido",
 }
 
+MP_METHOD_LABELS = {
+    "account_money": "Dinero en cuenta MP",
+    "debit_card": "Tarjeta de débito",
+    "credit_card": "Tarjeta de crédito",
+    "prepaid_card": "Tarjeta prepaga",
+    "ticket": "Pago en efectivo (ticket)",
+    "bank_transfer": "Transferencia bancaria",
+}
+
+MP_TYPE_LABELS = {
+    "account_money": "Dinero en cuenta",
+    "debit_card": "Débito",
+    "credit_card": "Crédito",
+    "prepaid_card": "Prepaga",
+    "ticket": "Ticket",
+    "bank_transfer": "Transferencia",
+}
+
 
 def _send(to: list[str], subject: str, html: str) -> bool:
     """Envía un email via Resend. Retorna True si fue exitoso."""
@@ -88,6 +106,12 @@ def _build_items_context(order) -> list[dict]:
 def _format_money(amount: Decimal | int | float | None) -> str:
     value = amount if amount is not None else Decimal("0")
     return f"${value:,.0f}"
+
+
+def _format_datetime(value) -> str | None:
+    if not value:
+        return None
+    return timezone.localtime(value).strftime("%d/%m/%Y %H:%M")
 
 
 def _resolve_payment_status(order) -> tuple[str, object | None]:
@@ -152,14 +176,37 @@ def _build_order_email_context(order) -> dict:
 
     cash_discount_amount = getattr(order, "cash_discount_amount", Decimal("0")) or Decimal("0")
     cash_discount_percent = getattr(order, "cash_discount_percent", Decimal("0")) or Decimal("0")
+    total_discount_amount = getattr(order, "discount_amount", Decimal("0")) or Decimal("0")
+    coupon_discount_amount = max(Decimal("0"), total_discount_amount - cash_discount_amount)
+
+    shipment = getattr(order, "shipment", None)
+    tracking_code = shipment.tracking_code if shipment and shipment.tracking_code else None
+
+    mp_raw = getattr(mp_payment, "raw_response", {}) or {}
+    mp_webhook_topic = (
+        mp_raw.get("notification_topic")
+        or mp_raw.get("topic")
+        or mp_raw.get("type")
+        or None
+    )
+    mp_webhook_action = mp_raw.get("action") or mp_raw.get("event") or None
+    mp_status_raw = getattr(mp_payment, "status", "") if mp_payment else ""
+    mp_status_detail = mp_raw.get("status_detail") or None
 
     # Formato para mostrar el código y el valor del descuento
     def format_discount_code(order):
         if order.discount_code:
             if order.discount_type == DiscountCode.DISCOUNT_PERCENT:
-                return f"Código {order.discount_code} ({order.discount_amount:.0f}%)"
+                coupon = (
+                    DiscountCode.objects.filter(code__iexact=order.discount_code)
+                    .only("discount_type", "discount_amount")
+                    .first()
+                )
+                if coupon and coupon.discount_type == DiscountCode.DISCOUNT_PERCENT:
+                    return f"Código {order.discount_code} ({coupon.discount_amount:.0f}%)"
+                return f"Código {order.discount_code}"
             elif order.discount_type == DiscountCode.DISCOUNT_FIXED:
-                return f"Código {order.discount_code} (-{_format_money(order.discount_amount)})"
+                return f"Código {order.discount_code} (-{_format_money(coupon_discount_amount)})"
         return None
 
     return {
@@ -168,7 +215,7 @@ def _build_order_email_context(order) -> dict:
         "order_code": order.order_code,
         "created_at": timezone.localtime(order.created_at).strftime("%d/%m/%Y %H:%M"),
         "subtotal": _format_money(order.subtotal),
-        "coupon_discount_amount": _format_money(order.discount_amount) if order.discount_amount else None,
+        "coupon_discount_amount": _format_money(coupon_discount_amount) if coupon_discount_amount else None,
         "coupon_discount_code": format_discount_code(order),
         "cash_discount_amount": _format_money(cash_discount_amount) if cash_discount_amount else None,
         "cash_discount_percent": f"{cash_discount_percent:.0f}%" if cash_discount_percent else None,
@@ -184,9 +231,32 @@ def _build_order_email_context(order) -> dict:
         "payment_status_display": payment_status_display,
         "is_cash_payment": is_cash,
         "is_mercadopago_payment": is_mp,
+        "mp_preference_id": getattr(order, "mp_preference_id", "") or None,
         "mp_payment_id": getattr(mp_payment, "payment_id", "") or None,
         "mp_payment_method": getattr(mp_payment, "payment_method", "") or None,
+        "mp_payment_method_display": MP_METHOD_LABELS.get(
+            (getattr(mp_payment, "payment_method", "") or "").lower(),
+            getattr(mp_payment, "payment_method", "") or "No informado",
+        ) if mp_payment else "No informado",
         "mp_payment_type": getattr(mp_payment, "payment_type", "") or None,
+        "mp_payment_type_display": MP_TYPE_LABELS.get(
+            (getattr(mp_payment, "payment_type", "") or "").lower(),
+            getattr(mp_payment, "payment_type", "") or "No informado",
+        ) if mp_payment else "No informado",
+        "mp_status_raw": mp_status_raw or None,
+        "mp_status_detail": mp_status_detail,
+        "mp_transaction_amount": _format_money(getattr(mp_payment, "transaction_amount", None)) if mp_payment else None,
+        "mp_net_received_amount": _format_money(getattr(mp_payment, "net_received_amount", None)) if mp_payment else None,
+        "mp_date_approved": _format_datetime(getattr(mp_payment, "date_approved", None)) if mp_payment else None,
+        "mp_last_validated_at": _format_datetime(getattr(mp_payment, "last_validated_at", None)) if mp_payment else None,
+        "mp_expires_at": _format_datetime(getattr(mp_payment, "expires_at", None)) if mp_payment else None,
+        "mp_expired_at": _format_datetime(getattr(mp_payment, "expired_at", None)) if mp_payment else None,
+        "mp_webhook_topic": mp_webhook_topic,
+        "mp_webhook_action": mp_webhook_action,
+        "tracking_code": tracking_code,
+        "paqar_status_display": order.get_paqar_status_display() if getattr(order, "paqar_status", "") else None,
+        "paqar_tracking_number": getattr(order, "paqar_tracking_number", "") or None,
+        "paqar_error": getattr(order, "paqar_error", "") or None,
         "brand_image_url": f"{site_url}/brand/mantenimientofoto.png",
         "whatsapp_url": "https://wa.me/541150588131",
         "discount_code_display": _format_discount_code(order),
@@ -196,10 +266,17 @@ def _build_order_email_context(order) -> dict:
 def _format_discount_code(order):
     """Generates a formatted discount code with value."""
     if order.discount_code:
-        if order.discount_amount:
+        if order.discount_type == "percent":
+            from .models import DiscountCode
+
+            coupon = (
+                DiscountCode.objects.filter(code__iexact=order.discount_code)
+                .only("discount_type", "discount_amount")
+                .first()
+            )
+            discount_value = f"({coupon.discount_amount:.0f}%)" if coupon else ""
+        elif order.discount_amount:
             discount_value = f"(-{_format_money(order.discount_amount)})"
-        elif order.discount_percent:
-            discount_value = f"({order.discount_percent:.0f}%)"
         else:
             discount_value = ""
         return f"Código {order.discount_code} {discount_value}"
