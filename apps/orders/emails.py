@@ -91,10 +91,12 @@ def send_order_confirmation(order_id: int) -> None:
     context = {
         "order": order,
         "items": _build_items_context(order),
-        "total": f"${order.total:,.0f}",
+        "subtotal": f"${order.subtotal:,.0f}",
         "discount_amount": f"${order.discount_amount:,.0f}" if order.discount_amount else None,
-        "shipping_method_label": get_shipping_method_label(shipping_method, shipping_zone),
         "shipping_price": f"${shipping_price:,.0f}" if shipping_price else "Gratis",
+        "shipping_method_label": get_shipping_method_label(shipping_method, shipping_zone),
+        "total": f"${order.total:,.0f}",
+        "payment_method_display": order.get_payment_method_display(),
         "order_code": order.order_code,
     }
 
@@ -110,13 +112,25 @@ def send_order_confirmation(order_id: int) -> None:
 def send_new_order_notification(order_id: int) -> None:
     """Notificación interna a la tienda cuando llega un pedido nuevo."""
     from .models import Order
+    from .services.shipping_service import get_shipping_method_label
+    
     order = Order.objects.prefetch_related("items").get(id=order_id)
+    
+    shipping_method = getattr(order, "shipping_method", "") or ""
+    shipping_zone = getattr(order, "shipping_zone", "") or ""
+    shipping_price = getattr(order, "shipping_price", None)
+    if shipping_price is None:
+        shipping_price = order.shipping_cost
 
     context = {
         "order": order,
         "items": _build_items_context(order),
-        "total": f"${order.total:,.0f}",
+        "subtotal": f"${order.subtotal:,.0f}",
         "discount_amount": f"${order.discount_amount:,.0f}" if order.discount_amount else None,
+        "shipping_price": f"${shipping_price:,.0f}" if shipping_price else "Gratis",
+        "shipping_method_label": get_shipping_method_label(shipping_method, shipping_zone),
+        "total": f"${order.total:,.0f}",
+        "payment_method_display": order.get_payment_method_display(),
         "created_at": timezone.localtime(order.created_at).strftime("%d/%m/%Y %H:%M"),
     }
 
