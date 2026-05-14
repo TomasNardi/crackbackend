@@ -95,12 +95,21 @@ class ProductAdmin(ModelAdmin):
     def save_model(self, request, obj, form, change):
         super().save_model(request, obj, form, change)
 
-        raw_payload = form.cleaned_data.get("images_payload") or "[]"
-        draft_token = form.cleaned_data.get("cloudinary_draft_token") or ""
+        cleaned_data = getattr(form, "cleaned_data", {}) or {}
+        if "images_payload" not in cleaned_data:
+            return
+
+        raw_payload = cleaned_data.get("images_payload")
+        if not raw_payload:
+            return
+
+        draft_token = cleaned_data.get("cloudinary_draft_token") or ""
 
         try:
             payload = json.loads(raw_payload)
             image_ids = [int(item["id"]) for item in payload if isinstance(item, dict) and item.get("id")]
+            if not image_ids:
+                return
             attach_images_to_product(product=obj, draft_token=draft_token, ordered_image_ids=image_ids)
         except (ValueError, json.JSONDecodeError, CloudinaryValidationError) as exc:
             self.message_user(request, f"No se pudieron sincronizar las imágenes: {exc}", level=messages.ERROR)
