@@ -33,6 +33,28 @@ aside [class*="text-gray"] {
   color: #D4CFC6 !important;
 }
 
+/* Keep icon slot stable while Material Symbols font is loading */
+aside .material-symbols-outlined {
+  font-family: "Material Symbols Outlined", "Material Symbols Rounded", sans-serif !important;
+  font-weight: normal;
+  font-style: normal;
+  line-height: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.125rem;
+  min-width: 1.125rem;
+  max-width: 1.125rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-transform: none;
+  letter-spacing: normal;
+  direction: ltr;
+  -webkit-font-smoothing: antialiased;
+  -webkit-font-feature-settings: "liga";
+  font-feature-settings: "liga";
+}
+
 /* Sidebar section titles */
 aside .font-semibold,
 aside .text-xs.font-semibold,
