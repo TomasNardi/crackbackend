@@ -8,6 +8,7 @@ import logging
 from decimal import Decimal
 
 from django.db import transaction
+from django.utils import timezone
 
 from apps.products.models import Product
 from apps.orders.models import DiscountCode
@@ -16,6 +17,37 @@ from apps.orders.emails import send_order_confirmation, send_new_order_notificat
 logger = logging.getLogger(__name__)
 
 UNIQUE_ORDER_CATEGORIES = {"single", "singles", "slab", "slabs"}
+
+
+def apply_product_purchase_stock(product, quantity):
+    """Persist stock changes without triggering Product.save side effects."""
+    category_name = product.category.name if product.category else ""
+    is_unique = category_name.strip().lower() in UNIQUE_ORDER_CATEGORIES
+    updated_at = timezone.now()
+
+    if is_unique:
+        Product.objects.filter(pk=product.pk).update(
+            in_stock=False,
+            stock_quantity=0,
+            updated_at=updated_at,
+        )
+        product.in_stock = False
+        product.stock_quantity = 0
+        product.updated_at = updated_at
+        return
+
+    if product.stock_quantity is None:
+        return
+
+    next_stock = max(0, product.stock_quantity - quantity)
+    Product.objects.filter(pk=product.pk).update(
+        stock_quantity=next_stock,
+        in_stock=next_stock > 0,
+        updated_at=updated_at,
+    )
+    product.stock_quantity = next_stock
+    product.in_stock = next_stock > 0
+    product.updated_at = updated_at
 
 
 def send_order_emails(order_id):
@@ -46,18 +78,7 @@ def apply_order_confirmed_side_effects(order):
         if not product:
             continue
 
-        category_name = product.category.name if product.category else ""
-        is_unique = category_name.strip().lower() in UNIQUE_ORDER_CATEGORIES
-
-        if is_unique:
-            product.in_stock = False
-            product.save(update_fields=["in_stock", "updated_at"])
-            continue
-
-        if product.stock_quantity is not None:
-            product.stock_quantity = max(0, product.stock_quantity - item.quantity)
-            product.in_stock = product.stock_quantity > 0
-            product.save(update_fields=["stock_quantity", "in_stock", "updated_at"])
+        apply_product_purchase_stock(product, item.quantity)
 
     if order.discount_code:
         discount_code = DiscountCode.objects.select_for_update().filter(code__iexact=order.discount_code).first()

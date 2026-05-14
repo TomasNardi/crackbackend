@@ -5,6 +5,9 @@ from django.test import TestCase, override_settings
 
 from apps.orders.mercadopago_service import create_checkout_preference
 from apps.orders.models import Order, OrderItem
+from apps.orders.serializers import OrderCreateSerializer
+from apps.orders.services import reconcile_payment
+from apps.products.models import Product, ProductCategory, ProductImage
 
 
 class MercadoPagoPreferenceTests(TestCase):
@@ -58,3 +61,100 @@ class MercadoPagoPreferenceTests(TestCase):
         self.assertEqual(payload["metadata"]["discount_amount"], "200.00")
         self.assertEqual(payload["metadata"]["total_amount"], "3300.00")
         self.assertEqual(result["preference_id"], "pref-123")
+
+
+class OrderProductImageIntegrityTests(TestCase):
+    def setUp(self):
+        self.single_category = ProductCategory.objects.create(name="Single")
+
+    def _create_product(self):
+        product = Product.objects.create(
+            category=self.single_category,
+            name="Charizard Test",
+            price_usd=Decimal("100.00"),
+            in_stock=True,
+            stock_quantity=1,
+            image_url="https://cdn.example.com/charizard-main.jpg",
+            image_url_2="https://cdn.example.com/charizard-2.jpg",
+            image_url_3="https://cdn.example.com/charizard-3.jpg",
+        )
+        image = ProductImage.objects.create(
+            product=product,
+            secure_url="https://cdn.example.com/gallery-charizard.jpg",
+            source=ProductImage.SOURCE_URL,
+            order_index=0,
+            status=ProductImage.STATUS_CONFIRMED,
+            draft_token="legacy-import",
+        )
+        return product, image
+
+    def test_cash_checkout_does_not_remove_product_images(self):
+        product, image = self._create_product()
+
+        serializer = OrderCreateSerializer(
+            data={
+                "customer_name": "Cliente Test",
+                "customer_email": "cliente@test.com",
+                "payment_method": Order.PAYMENT_CASH,
+                "shipping_type": Order.SHIPPING_PICKUP,
+                "shipping_method": Order.SHIPPING_METHOD_STORE_PICKUP,
+                "items": [{"product_id": product.id, "quantity": 1}],
+            }
+        )
+
+        self.assertTrue(serializer.is_valid(), serializer.errors)
+        serializer.save()
+
+        product.refresh_from_db()
+        self.assertEqual(product.image_url, "https://cdn.example.com/charizard-main.jpg")
+        self.assertEqual(product.image_url_2, "https://cdn.example.com/charizard-2.jpg")
+        self.assertEqual(product.image_url_3, "https://cdn.example.com/charizard-3.jpg")
+        self.assertTrue(ProductImage.objects.filter(pk=image.pk, product=product).exists())
+
+    def test_mercadopago_confirmation_does_not_remove_product_images(self):
+        product, image = self._create_product()
+
+        order = Order.objects.create(
+            customer_name="Cliente MP",
+            customer_email="cliente-mp@test.com",
+            shipping_type=Order.SHIPPING_PICKUP,
+            shipping_method=Order.SHIPPING_METHOD_STORE_PICKUP,
+            shipping_zone="",
+            shipping_cost=Decimal("0.00"),
+            shipping_price=Decimal("0.00"),
+            has_shipping=False,
+            payment_method=Order.PAYMENT_MERCADOPAGO,
+            subtotal=Decimal("100.00"),
+            total=Decimal("100.00"),
+            status=Order.STATUS_PENDING,
+            mp_preference_id="pref-test-123",
+        )
+        OrderItem.objects.create(
+            order=order,
+            product=product,
+            product_name=product.name,
+            unit_price=Decimal("100.00"),
+            quantity=1,
+        )
+
+        order, paid = reconcile_payment(
+            {
+                "id": "payment-123",
+                "external_reference": order.order_code,
+                "status": "approved",
+                "payment_method_id": "visa",
+                "payment_type_id": "credit_card",
+                "transaction_amount": "100.00",
+                "transaction_details": {"net_received_amount": "90.00"},
+                "metadata": {"preference_id": "pref-test-123"},
+            },
+            source="test",
+        )
+
+        self.assertTrue(paid)
+        product.refresh_from_db()
+        self.assertEqual(order.status, Order.STATUS_PAID)
+        self.assertEqual(product.image_url, "https://cdn.example.com/charizard-main.jpg")
+        self.assertEqual(product.image_url_2, "https://cdn.example.com/charizard-2.jpg")
+        self.assertEqual(product.image_url_3, "https://cdn.example.com/charizard-3.jpg")
+        self.assertTrue(ProductImage.objects.filter(pk=image.pk, product=product).exists())
