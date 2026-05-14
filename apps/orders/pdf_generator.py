@@ -23,7 +23,7 @@ from reportlab.platypus import (
 )
 from reportlab.lib.enums import TA_CENTER, TA_RIGHT, TA_LEFT, TA_JUSTIFY
 from apps.orders.services.shipping_service import get_shipping_method_label
-from apps.orders.models import Order
+from apps.orders.models import Order, DiscountCode
 
 
 # Colores de CRACK TCG (Gold/Brown palette)
@@ -343,29 +343,52 @@ def generate_order_pdf(order):
     
     # ==================== TOTALES ====================
     totals_data = []
-    
+
     shipping_amount = getattr(order, "shipping_price", None)
     if shipping_amount is None:
         shipping_amount = order.shipping_cost
+
+    # order.discount_amount almacena cupón + efectivo combinados (ver serializers.py).
+    # Separamos el cupón restando el efectivo, igual que el template de emails.
+    total_discount_amount = order.discount_amount or Decimal("0")
+    cash_discount_amount = order.cash_discount_amount or Decimal("0")
+    coupon_discount_amount = max(Decimal("0"), total_discount_amount - cash_discount_amount)
+
+    coupon_label_suffix = ""
+    if order.discount_code:
+        if order.discount_type == DiscountCode.DISCOUNT_PERCENT:
+            coupon = (
+                DiscountCode.objects.filter(code__iexact=order.discount_code)
+                .only("discount_type", "discount_amount")
+                .first()
+            )
+            if coupon and coupon.discount_type == DiscountCode.DISCOUNT_PERCENT:
+                coupon_label_suffix = f" ({coupon.discount_amount:.0f}%)"
+        elif order.discount_type == DiscountCode.DISCOUNT_FIXED and coupon_discount_amount:
+            coupon_label_suffix = f" (-${coupon_discount_amount:.2f})"
 
     # Subtotal productos
     totals_data.append([
         Paragraph("<b>Subtotal productos:</b>", ParagraphStyle("Right", parent=styles["Normal"], alignment=TA_RIGHT)),
         Paragraph(f"${order.subtotal:.2f}", ParagraphStyle("Right", parent=styles["Normal"], alignment=TA_RIGHT)),
     ])
-    
+
     # Descuento código
-    if order.discount_code:
+    if order.discount_code and coupon_discount_amount > 0:
         totals_data.append([
-            Paragraph(f"<b>Descuento ({order.discount_code}):</b>", ParagraphStyle("Right", parent=styles["Normal"], alignment=TA_RIGHT)),
-            Paragraph(f"-${order.discount_amount:.2f}", ParagraphStyle("Right", parent=styles["Normal"], alignment=TA_RIGHT, textColor=HexColor("#4CAF50"))),
+            Paragraph(f"<b>Descuento ({order.discount_code}){coupon_label_suffix}:</b>", ParagraphStyle("Right", parent=styles["Normal"], alignment=TA_RIGHT)),
+            Paragraph(f"-${coupon_discount_amount:.2f}", ParagraphStyle("Right", parent=styles["Normal"], alignment=TA_RIGHT, textColor=HexColor("#4CAF50"))),
         ])
-    
+
     # Descuento efectivo
-    if order.cash_discount_amount > 0:
+    if cash_discount_amount > 0:
+        cash_percent = order.cash_discount_percent or Decimal("0")
+        cash_label = "Descuento Efectivo/Transferencia/Crypto"
+        if cash_percent > 0:
+            cash_label += f" ({cash_percent:.0f}%)"
         totals_data.append([
-            Paragraph("<b>Descuento Efectivo:</b>", ParagraphStyle("Right", parent=styles["Normal"], alignment=TA_RIGHT)),
-            Paragraph(f"-${order.cash_discount_amount:.2f}", ParagraphStyle("Right", parent=styles["Normal"], alignment=TA_RIGHT, textColor=HexColor("#4CAF50"))),
+            Paragraph(f"<b>{cash_label}:</b>", ParagraphStyle("Right", parent=styles["Normal"], alignment=TA_RIGHT)),
+            Paragraph(f"-${cash_discount_amount:.2f}", ParagraphStyle("Right", parent=styles["Normal"], alignment=TA_RIGHT, textColor=HexColor("#4CAF50"))),
         ])
     
     # Envío

@@ -63,6 +63,19 @@ class ShipmentInline(TabularInline):
     fields = ("tracking_code", "status", "shipped_at", "created_at")
     readonly_fields = ("created_at",)
 
+    def get_readonly_fields(self, request, obj=None):
+        base = list(super().get_readonly_fields(request, obj))
+        if obj and obj.payment_method == Order.PAYMENT_CASH and obj.status == Order.STATUS_PENDING:
+            for field in ("tracking_code", "status", "shipped_at"):
+                if field not in base:
+                    base.append(field)
+        return tuple(base)
+
+    def has_add_permission(self, request, obj=None):
+        if obj and obj.payment_method == Order.PAYMENT_CASH and obj.status == Order.STATUS_PENDING:
+            return False
+        return super().has_add_permission(request, obj)
+
 
 class ShipmentQuickUpdateForm(forms.Form):
     tracking_code = forms.CharField(
@@ -208,6 +221,14 @@ class OrderAdmin(ModelAdmin):
                 'font-size:12px;font-weight:600;display:inline-block;">🚚 Enviado</span>'
             )
 
+        if obj.payment_method == Order.PAYMENT_CASH and obj.status == Order.STATUS_PENDING:
+            return format_html(
+                '<span style="'
+                'background:#9ca3af;color:#fff;padding:5px 12px;border-radius:4px;'
+                'font-size:12px;font-weight:600;display:inline-block;cursor:not-allowed;opacity:0.75;"'
+                ' title="Marcá la orden como pagada antes de cargar el envío.">Pendiente de pago</span>'
+            )
+
         url = reverse("admin:orders_order_shipping_popup", args=[obj.pk])
         return format_html(
             '<a href="{}" onclick="window.open(this.href, \'shipping-popup-{}\', \'width=560,height=520,resizable=yes,scrollbars=yes\'); return false;" style="'
@@ -247,6 +268,12 @@ class OrderAdmin(ModelAdmin):
 
         if order.shipping_type == Order.SHIPPING_PICKUP:
             return HttpResponse("Esta orden es retiro en persona y no requiere despacho.", status=400)
+
+        if order.payment_method == Order.PAYMENT_CASH and order.status == Order.STATUS_PENDING:
+            return HttpResponse(
+                "La orden está pendiente de pago en efectivo. Marcala como pagada antes de cargar el envío.",
+                status=403,
+            )
 
         shipment, _ = Shipment.objects.get_or_create(order=order, defaults={"status": Shipment.STATUS_PENDING})
 
