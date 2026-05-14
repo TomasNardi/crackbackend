@@ -7,7 +7,7 @@ from django.conf import settings
 from django.template.loader import render_to_string
 from django.utils import timezone
 
-from .models import ConfiguracionNotificaciones, SolicitudVenta
+from .models import NotificationRecipient, SolicitudVenta
 
 logger = logging.getLogger(__name__)
 
@@ -36,9 +36,9 @@ def _send(to: list[str], subject: str, html: str) -> bool:
 
 def send_new_sale_request_notification(solicitud_id: int) -> bool:
     solicitud = SolicitudVenta.objects.get(id=solicitud_id)
-    destinatarios = ConfiguracionNotificaciones.get().get_emails_list()
+    destinatarios = NotificationRecipient.get_active_emails()
     if not destinatarios:
-        logger.warning("No hay emails configurados para notificaciones de solicitudes de venta")
+        logger.warning("No hay destinatarios activos para notificaciones de solicitudes de venta")
         return False
 
     context = {

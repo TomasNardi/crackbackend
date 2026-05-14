@@ -595,8 +595,8 @@ UNFOLD = {
                     {
                         "title": "Destinatarios",
                         "icon": "alternate_email",
-                        "link": "/admin/core/configuracionnotificaciones/",
-                        "permission": admin_has_perm("core.view_configuracionnotificaciones"),
+                        "link": "/admin/core/notificationrecipient/",
+                        "permission": admin_has_perm("core.view_notificationrecipient"),
                     },
                     {
                         "title": "Suscripciones",
@@ -613,8 +613,8 @@ UNFOLD = {
                     {
                         "title": "Logs de envío",
                         "icon": "outgoing_mail",
-                        "link": "/admin/core/resendwebhookevent/",
-                        "permission": admin_has_perm("core.view_resendwebhookevent"),
+                        "link": "/admin/core/emaildelivery/",
+                        "permission": admin_has_perm("core.view_emaildelivery"),
                     },
                 ],
             },

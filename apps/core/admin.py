@@ -18,8 +18,8 @@ from .models import (
     ExchangeRate,
     ContactMessage,
     SolicitudVenta,
-    ConfiguracionNotificaciones,
-    ResendWebhookEvent,
+    NotificationRecipient,
+    EmailDelivery,
 )
 
 
@@ -350,63 +350,69 @@ class ContactMessageAdmin(ModelAdmin):
         return False
 
 
-@admin.register(ConfiguracionNotificaciones)
-class ConfiguracionNotificacionesAdmin(ModelAdmin):
-    list_display = ("emails_resumen",)
+@admin.register(NotificationRecipient)
+class NotificationRecipientAdmin(ModelAdmin):
+    list_display = ("email", "name", "is_active", "created_at")
+    list_filter = ("is_active",)
+    search_fields = ("email", "name")
+    list_editable = ("is_active",)
+    readonly_fields = ("created_at", "updated_at")
     fieldsets = (
         (
-            "Destinatarios adicionales",
+            None,
             {
-                "fields": ("emails",),
+                "fields": ("email", "name", "is_active"),
                 "description": (
-                    "Direcciones que reciben las notificaciones internas (nuevas órdenes, "
-                    "solicitudes de venta). Se suman a los destinatarios fijos del sistema "
-                    "(cracktcg@gmail.com, martin@martingrobas.com, tomas.nardi@hotmail.com)."
+                    "Cada destinatario recibe las notificaciones internas (nuevas órdenes, "
+                    "solicitudes de venta). Desactivá uno con el checkbox para dejar de "
+                    "enviarle sin borrar el registro."
                 ),
+            },
+        ),
+        (
+            "Metadatos",
+            {
+                "fields": ("created_at", "updated_at"),
+                "classes": ("collapse",),
             },
         ),
     )
 
-    @admin.display(description="Emails configurados")
-    def emails_resumen(self, obj):
-        emails = obj.get_emails_list()
-        return ", ".join(emails) if emails else "Sin emails configurados"
 
-    def has_add_permission(self, request):
-        return not ConfiguracionNotificaciones.objects.exists()
-
-    def has_delete_permission(self, request, obj=None):
-        return False
-
-    def changelist_view(self, request, extra_context=None):
-        obj = ConfiguracionNotificaciones.get()
-        change_url = reverse("admin:core_configuracionnotificaciones_change", args=[obj.pk])
-        return redirect(change_url)
-
-
-@admin.register(ResendWebhookEvent)
-class ResendWebhookEventAdmin(ModelAdmin):
-    list_display = ("received_at", "event_type_badge", "to_email", "subject", "email_id")
-    list_filter = ("event_type", "received_at")
-    search_fields = ("to_email", "from_email", "subject", "email_id", "event_id")
-    date_hierarchy = "received_at"
+@admin.register(EmailDelivery)
+class EmailDeliveryAdmin(ModelAdmin):
+    list_display = ("last_received_at", "status_badge", "to_email", "subject", "milestones", "email_id_short")
+    list_filter = ("status", "last_received_at")
+    search_fields = ("to_email", "from_email", "subject", "email_id")
+    date_hierarchy = "last_received_at"
     readonly_fields = (
-        "event_id",
-        "event_type",
         "email_id",
-        "from_email",
         "to_email",
+        "from_email",
         "subject",
-        "event_created_at",
-        "received_at",
-        "raw_payload_pretty",
+        "status",
+        "sent_at",
+        "delivery_delayed_at",
+        "delivered_at",
+        "opened_at",
+        "clicked_at",
+        "bounced_at",
+        "complained_at",
+        "failed_at",
+        "bounce_reason",
+        "failure_reason",
+        "first_received_at",
+        "last_received_at",
+        "last_event_at",
+        "processed_event_ids",
+        "last_payload_pretty",
     )
     fieldsets = (
         (
             "Resumen",
             {
                 "fields": (
-                    "event_type",
+                    "status",
                     "to_email",
                     "from_email",
                     "subject",
@@ -415,47 +421,100 @@ class ResendWebhookEventAdmin(ModelAdmin):
             },
         ),
         (
-            "Metadatos",
+            "Línea de tiempo",
             {
-                "fields": ("event_id", "event_created_at", "received_at"),
+                "fields": (
+                    "sent_at",
+                    "delivery_delayed_at",
+                    "delivered_at",
+                    "opened_at",
+                    "clicked_at",
+                    "bounced_at",
+                    "complained_at",
+                    "failed_at",
+                ),
+            },
+        ),
+        (
+            "Errores",
+            {
+                "fields": ("bounce_reason", "failure_reason"),
                 "classes": ("collapse",),
             },
         ),
         (
-            "Payload completo",
+            "Metadatos",
             {
-                "fields": ("raw_payload_pretty",),
+                "fields": (
+                    "first_received_at",
+                    "last_received_at",
+                    "last_event_at",
+                    "processed_event_ids",
+                ),
+                "classes": ("collapse",),
+            },
+        ),
+        (
+            "Último payload",
+            {
+                "fields": ("last_payload_pretty",),
                 "classes": ("collapse",),
             },
         ),
     )
 
-    _EVENT_COLORS = {
-        ResendWebhookEvent.EventType.SENT: "#6B7280",
-        ResendWebhookEvent.EventType.DELIVERED: "#228B5A",
-        ResendWebhookEvent.EventType.DELIVERY_DELAYED: "#D4A017",
-        ResendWebhookEvent.EventType.BOUNCED: "#D14343",
-        ResendWebhookEvent.EventType.COMPLAINED: "#7C3AED",
-        ResendWebhookEvent.EventType.OPENED: "#2563EB",
-        ResendWebhookEvent.EventType.CLICKED: "#0EA5E9",
-        ResendWebhookEvent.EventType.FAILED: "#991B1B",
+    _STATUS_COLORS = {
+        EmailDelivery.Status.SENT: "#6B7280",
+        EmailDelivery.Status.DELIVERY_DELAYED: "#D4A017",
+        EmailDelivery.Status.DELIVERED: "#228B5A",
+        EmailDelivery.Status.OPENED: "#2563EB",
+        EmailDelivery.Status.CLICKED: "#0EA5E9",
+        EmailDelivery.Status.COMPLAINED: "#7C3AED",
+        EmailDelivery.Status.BOUNCED: "#D14343",
+        EmailDelivery.Status.FAILED: "#991B1B",
     }
 
-    @admin.display(description="Tipo", ordering="event_type")
-    def event_type_badge(self, obj):
-        color = self._EVENT_COLORS.get(obj.event_type, "#999999")
+    @admin.display(description="Estado", ordering="status")
+    def status_badge(self, obj):
+        color = self._STATUS_COLORS.get(obj.status, "#999999")
         return format_html(
             '<span style="background-color:{};color:#fff;padding:3px 10px;border-radius:20px;font-size:11px;font-weight:600;letter-spacing:.04em;">{}</span>',
             color,
-            obj.get_event_type_display(),
+            obj.get_status_display(),
         )
 
-    @admin.display(description="Payload completo")
-    def raw_payload_pretty(self, obj):
+    @admin.display(description="Hitos")
+    def milestones(self, obj):
+        chips = []
+        spec = [
+            ("Env", obj.sent_at, "#6B7280"),
+            ("Entr", obj.delivered_at, "#228B5A"),
+            ("Abr", obj.opened_at, "#2563EB"),
+            ("Clk", obj.clicked_at, "#0EA5E9"),
+            ("Bnc", obj.bounced_at, "#D14343"),
+            ("Spam", obj.complained_at, "#7C3AED"),
+        ]
+        for label, ts, color in spec:
+            if not ts:
+                continue
+            chips.append(
+                f'<span style="display:inline-block;background:{color};color:#fff;padding:2px 7px;border-radius:10px;font-size:10px;font-weight:600;margin-right:4px;">{label}</span>'
+            )
+        return format_html("".join(chips)) if chips else "—"
+
+    @admin.display(description="Email ID")
+    def email_id_short(self, obj):
+        if not obj.email_id:
+            return "—"
+        short = obj.email_id[:8]
+        return format_html('<code style="font-size:11px;">{}…</code>', short)
+
+    @admin.display(description="Último payload")
+    def last_payload_pretty(self, obj):
         try:
-            formatted = json.dumps(obj.raw_payload or {}, indent=2, ensure_ascii=False)
+            formatted = json.dumps(obj.last_payload or {}, indent=2, ensure_ascii=False)
         except (TypeError, ValueError):
-            formatted = str(obj.raw_payload or "")
+            formatted = str(obj.last_payload or "")
         return format_html(
             '<pre style="background:#0f172a;color:#e2e8f0;padding:14px 18px;border-radius:8px;font-size:12px;line-height:1.5;max-height:420px;overflow:auto;">{}</pre>',
             formatted,

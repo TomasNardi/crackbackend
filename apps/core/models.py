@@ -207,90 +207,165 @@ class ContactMessage(models.Model):
         return f"{self.name} <{self.email}> — {self.created_at:%d/%m/%Y}"
 
 
-class ConfiguracionNotificaciones(models.Model):
-    """Configuración global de emails para notificaciones internas."""
+class NotificationRecipient(models.Model):
+    """Destinatario de notificaciones internas (nuevas órdenes, solicitudes de venta)."""
 
-    emails = models.TextField(
-        "Emails de notificación",
-        blank=True,
-        help_text="Separá múltiples emails con comas o saltos de línea.",
+    email = models.EmailField("Email", unique=True)
+    name = models.CharField(
+        "Nombre", max_length=120, blank=True, default="",
+        help_text="Opcional. Solo para identificarlo en el listado.",
     )
+    is_active = models.BooleanField(
+        "Activo", default=True,
+        help_text="Si está desactivado, no recibe notificaciones.",
+    )
+    created_at = models.DateTimeField("Creado", auto_now_add=True)
+    updated_at = models.DateTimeField("Modificado", auto_now=True)
 
     class Meta:
-        verbose_name = "Configuración de notificaciones"
-        verbose_name_plural = "Configuraciones de notificaciones"
+        verbose_name = "Destinatario"
+        verbose_name_plural = "Destinatarios"
+        ordering = ["email"]
 
     def __str__(self):
-        return "Configuración global de notificaciones"
-
-    def save(self, *args, **kwargs):
-        self.pk = 1
-        super().save(*args, **kwargs)
+        return f"{self.name} <{self.email}>" if self.name else self.email
 
     @classmethod
-    def get(cls):
-        obj, _ = cls.objects.get_or_create(pk=1, defaults={"emails": ""})
-        return obj
-
-    def get_emails_list(self):
-        raw_values = self.emails.replace("\n", ",").split(",") if self.emails else []
-        unique_emails = []
-        seen = set()
-        for value in raw_values:
-            email = value.strip().lower()
-            if not email or email in seen:
-                continue
-            seen.add(email)
-            unique_emails.append(email)
-        return unique_emails
+    def get_active_emails(cls) -> list[str]:
+        return list(
+            cls.objects.filter(is_active=True).order_by("email").values_list("email", flat=True)
+        )
 
 
-class ResendWebhookEvent(models.Model):
-    """Log de eventos de Resend (entregas, bounces, opens, clicks, etc.)."""
+class EmailDelivery(models.Model):
+    """Estado consolidado de un envío Resend a un destinatario específico."""
 
-    class EventType(models.TextChoices):
-        SENT = "email.sent", "Enviado"
-        DELIVERED = "email.delivered", "Entregado"
-        DELIVERY_DELAYED = "email.delivery_delayed", "Entrega demorada"
-        BOUNCED = "email.bounced", "Rebotado"
-        COMPLAINED = "email.complained", "Reportado como spam"
-        OPENED = "email.opened", "Abierto"
-        CLICKED = "email.clicked", "Click"
-        FAILED = "email.failed", "Fallido"
+    class Status(models.TextChoices):
+        SENT = "sent", "Enviado"
+        DELIVERY_DELAYED = "delivery_delayed", "Entrega demorada"
+        DELIVERED = "delivered", "Entregado"
+        OPENED = "opened", "Abierto"
+        CLICKED = "clicked", "Click"
+        COMPLAINED = "complained", "Reportado como spam"
+        BOUNCED = "bounced", "Rebotado"
+        FAILED = "failed", "Fallido"
 
-    event_id = models.CharField(
-        "ID del evento (svix)", max_length=255, unique=True,
-        help_text="Identificador único del evento — garantiza idempotencia.",
-    )
-    event_type = models.CharField(
-        "Tipo", max_length=64, choices=EventType.choices,
-        db_index=True,
-    )
+    # Prioridad para promover el status. Negativos al final → siempre ganan sobre positivos.
+    _STATUS_PRIORITY = {
+        Status.SENT: 1,
+        Status.DELIVERY_DELAYED: 2,
+        Status.DELIVERED: 3,
+        Status.OPENED: 4,
+        Status.CLICKED: 5,
+        Status.COMPLAINED: 6,
+        Status.BOUNCED: 7,
+        Status.FAILED: 8,
+    }
+
+    # Mapeo de tipo de evento Resend → (status, nombre del campo timestamp)
+    EVENT_MAP = {
+        "email.sent": (Status.SENT, "sent_at"),
+        "email.delivery_delayed": (Status.DELIVERY_DELAYED, "delivery_delayed_at"),
+        "email.delivered": (Status.DELIVERED, "delivered_at"),
+        "email.opened": (Status.OPENED, "opened_at"),
+        "email.clicked": (Status.CLICKED, "clicked_at"),
+        "email.complained": (Status.COMPLAINED, "complained_at"),
+        "email.bounced": (Status.BOUNCED, "bounced_at"),
+        "email.failed": (Status.FAILED, "failed_at"),
+    }
+
     email_id = models.CharField(
-        "ID del email", max_length=128, blank=True, default="", db_index=True,
-        help_text="ID que asigna Resend al email — agrupa todos los eventos de un mismo envío.",
+        "ID del email", max_length=128, db_index=True,
+        help_text="ID que asigna Resend al envío.",
     )
+    to_email = models.CharField("Para", max_length=512, db_index=True)
     from_email = models.CharField("Desde", max_length=255, blank=True, default="")
-    to_email = models.CharField("Para", max_length=512, blank=True, default="", db_index=True)
     subject = models.CharField("Asunto", max_length=512, blank=True, default="")
-    event_created_at = models.DateTimeField(
-        "Fecha del evento (Resend)", null=True, blank=True,
-        help_text="Timestamp original que reporta Resend.",
+    status = models.CharField(
+        "Estado actual", max_length=32, choices=Status.choices,
+        default=Status.SENT, db_index=True,
     )
-    received_at = models.DateTimeField("Recibido", auto_now_add=True, db_index=True)
-    raw_payload = models.JSONField("Payload completo", default=dict, blank=True)
+
+    sent_at = models.DateTimeField("Enviado", null=True, blank=True)
+    delivery_delayed_at = models.DateTimeField("Demora", null=True, blank=True)
+    delivered_at = models.DateTimeField("Entregado", null=True, blank=True)
+    opened_at = models.DateTimeField("Abierto", null=True, blank=True)
+    clicked_at = models.DateTimeField("Click", null=True, blank=True)
+    bounced_at = models.DateTimeField("Rebotado", null=True, blank=True)
+    complained_at = models.DateTimeField("Reportado", null=True, blank=True)
+    failed_at = models.DateTimeField("Fallido", null=True, blank=True)
+
+    bounce_reason = models.TextField("Motivo rebote", blank=True, default="")
+    failure_reason = models.TextField("Motivo fallo", blank=True, default="")
+
+    first_received_at = models.DateTimeField("Primer evento", auto_now_add=True)
+    last_received_at = models.DateTimeField("Último evento", auto_now=True, db_index=True)
+    last_event_at = models.DateTimeField(
+        "Última fecha (Resend)", null=True, blank=True,
+        help_text="Timestamp del evento más reciente según Resend.",
+    )
+
+    processed_event_ids = models.JSONField(
+        "IDs de eventos procesados", default=list, blank=True,
+        help_text="svix-ids ya aplicados — garantiza idempotencia ante reintentos.",
+    )
+    last_payload = models.JSONField("Último payload", default=dict, blank=True)
 
     class Meta:
-        verbose_name = "Log de envío (Resend)"
-        verbose_name_plural = "Logs de envío (Resend)"
-        ordering = ["-received_at"]
+        verbose_name = "Envío (Resend)"
+        verbose_name_plural = "Envíos (Resend)"
+        ordering = ["-last_received_at"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["email_id", "to_email"], name="emaildelivery_email_to_unique"
+            ),
+        ]
         indexes = [
-            models.Index(fields=["-received_at"]),
-            models.Index(fields=["event_type", "-received_at"]),
+            models.Index(fields=["-last_received_at"]),
+            models.Index(fields=["status", "-last_received_at"]),
         ]
 
     def __str__(self):
-        return f"{self.get_event_type_display()} → {self.to_email or '?'} @ {self.received_at:%d/%m/%Y %H:%M}"
+        return f"{self.get_status_display()} → {self.to_email} ({self.email_id[:8]})"
+
+    def apply_event(self, event_type: str, event_at, payload: dict, svix_id: str) -> bool:
+        """Aplica un evento. Devuelve True si modificó el row, False si es duplicado o desconocido."""
+        if svix_id and svix_id in (self.processed_event_ids or []):
+            return False
+
+        mapping = self.EVENT_MAP.get(event_type)
+        if not mapping:
+            return False
+
+        new_status, ts_field = mapping
+        setattr(self, ts_field, event_at)
+
+        current_priority = self._STATUS_PRIORITY.get(self.status, 0)
+        new_priority = self._STATUS_PRIORITY.get(new_status, 0)
+        if new_priority > current_priority:
+            self.status = new_status
+
+        data = payload.get("data") if isinstance(payload, dict) else None
+        if isinstance(data, dict):
+            if new_status == self.Status.BOUNCED:
+                bounce = data.get("bounce") or {}
+                if isinstance(bounce, dict):
+                    self.bounce_reason = str(bounce.get("message") or bounce.get("type") or "")[:2000]
+            if new_status == self.Status.FAILED:
+                failed = data.get("failed") or {}
+                if isinstance(failed, dict):
+                    self.failure_reason = str(failed.get("reason") or "")[:2000]
+
+        if event_at and (self.last_event_at is None or event_at > self.last_event_at):
+            self.last_event_at = event_at
+
+        self.last_payload = payload or {}
+        if svix_id:
+            ids = list(self.processed_event_ids or [])
+            ids.append(svix_id)
+            # Mantener máximo 50 ids para no crecer indefinidamente.
+            self.processed_event_ids = ids[-50:]
+        return True
 
 
 class SolicitudVenta(models.Model):

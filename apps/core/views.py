@@ -18,7 +18,7 @@ from rest_framework import permissions, status
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from .models import SiteConfig, ExchangeRate, ContactMessage, EmailSubscription, ResendWebhookEvent
+from .models import SiteConfig, ExchangeRate, ContactMessage, EmailSubscription, EmailDelivery
 from .serializers import (
     SiteConfigSerializer, EmailSubscribeSerializer, ExchangeRateSerializer,
     ContactMessageSerializer, SolicitudVentaSerializer
@@ -234,27 +234,45 @@ class ResendWebhookView(APIView):
             return Response({"detail": "Payload inválido."}, status=status.HTTP_400_BAD_REQUEST)
 
         event_type = (payload.get("type") or "").strip()
+        if event_type not in EmailDelivery.EVENT_MAP:
+            logger.info("Webhook Resend con tipo desconocido: %s (svix-id=%s)", event_type, svix_id)
+            return Response(status=status.HTTP_200_OK)
+
         data = payload.get("data") or {}
-        to_field = data.get("to")
-        if isinstance(to_field, list):
-            to_email = ", ".join(str(item) for item in to_field if item)
-        else:
-            to_email = str(to_field or "")
+        email_id = str(data.get("email_id") or "")[:128]
+        if not email_id:
+            logger.warning("Webhook Resend sin email_id (svix-id=%s)", svix_id)
+            return Response(status=status.HTTP_200_OK)
 
-        _, created = ResendWebhookEvent.objects.get_or_create(
-            event_id=svix_id,
-            defaults={
-                "event_type": event_type[:64],
-                "email_id": str(data.get("email_id") or "")[:128],
-                "from_email": str(data.get("from") or "")[:255],
-                "to_email": to_email[:512],
-                "subject": str(data.get("subject") or "")[:512],
-                "event_created_at": _parse_event_timestamp(payload.get("created_at") or data.get("created_at")),
-                "raw_payload": payload,
-            },
-        )
+        to_field = data.get("to") or []
+        if not isinstance(to_field, list):
+            to_field = [to_field]
+        recipients = [str(item).strip().lower() for item in to_field if item]
+        if not recipients:
+            logger.warning("Webhook Resend sin destinatarios (svix-id=%s)", svix_id)
+            return Response(status=status.HTTP_200_OK)
 
-        if not created:
-            logger.info("Webhook Resend duplicado ignorado (svix-id=%s)", svix_id)
+        event_at = _parse_event_timestamp(payload.get("created_at") or data.get("created_at"))
+        from_email = str(data.get("from") or "")[:255]
+        subject = str(data.get("subject") or "")[:512]
+
+        for recipient in recipients:
+            delivery, _ = EmailDelivery.objects.get_or_create(
+                email_id=email_id,
+                to_email=recipient[:512],
+                defaults={
+                    "from_email": from_email,
+                    "subject": subject,
+                },
+            )
+            # Completar metadatos si vinieron vacíos en el primer evento.
+            if from_email and not delivery.from_email:
+                delivery.from_email = from_email
+            if subject and not delivery.subject:
+                delivery.subject = subject
+
+            changed = delivery.apply_event(event_type, event_at, payload, svix_id)
+            if changed:
+                delivery.save()
 
         return Response(status=status.HTTP_200_OK)

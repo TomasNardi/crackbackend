@@ -9,7 +9,7 @@ Remitente:
   - Sandbox:    onboarding@resend.dev  (sin dominio verificado)
   - Producción: RESEND_FROM_EMAIL en variables de entorno de Render
 
-Destinatarios internos: STORE_EMAILS (cracktcg@gmail.com + admins, reciben copia de cada orden)
+Destinatarios internos: NotificationRecipient (CRUD en admin → Mail → Destinatarios)
 """
 
 import logging
@@ -21,28 +21,11 @@ import resend
 
 logger = logging.getLogger(__name__)
 
-# Emails internos hardcoded — reciben copia de TODAS las órdenes
-STORE_EMAILS = [
-    "cracktcg@gmail.com",
-    "martin@martingrobas.com",
-    "tomas.nardi@hotmail.com",
-]
-
-
 def get_internal_notification_recipients() -> list[str]:
-    """Combina STORE_EMAILS hardcoded + emails configurables desde admin."""
-    from apps.core.models import ConfiguracionNotificaciones
+    """Destinatarios activos cargados en el admin (Mail → Destinatarios)."""
+    from apps.core.models import NotificationRecipient
 
-    extras = ConfiguracionNotificaciones.get().get_emails_list()
-    seen = set()
-    merged = []
-    for email in [*STORE_EMAILS, *extras]:
-        normalized = (email or "").strip().lower()
-        if not normalized or normalized in seen:
-            continue
-        seen.add(normalized)
-        merged.append(normalized)
-    return merged
+    return NotificationRecipient.get_active_emails()
 
 # Remitente — en sandbox usá onboarding@resend.dev; en producción configurá RESEND_FROM_EMAIL
 FROM_EMAIL = getattr(settings, "RESEND_FROM_EMAIL", "onboarding@resend.dev")
