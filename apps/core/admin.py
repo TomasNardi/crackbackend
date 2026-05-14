@@ -19,6 +19,7 @@ from .models import (
     ContactMessage,
     SolicitudVenta,
     ConfiguracionNotificaciones,
+    ResendWebhookEvent,
 )
 
 
@@ -354,10 +355,14 @@ class ConfiguracionNotificacionesAdmin(ModelAdmin):
     list_display = ("emails_resumen",)
     fieldsets = (
         (
-            "Configuración global",
+            "Destinatarios adicionales",
             {
                 "fields": ("emails",),
-                "description": "Emails que recibirán las nuevas solicitudes de venta.",
+                "description": (
+                    "Direcciones que reciben las notificaciones internas (nuevas órdenes, "
+                    "solicitudes de venta). Se suman a los destinatarios fijos del sistema "
+                    "(cracktcg@gmail.com, martin@martingrobas.com, tomas.nardi@hotmail.com)."
+                ),
             },
         ),
     )
@@ -373,16 +378,94 @@ class ConfiguracionNotificacionesAdmin(ModelAdmin):
     def has_delete_permission(self, request, obj=None):
         return False
 
-    def has_module_permission(self, request):
-        return False
-
-    def has_view_permission(self, request, obj=None):
-        return False
-
     def changelist_view(self, request, extra_context=None):
         obj = ConfiguracionNotificaciones.get()
         change_url = reverse("admin:core_configuracionnotificaciones_change", args=[obj.pk])
         return redirect(change_url)
+
+
+@admin.register(ResendWebhookEvent)
+class ResendWebhookEventAdmin(ModelAdmin):
+    list_display = ("received_at", "event_type_badge", "to_email", "subject", "email_id")
+    list_filter = ("event_type", "received_at")
+    search_fields = ("to_email", "from_email", "subject", "email_id", "event_id")
+    date_hierarchy = "received_at"
+    readonly_fields = (
+        "event_id",
+        "event_type",
+        "email_id",
+        "from_email",
+        "to_email",
+        "subject",
+        "event_created_at",
+        "received_at",
+        "raw_payload_pretty",
+    )
+    fieldsets = (
+        (
+            "Resumen",
+            {
+                "fields": (
+                    "event_type",
+                    "to_email",
+                    "from_email",
+                    "subject",
+                    "email_id",
+                ),
+            },
+        ),
+        (
+            "Metadatos",
+            {
+                "fields": ("event_id", "event_created_at", "received_at"),
+                "classes": ("collapse",),
+            },
+        ),
+        (
+            "Payload completo",
+            {
+                "fields": ("raw_payload_pretty",),
+                "classes": ("collapse",),
+            },
+        ),
+    )
+
+    _EVENT_COLORS = {
+        ResendWebhookEvent.EventType.SENT: "#6B7280",
+        ResendWebhookEvent.EventType.DELIVERED: "#228B5A",
+        ResendWebhookEvent.EventType.DELIVERY_DELAYED: "#D4A017",
+        ResendWebhookEvent.EventType.BOUNCED: "#D14343",
+        ResendWebhookEvent.EventType.COMPLAINED: "#7C3AED",
+        ResendWebhookEvent.EventType.OPENED: "#2563EB",
+        ResendWebhookEvent.EventType.CLICKED: "#0EA5E9",
+        ResendWebhookEvent.EventType.FAILED: "#991B1B",
+    }
+
+    @admin.display(description="Tipo", ordering="event_type")
+    def event_type_badge(self, obj):
+        color = self._EVENT_COLORS.get(obj.event_type, "#999999")
+        return format_html(
+            '<span style="background-color:{};color:#fff;padding:3px 10px;border-radius:20px;font-size:11px;font-weight:600;letter-spacing:.04em;">{}</span>',
+            color,
+            obj.get_event_type_display(),
+        )
+
+    @admin.display(description="Payload completo")
+    def raw_payload_pretty(self, obj):
+        try:
+            formatted = json.dumps(obj.raw_payload or {}, indent=2, ensure_ascii=False)
+        except (TypeError, ValueError):
+            formatted = str(obj.raw_payload or "")
+        return format_html(
+            '<pre style="background:#0f172a;color:#e2e8f0;padding:14px 18px;border-radius:8px;font-size:12px;line-height:1.5;max-height:420px;overflow:auto;">{}</pre>',
+            formatted,
+        )
+
+    def has_add_permission(self, request):
+        return False
+
+    def has_change_permission(self, request, obj=None):
+        return False
 
 
 @admin.register(SolicitudVenta)
@@ -508,7 +591,7 @@ class SolicitudVentaAdmin(ModelAdmin):
 
 
 # Feature toggled off: keep code/data but remove models from Django admin UI.
-for _model in (SolicitudVenta, ConfiguracionNotificaciones):
+for _model in (SolicitudVenta,):
     try:
         admin.site.unregister(_model)
     except NotRegistered:

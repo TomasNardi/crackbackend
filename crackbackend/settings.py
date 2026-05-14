@@ -318,6 +318,10 @@ RESEND_API_KEY = os.environ.get("RESEND_API_KEY", "re_7nKA3kPy_2qFTu2Kwa3iyMVXrW
 # El friendly name "CRACK TCG" mejora entregabilidad y reconocimiento de marca.
 RESEND_FROM_EMAIL = os.environ.get("RESEND_FROM_EMAIL", "CRACK TCG <tienda@cracktcg.com>")
 
+# Secret del webhook de Resend (formato `whsec_...`).
+# Obtenerlo en Resend dashboard → Webhooks → Signing secret y cargarlo en Render.
+RESEND_WEBHOOK_SECRET = os.environ.get("RESEND_WEBHOOK_SECRET", "")
+
 # ---------------------------------------------------------------------------
 # MercadoPago
 # ---------------------------------------------------------------------------
@@ -584,6 +588,37 @@ UNFOLD = {
                 ],
             },
             {
+                "title": "Mail",
+                "separator": True,
+                "collapsible": False,
+                "items": [
+                    {
+                        "title": "Destinatarios",
+                        "icon": "alternate_email",
+                        "link": "/admin/core/configuracionnotificaciones/",
+                        "permission": admin_has_perm("core.view_configuracionnotificaciones"),
+                    },
+                    {
+                        "title": "Suscripciones",
+                        "icon": "mail",
+                        "link": "/admin/core/emailsubscription/",
+                        "permission": admin_has_perm("core.view_emailsubscription"),
+                    },
+                    {
+                        "title": "Campañas de email",
+                        "icon": "campaign",
+                        "link": "/admin/core/emailcampaign/",
+                        "permission": admin_has_perm("core.view_emailcampaign"),
+                    },
+                    {
+                        "title": "Logs de envío",
+                        "icon": "outgoing_mail",
+                        "link": "/admin/core/resendwebhookevent/",
+                        "permission": admin_has_perm("core.view_resendwebhookevent"),
+                    },
+                ],
+            },
+            {
                 "title": "Configuración",
                 "separator": True,
                 "collapsible": False,
@@ -605,18 +640,6 @@ UNFOLD = {
                         "icon": "currency_exchange",
                         "link": "/admin/core/exchangerate/",
                         "permission": admin_has_perm("core.view_exchangerate"),
-                    },
-                    {
-                        "title": "Suscripciones",
-                        "icon": "mail",
-                        "link": "/admin/core/emailsubscription/",
-                        "permission": admin_has_perm("core.view_emailsubscription"),
-                    },
-                    {
-                        "title": "Campañas de email",
-                        "icon": "campaign",
-                        "link": "/admin/core/emailcampaign/",
-                        "permission": admin_has_perm("core.view_emailcampaign"),
                     },
                     {
                         "title": "Mensajes de contacto",

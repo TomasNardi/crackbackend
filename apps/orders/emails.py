@@ -21,12 +21,28 @@ import resend
 
 logger = logging.getLogger(__name__)
 
-# Emails internos — reciben copia de TODAS las órdenes
+# Emails internos hardcoded — reciben copia de TODAS las órdenes
 STORE_EMAILS = [
     "cracktcg@gmail.com",
     "martin@martingrobas.com",
     "tomas.nardi@hotmail.com",
 ]
+
+
+def get_internal_notification_recipients() -> list[str]:
+    """Combina STORE_EMAILS hardcoded + emails configurables desde admin."""
+    from apps.core.models import ConfiguracionNotificaciones
+
+    extras = ConfiguracionNotificaciones.get().get_emails_list()
+    seen = set()
+    merged = []
+    for email in [*STORE_EMAILS, *extras]:
+        normalized = (email or "").strip().lower()
+        if not normalized or normalized in seen:
+            continue
+        seen.add(normalized)
+        merged.append(normalized)
+    return merged
 
 # Remitente — en sandbox usá onboarding@resend.dev; en producción configurá RESEND_FROM_EMAIL
 FROM_EMAIL = getattr(settings, "RESEND_FROM_EMAIL", "onboarding@resend.dev")
@@ -329,7 +345,7 @@ def send_new_order_notification(order_id: int) -> None:
     html = render_to_string("emails/new_order_notification.html", context)
 
     _send(
-        to=list(STORE_EMAILS),
+        to=get_internal_notification_recipients(),
         subject=f"🛒 Nueva orden {order.order_code} — {order.customer_name} (${order.total:,.0f})",
         html=html,
     )

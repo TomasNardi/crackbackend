@@ -35,6 +35,7 @@ from apps.core.views import (
     ExchangeRateView,
     ContactView,
     SolicitudVentaCreateView,
+    ResendWebhookView,
 )
 
 router = DefaultRouter()
@@ -72,6 +73,9 @@ urlpatterns = [
     path("contact/", ContactView.as_view(), name="contact"),
     path("sale-requests/", SolicitudVentaCreateView.as_view(), name="sale_requests"),
     path("ping/", PingView.as_view(), name="ping"),
+
+    # Webhooks
+    path("webhooks/resend/", ResendWebhookView.as_view(), name="resend_webhook"),
 
     # Cloudinary (admin product uploads)
     path("products/admin/cloudinary/signature/", CloudinarySignedUploadSignatureView.as_view(), name="cloudinary_upload_signature"),

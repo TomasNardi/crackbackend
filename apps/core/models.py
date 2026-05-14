@@ -245,6 +245,54 @@ class ConfiguracionNotificaciones(models.Model):
         return unique_emails
 
 
+class ResendWebhookEvent(models.Model):
+    """Log de eventos de Resend (entregas, bounces, opens, clicks, etc.)."""
+
+    class EventType(models.TextChoices):
+        SENT = "email.sent", "Enviado"
+        DELIVERED = "email.delivered", "Entregado"
+        DELIVERY_DELAYED = "email.delivery_delayed", "Entrega demorada"
+        BOUNCED = "email.bounced", "Rebotado"
+        COMPLAINED = "email.complained", "Reportado como spam"
+        OPENED = "email.opened", "Abierto"
+        CLICKED = "email.clicked", "Click"
+        FAILED = "email.failed", "Fallido"
+
+    event_id = models.CharField(
+        "ID del evento (svix)", max_length=255, unique=True,
+        help_text="Identificador único del evento — garantiza idempotencia.",
+    )
+    event_type = models.CharField(
+        "Tipo", max_length=64, choices=EventType.choices,
+        db_index=True,
+    )
+    email_id = models.CharField(
+        "ID del email", max_length=128, blank=True, default="", db_index=True,
+        help_text="ID que asigna Resend al email — agrupa todos los eventos de un mismo envío.",
+    )
+    from_email = models.CharField("Desde", max_length=255, blank=True, default="")
+    to_email = models.CharField("Para", max_length=512, blank=True, default="", db_index=True)
+    subject = models.CharField("Asunto", max_length=512, blank=True, default="")
+    event_created_at = models.DateTimeField(
+        "Fecha del evento (Resend)", null=True, blank=True,
+        help_text="Timestamp original que reporta Resend.",
+    )
+    received_at = models.DateTimeField("Recibido", auto_now_add=True, db_index=True)
+    raw_payload = models.JSONField("Payload completo", default=dict, blank=True)
+
+    class Meta:
+        verbose_name = "Log de envío (Resend)"
+        verbose_name_plural = "Logs de envío (Resend)"
+        ordering = ["-received_at"]
+        indexes = [
+            models.Index(fields=["-received_at"]),
+            models.Index(fields=["event_type", "-received_at"]),
+        ]
+
+    def __str__(self):
+        return f"{self.get_event_type_display()} → {self.to_email or '?'} @ {self.received_at:%d/%m/%Y %H:%M}"
+
+
 class SolicitudVenta(models.Model):
     """Solicitudes públicas para vender una colección."""
 

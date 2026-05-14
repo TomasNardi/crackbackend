@@ -3,14 +3,22 @@ Core Views
 ===========
 """
 
+import base64
+import hashlib
+import hmac
+import json
 import logging
+import time
+from datetime import datetime, timezone as dt_timezone
+
+from django.conf import settings
 from django.utils.decorators import method_decorator
 from django_ratelimit.decorators import ratelimit
 from rest_framework import permissions, status
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from .models import SiteConfig, ExchangeRate, ContactMessage, EmailSubscription
+from .models import SiteConfig, ExchangeRate, ContactMessage, EmailSubscription, ResendWebhookEvent
 from .serializers import (
     SiteConfigSerializer, EmailSubscribeSerializer, ExchangeRateSerializer,
     ContactMessageSerializer, SolicitudVentaSerializer
@@ -140,3 +148,113 @@ class SolicitudVentaCreateView(APIView):
             },
             status=status.HTTP_201_CREATED,
         )
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Resend webhook — recibe eventos (sent/delivered/bounced/opened/clicked/...)
+# ─────────────────────────────────────────────────────────────────────────────
+
+_SVIX_MAX_AGE_SECONDS = 5 * 60  # rechazar payloads firmados hace > 5 min (anti-replay)
+
+
+def _decode_svix_secret(secret: str) -> bytes | None:
+    if not secret:
+        return None
+    cleaned = secret.strip()
+    if cleaned.startswith("whsec_"):
+        cleaned = cleaned[len("whsec_"):]
+    try:
+        return base64.b64decode(cleaned)
+    except (ValueError, base64.binascii.Error):
+        return None
+
+
+def _verify_svix_signature(raw_body: bytes, svix_id: str, svix_timestamp: str, svix_signature: str, secret: str) -> bool:
+    """Verifica firma Svix (HMAC-SHA256). Devuelve True si alguna firma del header matchea."""
+    key = _decode_svix_secret(secret)
+    if not key or not svix_id or not svix_timestamp or not svix_signature:
+        return False
+
+    try:
+        ts = int(svix_timestamp)
+    except ValueError:
+        return False
+    if abs(time.time() - ts) > _SVIX_MAX_AGE_SECONDS:
+        return False
+
+    signed_payload = f"{svix_id}.{svix_timestamp}.".encode() + raw_body
+    expected = base64.b64encode(hmac.new(key, signed_payload, hashlib.sha256).digest()).decode()
+
+    # El header puede contener varias firmas separadas por espacio: "v1,abc v1,def"
+    for entry in svix_signature.split():
+        version, _, sig = entry.partition(",")
+        if version != "v1":
+            continue
+        if hmac.compare_digest(expected, sig):
+            return True
+    return False
+
+
+def _parse_event_timestamp(value):
+    if not value or not isinstance(value, str):
+        return None
+    try:
+        # Resend usa ISO 8601 con sufijo Z
+        return datetime.fromisoformat(value.replace("Z", "+00:00")).astimezone(dt_timezone.utc)
+    except ValueError:
+        return None
+
+
+class ResendWebhookView(APIView):
+    """POST /api/v1/webhooks/resend/ — recibe eventos firmados de Resend (Svix)."""
+
+    permission_classes = [permissions.AllowAny]
+    authentication_classes = []
+
+    def post(self, request):
+        secret = getattr(settings, "RESEND_WEBHOOK_SECRET", "") or ""
+        svix_id = request.headers.get("svix-id", "")
+        svix_timestamp = request.headers.get("svix-timestamp", "")
+        svix_signature = request.headers.get("svix-signature", "")
+
+        raw_body = request.body or b""
+
+        if not secret:
+            logger.error("RESEND_WEBHOOK_SECRET no configurado — rechazando webhook")
+            return Response({"detail": "Webhook no configurado."}, status=status.HTTP_503_SERVICE_UNAVAILABLE)
+
+        if not _verify_svix_signature(raw_body, svix_id, svix_timestamp, svix_signature, secret):
+            logger.warning("Webhook Resend con firma inválida (svix-id=%s)", svix_id)
+            return Response({"detail": "Firma inválida."}, status=status.HTTP_401_UNAUTHORIZED)
+
+        try:
+            payload = json.loads(raw_body.decode("utf-8") or "{}")
+        except (ValueError, UnicodeDecodeError):
+            logger.warning("Webhook Resend con payload no-JSON (svix-id=%s)", svix_id)
+            return Response({"detail": "Payload inválido."}, status=status.HTTP_400_BAD_REQUEST)
+
+        event_type = (payload.get("type") or "").strip()
+        data = payload.get("data") or {}
+        to_field = data.get("to")
+        if isinstance(to_field, list):
+            to_email = ", ".join(str(item) for item in to_field if item)
+        else:
+            to_email = str(to_field or "")
+
+        _, created = ResendWebhookEvent.objects.get_or_create(
+            event_id=svix_id,
+            defaults={
+                "event_type": event_type[:64],
+                "email_id": str(data.get("email_id") or "")[:128],
+                "from_email": str(data.get("from") or "")[:255],
+                "to_email": to_email[:512],
+                "subject": str(data.get("subject") or "")[:512],
+                "event_created_at": _parse_event_timestamp(payload.get("created_at") or data.get("created_at")),
+                "raw_payload": payload,
+            },
+        )
+
+        if not created:
+            logger.info("Webhook Resend duplicado ignorado (svix-id=%s)", svix_id)
+
+        return Response(status=status.HTTP_200_OK)
