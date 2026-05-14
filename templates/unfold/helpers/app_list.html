@@ -16,7 +16,7 @@
                             {{ group.title }}
 
                             {% if group.collapsible %}
-                                <span class="material-symbols-outlined ml-auto text-base-400 transition-all group-hover:text-primary-600 dark:group-hover:text-primary-500" x-bind:class="{'rotate-90': navigationOpen}">
+                                <span class="material-symbols-outlined ml-auto text-base-400 transition-all group-hover:text-primary-600 dark:group-hover:text-primary-500" style="display:inline-flex;align-items:center;justify-content:center;line-height:1;white-space:nowrap;overflow:hidden;width:1.125rem;min-width:1.125rem;max-width:1.125rem;" x-bind:class="{'rotate-90': navigationOpen}">
                                     chevron_right
                                 </span>
                             {% endif %}
@@ -29,7 +29,7 @@
                                 <li>
                                     <a href="{% if item.link_callback %}{{ item.link_callback }}{% else %}{{ item.link }}{% endif %}" class="flex h-9.5 items-center -mx-3 px-3 rounded hover:text-primary-600 dark:hover:text-primary-500 {% if item.active %}bg-base-100 font-semibold text-primary-600 dark:bg-white/[.06] dark:text-primary-500{% endif %}">
                                         {% if item.icon %}
-                                            <span class="material-symbols-outlined md-18 mr-3 w-4.5">
+                                            <span class="material-symbols-outlined md-18 mr-3 w-4.5" style="display:inline-flex;align-items:center;justify-content:center;line-height:1;white-space:nowrap;overflow:hidden;width:1.125rem;min-width:1.125rem;max-width:1.125rem;">
                                                 {{ item.icon }}
                                             </span>
                                         {% endif %}
@@ -60,7 +60,7 @@
     {% if sidebar_show_all_applications %}
         <div class="mt-auto" x-data="{ openAllApplications: false }">
             <a class="cursor-pointer flex items-center px-6 py-3 text-sm dark:text-font-default-dark hover:text-primary-600 dark:hover:text-primary-500" x-on:click="openAllApplications = !openAllApplications">
-                <span class="material-symbols-outlined md-18 mr-3">
+                <span class="material-symbols-outlined md-18 mr-3" style="display:inline-flex;align-items:center;justify-content:center;line-height:1;white-space:nowrap;overflow:hidden;width:1.125rem;min-width:1.125rem;max-width:1.125rem;">
                     apps
                 </span>
 

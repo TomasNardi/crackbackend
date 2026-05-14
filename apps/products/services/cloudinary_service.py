@@ -168,6 +168,13 @@ def create_pending_image(*, draft_token: str, secure_url: str, order_index: int,
 
 
 def attach_images_to_product(*, product, draft_token: str, ordered_image_ids: list[int]) -> list[ProductImage]:
+    # Protección: Solo permitir ejecución desde el admin
+    import inspect
+    stack = inspect.stack()
+    allowed_callers = ["save_model", "ProductAdmin"]
+    if not any(caller.function in allowed_callers for caller in stack):
+        raise CloudinaryValidationError("Las imágenes solo pueden modificarse desde el panel admin.")
+
     if len(ordered_image_ids) > MAX_PRODUCT_IMAGES:
         raise CloudinaryValidationError("Máximo 3 imágenes por producto.")
 

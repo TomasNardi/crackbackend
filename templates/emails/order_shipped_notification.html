@@ -1,55 +1,75 @@
-<!DOCTYPE html>
-<html lang="es">
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml" lang="es" xml:lang="es">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Tu compra está en camino — {{ order.order_code }}</title>
+  <meta http-equiv="Content-Type" content="text/html; charset=UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="x-apple-disable-message-reformatting" />
+  <title>Tu compra ya fue despachada - {{ order.order_code }}</title>
 </head>
-<body style="margin:0;padding:24px;background:#f4f4f4;font-family:Arial,Helvetica,sans-serif;color:#1f2937;">
-  <table role="presentation" cellpadding="0" cellspacing="0" width="100%">
+<body style="margin:0;padding:0;background-color:#111111;-webkit-text-size-adjust:100%;-ms-text-size-adjust:100%;">
+
+  <div style="display:none;max-height:0;overflow:hidden;mso-hide:all;">
+    Tu pedido {{ order.order_code }} ya fue despachado. Tracking {{ tracking_code }}.
+    &nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;
+  </div>
+
+  <table border="0" cellpadding="0" cellspacing="0" width="100%" style="background-color:#111111;">
     <tr>
-      <td align="center">
-        <table role="presentation" cellpadding="0" cellspacing="0" width="600" style="max-width:600px;background:#ffffff;border-radius:12px;overflow:hidden;box-shadow:0 4px 20px rgba(0,0,0,.08);">
+      <td align="center" style="padding:40px 16px;">
+
+        <table border="0" cellpadding="0" cellspacing="0" width="600" style="max-width:600px;">
+
           <tr>
-            <td align="center" style="padding:32px 24px 18px 24px;background:#f8f8f8;">
-              <img src="{{ logo_url }}" alt="CRACK TCG" width="220" style="display:block;max-width:220px;width:100%;height:auto;border:0;">
+            <td align="center" style="background-color:#0d0d0d;padding:32px 48px 28px;border-radius:12px 12px 0 0;border-bottom:1px solid #2a2a2a;">
+              <img src="{{ brand_image_url }}" alt="CRACK TCG" width="170" style="display:block;width:170px;max-width:170px;height:auto;border:0;outline:none;text-decoration:none;margin:0 auto;" />
+              <p style="margin:10px 0 0;font-family:Arial,sans-serif;font-size:10px;letter-spacing:2px;color:#6f6f6f;text-transform:uppercase;">Pedido despachado</p>
             </td>
           </tr>
 
           <tr>
-            <td style="padding:28px 30px 10px 30px;text-align:center;">
-              <h1 style="margin:0;font-size:30px;line-height:1.2;color:#111827;">TU COMPRA ESTA EN CAMINO</h1>
-            </td>
-          </tr>
-
-          <tr>
-            <td style="padding:0 30px 18px 30px;text-align:center;">
-              <p style="margin:0;font-size:18px;line-height:1.45;color:#4b5563;">
-                Hola {{ order.customer_name }},
-              </p>
-            </td>
-          </tr>
-
-          <tr>
-            <td style="padding:0 30px 14px 30px;text-align:center;">
-              <p style="margin:0;font-size:16px;line-height:1.55;color:#374151;">
-                Tu compra ya fue despachada correctamente.
-              </p>
-            </td>
-          </tr>
-
-          <tr>
-            <td style="padding:0 30px 32px 30px;">
-              <table role="presentation" cellpadding="0" cellspacing="0" width="100%" style="border-collapse:separate;border-spacing:0 10px;">
+            <td align="center" style="background-color:#161616;padding:48px 48px 40px;border-bottom:1px solid #2a2a2a;">
+              <table border="0" cellpadding="0" cellspacing="0">
                 <tr>
-                  <td style="width:48%;background:#f9fafb;border:1px solid #e5e7eb;border-radius:8px;padding:14px 14px;">
-                    <p style="margin:0 0 6px 0;font-size:12px;letter-spacing:.06em;text-transform:uppercase;color:#6b7280;">Codigo de reserva</p>
-                    <p style="margin:0;font-size:20px;font-weight:700;color:#111827;">#{{ order.order_code }}</p>
+                  <td align="center" style="width:72px;height:72px;background-color:#C8972E;border-radius:50%;">
+                    <span style="font-family:Arial,sans-serif;font-size:32px;line-height:72px;display:block;color:#0d0d0d;font-weight:900;">&#128666;</span>
                   </td>
-                  <td style="width:4%;"></td>
-                  <td style="width:48%;background:#f9fafb;border:1px solid #e5e7eb;border-radius:8px;padding:14px 14px;">
-                    <p style="margin:0 0 6px 0;font-size:12px;letter-spacing:.06em;text-transform:uppercase;color:#6b7280;">Codigo de seguimiento</p>
-                    <p style="margin:0;font-size:20px;font-weight:700;color:#111827;">#{{ tracking_code }}</p>
+                </tr>
+              </table>
+
+              <h1 style="margin:24px 0 8px;font-family:Georgia,'Times New Roman',serif;font-size:28px;font-weight:700;color:#ffffff;letter-spacing:-0.5px;line-height:1.2;">
+                Tu compra esta en camino
+              </h1>
+              <p style="margin:0;font-family:Arial,sans-serif;font-size:15px;color:#aaaaaa;line-height:1.7;max-width:440px;">
+                Hola <strong style="color:#ffffff;">{{ order.customer_name }}</strong>, tu pedido fue despachado correctamente.
+                Ya podes seguirlo con el codigo que te dejamos abajo.
+              </p>
+            </td>
+          </tr>
+
+          <tr>
+            <td style="background-color:#121212;padding:24px 48px;border-bottom:1px solid #2a2a2a;">
+              <p style="margin:0 0 14px;font-family:Arial,sans-serif;font-size:10px;font-weight:700;color:#C8972E;text-transform:uppercase;letter-spacing:3px;">Datos de seguimiento</p>
+              <table border="0" cellpadding="0" cellspacing="0" width="100%">
+                <tr>
+                  <td style="padding:0 12px 12px 0;width:50%;">
+                    <p style="margin:0 0 2px;font-family:Arial,sans-serif;font-size:10px;color:#666666;text-transform:uppercase;letter-spacing:1px;">N. de orden</p>
+                    <p style="margin:0;font-family:Arial,sans-serif;font-size:15px;font-weight:700;color:#ffffff;">{{ order.order_code }}</p>
+                  </td>
+                  <td style="padding:0 0 12px 12px;width:50%;">
+                    <p style="margin:0 0 2px;font-family:Arial,sans-serif;font-size:10px;color:#666666;text-transform:uppercase;letter-spacing:1px;">Fecha de despacho</p>
+                    <p style="margin:0;font-family:Arial,sans-serif;font-size:13px;color:#ffffff;">{{ shipped_at }}</p>
+                  </td>
+                </tr>
+                <tr>
+                  <td colspan="2" style="padding:8px 0 0;">
+                    <table border="0" cellpadding="0" cellspacing="0" width="100%" style="background-color:#181818;border:1px solid #2a2a2a;border-radius:8px;">
+                      <tr>
+                        <td style="padding:14px 16px;">
+                          <p style="margin:0 0 4px;font-family:Arial,sans-serif;font-size:10px;color:#777777;text-transform:uppercase;letter-spacing:1.5px;">Codigo de seguimiento</p>
+                          <p style="margin:0;font-family:Georgia,'Times New Roman',serif;font-size:24px;font-weight:700;color:#C8972E;letter-spacing:0.5px;">{{ tracking_code }}</p>
+                        </td>
+                      </tr>
+                    </table>
                   </td>
                 </tr>
               </table>
@@ -57,15 +77,34 @@
           </tr>
 
           <tr>
-            <td style="padding:0 30px 32px 30px;text-align:center;">
-              <p style="margin:0;font-size:14px;line-height:1.6;color:#6b7280;">
-                Gracias por comprar con nosotros.
+            <td align="center" style="background-color:#161616;padding:32px 48px;border-bottom:1px solid #2a2a2a;">
+              <p style="margin:0 0 20px;font-family:Arial,sans-serif;font-size:14px;color:#888888;line-height:1.7;">
+                Si necesitas ayuda con el seguimiento o con la entrega, escribinos por WhatsApp.
+              </p>
+              <table border="0" cellpadding="0" cellspacing="0">
+                <tr>
+                  <td align="center" style="background-color:#C8972E;border-radius:6px;">
+                    <a href="{{ whatsapp_url }}" target="_blank" rel="noopener noreferrer" style="display:inline-block;padding:13px 32px;font-family:Arial,sans-serif;font-size:13px;font-weight:700;color:#0d0d0d;text-decoration:none;letter-spacing:0.5px;white-space:nowrap;">Contactar a CRACK TCG</a>
+                  </td>
+                </tr>
+              </table>
+            </td>
+          </tr>
+
+          <tr>
+            <td align="center" style="background-color:#0d0d0d;padding:28px 48px;border-radius:0 0 12px 12px;">
+              <p style="margin:12px 0 0;font-family:Arial,sans-serif;font-size:10px;color:#333333;line-height:1.6;">
+                Recibiste este email porque realizaste una compra en cracktcg.com<br>
+                Gracias por elegir CRACK TCG.
               </p>
             </td>
           </tr>
+
         </table>
+
       </td>
     </tr>
   </table>
+
 </body>
 </html>

@@ -25,19 +25,8 @@
           <!-- ══ HEADER ══ -->
           <tr>
             <td align="center" style="background-color:#0d0d0d;padding:32px 48px 28px;border-radius:12px 12px 0 0;border-bottom:1px solid #2a2a2a;">
-              <!-- Logo wordmark -->
-              <table border="0" cellpadding="0" cellspacing="0">
-                <tr>
-                  <td>
-                    <span style="font-family:Georgia,'Times New Roman',serif;font-size:32px;font-weight:900;letter-spacing:10px;color:#ffffff;text-transform:uppercase;line-height:1;">CRACK</span><span style="font-family:Georgia,'Times New Roman',serif;font-size:32px;font-weight:900;color:#C8972E;line-height:1;">.</span>
-                  </td>
-                </tr>
-                <tr>
-                  <td align="center" style="padding-top:6px;">
-                    <span style="font-family:Arial,sans-serif;font-size:9px;letter-spacing:5px;color:#555555;text-transform:uppercase;">TRADING CARDS</span>
-                  </td>
-                </tr>
-              </table>
+              <img src="{{ brand_image_url }}" alt="CRACK TCG" width="170" style="display:block;width:170px;max-width:170px;height:auto;border:0;outline:none;text-decoration:none;margin:0 auto;" />
+              <p style="margin:10px 0 0;font-family:Arial,sans-serif;font-size:10px;letter-spacing:2px;color:#6f6f6f;text-transform:uppercase;">Pedido confirmado</p>
             </td>
           </tr>
 
@@ -64,8 +53,41 @@
               </p>
               <p style="margin:20px 0 0;font-family:Arial,sans-serif;font-size:15px;color:#aaaaaa;line-height:1.7;max-width:420px;">
                 Hola <strong style="color:#ffffff;">{{ order.customer_name }}</strong>, recibimos tu pedido.<br>
-                Te contactaremos a la brevedad para coordinar el pago y el despacho.
+                {% if is_mercadopago_payment %}
+                  Tu pago se procesa por Mercado Pago. Te notificaremos cuando el envío haya sido despachado.
+                {% else %}
+                  Ya dejamos tu pedido en preparación. En breve te compartiremos los siguientes pasos para finalizar la compra.
+                {% endif %}
               </p>
+            </td>
+          </tr>
+
+          <!-- ══ RESUMEN DE COMPRA ══ -->
+          <tr>
+            <td style="background-color:#121212;padding:24px 48px;border-top:1px solid #2a2a2a;border-bottom:1px solid #2a2a2a;">
+              <p style="margin:0 0 14px;font-family:Arial,sans-serif;font-size:10px;font-weight:700;color:#C8972E;text-transform:uppercase;letter-spacing:3px;">Resumen de compra</p>
+              <table border="0" cellpadding="0" cellspacing="0" width="100%">
+                <tr>
+                  <td style="padding:0 12px 12px 0;width:50%;">
+                    <p style="margin:0 0 2px;font-family:Arial,sans-serif;font-size:10px;color:#666666;text-transform:uppercase;letter-spacing:1px;">Fecha</p>
+                    <p style="margin:0;font-family:Arial,sans-serif;font-size:13px;color:#ffffff;">{{ created_at }}</p>
+                  </td>
+                  <td style="padding:0 0 12px 12px;width:50%;">
+                    <p style="margin:0 0 2px;font-family:Arial,sans-serif;font-size:10px;color:#666666;text-transform:uppercase;letter-spacing:1px;">Estado de pago</p>
+                    <p style="margin:0;font-family:Arial,sans-serif;font-size:13px;color:#ffffff;">{{ payment_status_display }}</p>
+                  </td>
+                </tr>
+                <tr>
+                  <td style="padding:0 12px 0 0;width:50%;">
+                    <p style="margin:0 0 2px;font-family:Arial,sans-serif;font-size:10px;color:#666666;text-transform:uppercase;letter-spacing:1px;">Método de pago</p>
+                    <p style="margin:0;font-family:Arial,sans-serif;font-size:13px;color:#ffffff;">{{ payment_method_display }}</p>
+                  </td>
+                  <td style="padding:0 0 0 12px;width:50%;">
+                    <p style="margin:0 0 2px;font-family:Arial,sans-serif;font-size:10px;color:#666666;text-transform:uppercase;letter-spacing:1px;">Método de envío</p>
+                    <p style="margin:0;font-family:Arial,sans-serif;font-size:13px;color:#ffffff;">{{ shipping_method_label }}</p>
+                  </td>
+                </tr>
+              </table>
             </td>
           </tr>
 
@@ -73,6 +95,7 @@
           <tr>
             <td style="background-color:#0f0f0f;padding:32px 48px;border-top:1px solid #2a2a2a;border-bottom:1px solid #2a2a2a;">
               <p style="margin:0 0 20px;font-family:Arial,sans-serif;font-size:10px;font-weight:700;color:#C8972E;text-transform:uppercase;letter-spacing:3px;">Próximos pasos</p>
+              {% if is_cash_payment %}
               <table border="0" cellpadding="0" cellspacing="0" width="100%">
                 <!-- Paso 1 -->
                 <tr>
@@ -123,6 +146,17 @@
                   </td>
                 </tr>
               </table>
+              {% else %}
+              <table border="0" cellpadding="0" cellspacing="0" width="100%" style="background-color:#161616;border:1px solid #2a2a2a;border-radius:8px;">
+                <tr>
+                  <td style="padding:16px 18px;">
+                    <p style="margin:0;font-family:Arial,sans-serif;font-size:13px;color:#d0d0d0;line-height:1.6;">
+                      Tu pedido ya fue recibido correctamente. <strong style="color:#ffffff;">Te notificaremos cuando el envío haya sido despachado.</strong>
+                    </p>
+                  </td>
+                </tr>
+              </table>
+              {% endif %}
             </td>
           </tr>
 
@@ -138,7 +172,13 @@
                 <tr>
                   <td style="padding:0 0 12px;">
                     <p style="margin:0 0 4px;font-family:Arial,sans-serif;font-size:11px;font-weight:700;color:#888888;text-transform:uppercase;letter-spacing:1px;">Método</p>
-                    <p style="margin:0;font-family:Arial,sans-serif;font-size:13px;color:#ffffff;">{{ shipping_method_label }} · {{ shipping_price }}</p>
+                    <p style="margin:0;font-family:Arial,sans-serif;font-size:13px;color:#ffffff;">{{ shipping_method_label }} · {{ delivery_mode_label }}</p>
+                  </td>
+                </tr>
+                <tr>
+                  <td style="padding:0 0 12px;">
+                    <p style="margin:0 0 4px;font-family:Arial,sans-serif;font-size:11px;font-weight:700;color:#888888;text-transform:uppercase;letter-spacing:1px;">Monto de envío</p>
+                    <p style="margin:0;font-family:Arial,sans-serif;font-size:13px;color:#ffffff;">{{ shipping_cost_display }}</p>
                   </td>
                 </tr>
               </table>
@@ -171,7 +211,7 @@
                 <tr>
                   <td>
                     <p style="margin:0;font-family:Arial,sans-serif;font-size:11px;color:#fbbf24;line-height:1.5;">
-                      <strong>&#9432; Pago en efectivo:</strong> Recibirás un email con los detalles de cómo pagar. Una vez acreditado el pago, procederemos a despachar tu orden en 24–72 hs hábiles.
+                      <strong>&#9432; Pago manual:</strong> Podés abonar por Efectivo, Transferencia o Crypto. Te enviaremos los datos para completar el pago y luego avanzar con el despacho.
                     </p>
                   </td>
                 </tr>
@@ -196,20 +236,58 @@
                 <!-- Items -->
                 {% for item in items %}
                 <tr style="border-bottom:1px solid #1e1e1e;">
-                  <td style="padding:14px 0;font-family:Arial,sans-serif;font-size:13px;color:#dddddd;line-height:1.4;">{{ item.name }}</td>
-                  <td align="center" style="padding:14px 0;font-family:Arial,sans-serif;font-size:13px;color:#666666;">x{{ item.qty }}</td>
-                  <td align="right" style="padding:14px 0;font-family:Arial,sans-serif;font-size:13px;font-weight:600;color:#ffffff;white-space:nowrap;">{{ item.price }}</td>
+                  <td style="padding:14px 0 4px 0;font-family:Arial,sans-serif;font-size:13px;color:#dddddd;line-height:1.4;">
+                    {{ item.name }}
+                    {% if item.discount_percent %}<br>
+                      <span style="font-size:11px;color:#4ade80;font-weight:700;">Descuento: {{ item.discount_percent }}%</span>
+                    {% endif %}
+                  </td>
+                  <td align="center" style="padding:14px 0 4px 0;font-family:Arial,sans-serif;font-size:13px;color:#666666;">x{{ item.qty }}</td>
+                  <td align="right" style="padding:14px 0 4px 0;font-family:Arial,sans-serif;font-size:13px;font-weight:600;color:#ffffff;white-space:nowrap;">
+                    {% if item.price_before %}
+                      <span style="text-decoration:line-through;color:#888888;font-size:12px;">{{ item.price_before }}</span><br>
+                    {% endif %}
+                    <span style="color:#fff;font-size:15px;font-weight:700;">{{ item.price }}</span>
+                  </td>
                 </tr>
                 {% endfor %}
 
                 <!-- Descuento (opcional) -->
-                {% if discount_amount %}
+                {% if coupon_discount_amount %}
                 <tr style="border-bottom:1px solid #1e1e1e;">
                   <td colspan="2" style="padding:12px 0;font-family:Arial,sans-serif;font-size:12px;color:#4ade80;">
-                    Descuento aplicado
-                    <span style="background-color:#052e16;color:#4ade80;font-size:10px;font-weight:700;padding:2px 8px;border-radius:4px;margin-left:8px;letter-spacing:1px;">{{ order.discount_code }}</span>
+                    {{ coupon_discount_code }}
                   </td>
-                  <td align="right" style="padding:12px 0;font-family:Arial,sans-serif;font-size:13px;font-weight:600;color:#4ade80;white-space:nowrap;">&#8722;{{ discount_amount }}</td>
+                  <td align="right" style="padding:12px 0;font-family:Arial,sans-serif;font-size:13px;font-weight:600;color:#4ade80;white-space:nowrap;">&#8722;{{ coupon_discount_amount }}</td>
+                </tr>
+                {% endif %}
+
+                {% if cash_discount_amount %}
+                <tr style="border-bottom:1px solid #1e1e1e;">
+                  <td colspan="2" style="padding:12px 0;font-family:Arial,sans-serif;font-size:12px;color:#4ade80;">
+                    Descuento (Efectivo/Transferencia/Crypto)
+                    {% if cash_discount_percent %}
+                    <span style="background-color:#052e16;color:#4ade80;font-size:10px;font-weight:700;padding:2px 8px;border-radius:4px;margin-left:8px;letter-spacing:1px;">{{ cash_discount_percent }}</span>
+                    {% endif %}
+                  </td>
+                  <td align="right" style="padding:12px 0;font-family:Arial,sans-serif;font-size:13px;font-weight:600;color:#4ade80;white-space:nowrap;">&#8722;{{ cash_discount_amount }}</td>
+                </tr>
+                {% endif %}
+
+                <tr style="border-bottom:1px solid #1e1e1e;">
+                  <td colspan="2" style="padding:12px 0;font-family:Arial,sans-serif;font-size:12px;color:#dddddd;">Costo de envío</td>
+                  <td align="right" style="padding:12px 0;font-family:Arial,sans-serif;font-size:13px;font-weight:600;color:#ffffff;white-space:nowrap;">{{ shipping_cost_display }}</td>
+                </tr>
+
+                <tr style="border-bottom:1px solid #1e1e1e;">
+                  <td colspan="2" style="padding:12px 0;font-family:Arial,sans-serif;font-size:12px;color:#dddddd;">Estado de pago</td>
+                  <td align="right" style="padding:12px 0;font-family:Arial,sans-serif;font-size:13px;font-weight:600;color:#ffffff;white-space:nowrap;">{{ payment_status_display }}</td>
+                </tr>
+
+                {% if is_mercadopago_payment and mp_payment_id %}
+                <tr style="border-bottom:1px solid #1e1e1e;">
+                  <td colspan="2" style="padding:12px 0;font-family:Arial,sans-serif;font-size:12px;color:#dddddd;">Pago MP</td>
+                  <td align="right" style="padding:12px 0;font-family:Arial,sans-serif;font-size:13px;font-weight:600;color:#ffffff;white-space:nowrap;">#{{ mp_payment_id }}</td>
                 </tr>
                 {% endif %}
 
@@ -231,7 +309,7 @@
               <table border="0" cellpadding="0" cellspacing="0">
                 <tr>
                   <td align="center" style="background-color:#C8972E;border-radius:6px;">
-                    <a href="mailto:cracktcg@gmail.com" style="display:inline-block;padding:13px 32px;font-family:Arial,sans-serif;font-size:13px;font-weight:700;color:#0d0d0d;text-decoration:none;letter-spacing:0.5px;white-space:nowrap;">Contactar a CRACK TCG</a>
+                    <a href="{{ whatsapp_url }}" target="_blank" rel="noopener noreferrer" style="display:inline-block;padding:13px 32px;font-family:Arial,sans-serif;font-size:13px;font-weight:700;color:#0d0d0d;text-decoration:none;letter-spacing:0.5px;white-space:nowrap;">Contactar a CRACK TCG</a>
                   </td>
                 </tr>
               </table>
@@ -241,16 +319,10 @@
           <!-- ══ FOOTER ══ -->
           <tr>
             <td align="center" style="background-color:#0d0d0d;padding:28px 48px;border-radius:0 0 12px 12px;">
-              <p style="margin:0 0 4px;font-family:Georgia,'Times New Roman',serif;font-size:16px;font-weight:700;letter-spacing:6px;color:#333333;text-transform:uppercase;">CRACK</p>
-              <p style="margin:0 0 16px;font-family:Arial,sans-serif;font-size:10px;letter-spacing:3px;color:#333333;text-transform:uppercase;">Trading Cards · Buenos Aires</p>
-              <p style="margin:0;font-family:Arial,sans-serif;font-size:11px;color:#444444;line-height:1.8;">
-                <a href="mailto:cracktcg@gmail.com" style="color:#555555;text-decoration:none;">cracktcg@gmail.com</a>
-                &nbsp;&middot;&nbsp;
-                <a href="https://www.instagram.com/cracktcg" style="color:#555555;text-decoration:none;">@cracktcg</a>
-              </p>
+          
               <p style="margin:12px 0 0;font-family:Arial,sans-serif;font-size:10px;color:#333333;line-height:1.6;">
-                Recibiste este email porque realizaste una compra en crack-tcg.com.ar.<br>
-                Este es un mensaje transaccional y no puede darse de baja.
+                Recibiste este email porque realizaste una compra en cracktcg.com<br>
+                Gracias por elegir CRACK TCG.
               </p>
             </td>
           </tr>
