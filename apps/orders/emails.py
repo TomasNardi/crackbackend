@@ -9,7 +9,7 @@ Remitente:
   - Sandbox:    onboarding@resend.dev  (sin dominio verificado)
   - Producción: RESEND_FROM_EMAIL en variables de entorno de Render
 
-Destinatario tienda: STORE_EMAIL (siempre recibe copia de cada orden)
+Destinatarios internos: STORE_EMAILS (cracktcg@gmail.com + admins, reciben copia de cada orden)
 """
 
 import logging
@@ -21,8 +21,12 @@ import resend
 
 logger = logging.getLogger(__name__)
 
-# Email fijo de la tienda — recibe copia de TODAS las órdenes
-STORE_EMAIL = "cracktcg@gmail.com"
+# Emails internos — reciben copia de TODAS las órdenes
+STORE_EMAILS = [
+    "cracktcg@gmail.com",
+    "martin@martingrobas.com",
+    "tomas.nardi@hotmail.com",
+]
 
 # Remitente — en sandbox usá onboarding@resend.dev; en producción configurá RESEND_FROM_EMAIL
 FROM_EMAIL = getattr(settings, "RESEND_FROM_EMAIL", "onboarding@resend.dev")
@@ -258,7 +262,7 @@ def _build_order_email_context(order) -> dict:
         "paqar_tracking_number": getattr(order, "paqar_tracking_number", "") or None,
         "paqar_error": getattr(order, "paqar_error", "") or None,
         "brand_image_url": f"{site_url}/brand/mantenimientofoto.png",
-        "whatsapp_url": "https://wa.me/541150588131",
+        "whatsapp_url": f"{site_url}/wa",
         "discount_code_display": _format_discount_code(order),
     }
 
@@ -325,7 +329,7 @@ def send_new_order_notification(order_id: int) -> None:
     html = render_to_string("emails/new_order_notification.html", context)
 
     _send(
-        to=[STORE_EMAIL],
+        to=list(STORE_EMAILS),
         subject=f"🛒 Nueva orden {order.order_code} — {order.customer_name} (${order.total:,.0f})",
         html=html,
     )
@@ -380,7 +384,7 @@ def send_shipment_notification(order_id: int, tracking_code: str) -> None:
         "order": order,
         "tracking_code": tracking_code,
         "brand_image_url": f"{site_url}/brand/mantenimientofoto.png",
-        "whatsapp_url": "https://wa.me/541150588131",
+        "whatsapp_url": f"{site_url}/wa",
         "shipped_at": timezone.localtime(timezone.now()).strftime("%d/%m/%Y %H:%M"),
     }
 

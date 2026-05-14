@@ -314,9 +314,9 @@ GLOBAL_API_RATELIMIT_EXEMPT_PATHS = [
 # ---------------------------------------------------------------------------
 RESEND_API_KEY = os.environ.get("RESEND_API_KEY", "re_7nKA3kPy_2qFTu2Kwa3iyMVXrWgXbctNd")
 
-# Email de desarrollo: cracktcg@gmail.com
-# En producción, cambia a un dominio verificado en Resend (ej: noreply@cracktcg.com)
-RESEND_FROM_EMAIL = os.environ.get("RESEND_FROM_EMAIL", "cracktcg@gmail.com")
+# Remitente productivo: tienda@cracktcg.com (dominio verificado en Resend, MX/SPF/DKIM en Namecheap).
+# El friendly name "CRACK TCG" mejora entregabilidad y reconocimiento de marca.
+RESEND_FROM_EMAIL = os.environ.get("RESEND_FROM_EMAIL", "CRACK TCG <tienda@cracktcg.com>")
 
 # ---------------------------------------------------------------------------
 # MercadoPago

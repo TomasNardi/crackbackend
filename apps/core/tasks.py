@@ -27,6 +27,18 @@ def build_campaign_html(campaign, recipient_email):
     )
 
 
+def _resolve_site_url() -> str:
+    frontend_url = str(getattr(settings, "FRONTEND_URL", "") or "").strip()
+    if not frontend_url.startswith("http"):
+        frontend_url = str(getattr(settings, "SITE_URL", "https://cracktcg.com") or "").strip()
+    return (frontend_url or "https://cracktcg.com").rstrip("/")
+
+
+def build_unsubscribe_url(recipient_email: str) -> str:
+    token = make_unsubscribe_token(recipient_email)
+    return f"{_resolve_site_url()}/desuscribirse?token={quote(token)}"
+
+
 def _build_preview_html(asunto, contenido, imagen_url, recipient_email="suscriptor@ejemplo.com"):
     """
     Genera el HTML completo del email tal como lo recibirá el suscriptor.
@@ -44,14 +56,9 @@ def _build_preview_html(asunto, contenido, imagen_url, recipient_email="suscript
           </td>
         </tr>"""
 
-    from django.conf import settings as django_settings
-    frontend_url = str(getattr(django_settings, "FRONTEND_URL", "") or "").strip()
-    if not frontend_url.startswith("http"):
-      frontend_url = str(getattr(django_settings, "SITE_URL", "https://cracktcg.com") or "").strip()
-    site_url = frontend_url or "https://cracktcg.com"
+    site_url = _resolve_site_url()
     from_name = "CRACK TCG"
-    unsubscribe_token = make_unsubscribe_token(recipient_email)
-    unsubscribe_url = f"{site_url.rstrip('/')}/desuscribirse?token={quote(unsubscribe_token)}"
+    unsubscribe_url = build_unsubscribe_url(recipient_email)
 
     return f"""<!DOCTYPE html>
 <html lang="es">
@@ -216,6 +223,7 @@ def send_email_campaign(campaign_id):
                 imagen_url=campaign.imagen_url or "",
                 recipient_email=email,
             )
+            unsubscribe_url = build_unsubscribe_url(email)
 
             response = resend_lib.Emails.send({
                 "from": from_email,
@@ -225,6 +233,7 @@ def send_email_campaign(campaign_id):
                 "headers": {
                     "Precedence": "bulk",
                     "X-Entity-Ref-ID": f"campaign-{campaign_id}-{email}",
+                    "List-Unsubscribe": f"<{unsubscribe_url}>, <mailto:tienda@cracktcg.com?subject=Unsubscribe>",
                 },
             })
 
@@ -257,6 +266,12 @@ def send_email_campaign(campaign_id):
                         "to": [email],
                         "subject": campaign.asunto,
                         "html": html_content,
+                        "headers": {
+                            "Precedence": "bulk",
+                            "X-Entity-Ref-ID": f"campaign-{campaign_id}-{email}",
+                            "List-Unsubscribe": f"<{unsubscribe_url}>, <mailto:tienda@cracktcg.com?subject=Unsubscribe>",
+                            "List-Unsubscribe-Post": "List-Unsubscribe=One-Click",
+                        },
                     })
                     if response.get("id"):
                         exitosos += 1
