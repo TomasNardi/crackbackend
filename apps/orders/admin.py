@@ -7,7 +7,10 @@ from django.urls import reverse, path
 from django.http import HttpResponse, HttpResponseRedirect
 from django.utils.html import format_html
 from django.contrib import messages
+import logging
 from unfold.admin import ModelAdmin, TabularInline
+
+logger = logging.getLogger(__name__)
 from .models import (
     Order,
     OrderItem,
@@ -290,6 +293,11 @@ class OrderAdmin(ModelAdmin):
             order.status = Order.STATUS_PAID
             order.save(update_fields=["status", "updated_at"])
             self.message_user(request, f"Orden #{order.order_code} marcada como pagada.", level=messages.SUCCESS)
+            try:
+                from .emails import send_payment_confirmed_email
+                send_payment_confirmed_email(order.id)
+            except Exception as exc:
+                logger.exception("Error enviando email de pago confirmado para orden %s: %s", order.order_code, exc)
 
         return HttpResponseRedirect(request.META.get("HTTP_REFERER") or reverse("admin:orders_order_changelist"))
 
@@ -339,11 +347,18 @@ class OrderAdmin(ModelAdmin):
             payment_method=Order.PAYMENT_CASH,
             status=Order.STATUS_PENDING,
         )
+        order_ids = list(pending_cash.values_list("id", flat=True))
         updated = pending_cash.update(status=Order.STATUS_PAID, updated_at=timezone.now())
         skipped = queryset.count() - updated
 
         if updated:
             self.message_user(request, f"{updated} orden(es) en efectivo marcadas como pagadas.", level=messages.SUCCESS)
+            from .emails import send_payment_confirmed_email
+            for order_id in order_ids:
+                try:
+                    send_payment_confirmed_email(order_id)
+                except Exception as exc:
+                    logger.exception("Error enviando email de pago confirmado para orden id=%s: %s", order_id, exc)
         if skipped:
             self.message_user(
                 request,

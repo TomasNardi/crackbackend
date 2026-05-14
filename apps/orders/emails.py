@@ -353,6 +353,22 @@ def send_refund_notification(order_id: int) -> None:
     )
 
 
+def send_payment_confirmed_email(order_id: int) -> None:
+    """Email al cliente cuando el admin confirma manualmente el pago de su orden."""
+    from .models import Order
+
+    order = Order.objects.prefetch_related("items").get(id=order_id)
+    context = _build_order_email_context(order)
+
+    html = render_to_string("emails/order_payment_confirmed.html", context)
+
+    _send(
+        to=[order.customer_email],
+        subject=f"✅ Pago confirmado — Pedido {order.order_code} — CRACK TCG",
+        html=html,
+    )
+
+
 def send_shipment_notification(order_id: int, tracking_code: str) -> None:
     """Email al cliente cuando su orden fue despachada."""
     from .models import Order

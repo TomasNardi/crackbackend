@@ -1,3 +1,4 @@
+import time
 class Mobile:
     SIZES = ["s", "m", "l"]
 
@@ -38,6 +39,7 @@ class Order(Mobile):
         super().__init__(brand, size)
 
         self.method = method
+        self.Validation
 
     @property
     def method(self):
@@ -49,6 +51,10 @@ class Order(Mobile):
             self.__method = value
         else:
             raise Exception('Invalid payment info')
+    
+    def Validation(self):
+        time.sleep(3)
+        print('Payment validation')
 
 
 usu1 = Order('Samsung', "m", "Credit Card")
