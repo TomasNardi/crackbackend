@@ -1,21 +1,46 @@
-class User():
-    USER_ID = 0 
-    def __init__(self, name , lastname, dni , email):
-        self.name = name
-        self.lasname =  lastname
-        self.dni = dni
-        self.email = email
-        User.USER_ID =+ 1 
-        self.user_id = User.USER_ID
-        
-    @property
-    def name(self):
-        return self._name
-    
-    @name.setter
-    def name(self, value):
-        self._name = value
+# IMPLEMENTACIONES
+# Cómo se envía
 
-usu1 = User('tomi','nardi','39558339','tomas.nardi@hotmail.com')
+class EmailSender:
+    def enviar(self, mensaje):
+        print(f"Enviando EMAIL: {mensaje}")
 
-print(f"{usu1.name} , {usu1.user_id}")
+
+class WhatsAppSender:
+    def enviar(self, mensaje):
+        print(f"Enviando WHATSAPP: {mensaje}")
+
+
+# ABSTRACCIÓN
+# Qué tipo de notificación es
+
+class Notificacion:
+
+    def __init__(self, sender):
+        self.sender = sender
+
+    def enviar(self, mensaje):
+        self.sender.enviar(mensaje)
+
+
+# ABSTRACCIÓN EXTENDIDA
+
+class NotificacionUrgente(Notificacion):
+
+    def enviar(self, mensaje):
+        mensaje = "URGENTE -> " + mensaje
+        self.sender.enviar(mensaje)
+
+
+# USO
+
+email = EmailSender()
+whatsapp = WhatsAppSender()
+
+n1 = Notificacion(email)
+n1.enviar("Hola Tomas")
+
+print()
+
+n2 = NotificacionUrgente(whatsapp)
+n2.enviar("Servidor caido")

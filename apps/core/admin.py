@@ -383,6 +383,7 @@ class NotificationRecipientAdmin(ModelAdmin):
 @admin.register(EmailDelivery)
 class EmailDeliveryAdmin(ModelAdmin):
     _RESERVATION_CODE_RE = re.compile(r"\b([A-Z0-9]{6,8})\b")
+    _ORDER_ENTITY_REF_RE = re.compile(r"^order-([A-Z0-9]{6,8})(?:-([a-z0-9_\-]+))?$", re.IGNORECASE)
 
     list_display = (
         "last_received_at",
@@ -512,13 +513,47 @@ class EmailDeliveryAdmin(ModelAdmin):
                 return candidate
         return ""
 
+    def _extract_reservation_code_from_payload(self, obj):
+        payload = obj.last_payload or {}
+        if not isinstance(payload, dict):
+            return ""
+
+        data = payload.get("data") or {}
+        if not isinstance(data, dict):
+            return ""
+
+        headers = data.get("headers") or {}
+        if not isinstance(headers, dict):
+            return ""
+
+        entity_ref = str(headers.get("X-Entity-Ref-ID") or headers.get("x-entity-ref-id") or "").strip()
+        if not entity_ref:
+            return ""
+
+        match = self._ORDER_ENTITY_REF_RE.match(entity_ref)
+        if not match:
+            return ""
+
+        code = (match.group(1) or "").upper()
+        return code if code in self._get_orders_by_code() else ""
+
     def _resolve_order_for_delivery(self, obj):
         if hasattr(obj, "_resolved_order_cache"):
             return obj._resolved_order_cache
 
-        reservation_code = (obj.order_code or "").upper() or self._extract_reservation_code(obj.subject)
-        order = None
-        if reservation_code:
+        order = getattr(obj, "order", None)
+        reservation_code = (obj.order_code or "").upper()
+
+        if order and not reservation_code:
+            reservation_code = (order.order_code or "").upper()
+
+        if not reservation_code:
+            reservation_code = self._extract_reservation_code(obj.subject)
+
+        if not reservation_code:
+            reservation_code = self._extract_reservation_code_from_payload(obj)
+
+        if not order and reservation_code:
             order = self._get_orders_by_code().get(reservation_code)
 
         obj._resolved_order_cache = order
@@ -570,7 +605,7 @@ class EmailDeliveryAdmin(ModelAdmin):
             .exclude(to_email__in=internal_emails)
             .exclude(flow_kind="campaign")
             .exclude(subject__icontains="nueva orden")
-            .filter(Q(order_code__gt="") | purchase_subject_filter)
+            .filter(Q(order_id__isnull=False) | Q(order_code__gt="") | purchase_subject_filter)
         )
 
         non_campaign_ids = [

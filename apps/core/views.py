@@ -224,6 +224,32 @@ def _extract_order_code_from_subject(subject: str) -> str:
     return ""
 
 
+def _extract_order_code_from_entity_ref(entity_ref: str) -> tuple[str, str]:
+    """
+    Devuelve (order_code, flow_kind) a partir de X-Entity-Ref-ID.
+    Formatos soportados:
+    - order-ABC123
+    - order-ABC123-confirmation
+    - order-ABC123-internal_notification
+    """
+    value = (entity_ref or "").strip()
+    if not value:
+        return "", ""
+
+    match = _ORDER_ENTITY_REF_RE.match(value)
+    if match:
+        return (match.group(1) or "").upper(), (match.group(2) or "").lower()
+
+    parts = value.split("-")
+    if len(parts) >= 2 and parts[0].lower() == "order":
+        code = (parts[1] or "").strip().upper()
+        if re.fullmatch(r"[A-Z0-9]{6,8}", code):
+            flow_kind = "_".join(part.strip().lower() for part in parts[2:] if part.strip())
+            return code, flow_kind
+
+    return "", ""
+
+
 class ResendWebhookView(APIView):
     """POST /api/v1/webhooks/resend/ — recibe eventos firmados de Resend (Svix)."""
 
@@ -283,10 +309,7 @@ class ResendWebhookView(APIView):
             if entity_ref.lower().startswith("campaign-"):
                 flow_kind = "campaign"
             else:
-                match = _ORDER_ENTITY_REF_RE.match(entity_ref)
-                if match:
-                    order_code = (match.group(1) or "").upper()
-                    flow_kind = (match.group(2) or "").lower()
+                order_code, flow_kind = _extract_order_code_from_entity_ref(entity_ref)
 
         if not order_code:
             order_code = _extract_order_code_from_subject(subject)
@@ -298,6 +321,9 @@ class ResendWebhookView(APIView):
             order_obj = Order.objects.filter(order_code__iexact=order_code).only("id", "order_code").first()
             if not order_obj:
                 order_code = ""
+            else:
+                # Normaliza el código según la orden encontrada para trazabilidad consistente.
+                order_code = order_obj.order_code
 
         for recipient in recipients:
             delivery, _ = EmailDelivery.objects.get_or_create(

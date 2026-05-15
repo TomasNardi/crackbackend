@@ -295,3 +295,104 @@ body.app-auth.model-group.change-form .form-row.field-permissions .selector-chos
     min-height: 280px;
   }
 }
+
+/* ── Orders / Shipping changelist UX (desktop + notebook) ── */
+body.app-orders.model-order.change-list [class*="overflow-x-auto"],
+body.app-orders.model-shippingorder.change-list [class*="overflow-x-auto"] {
+  border: 1px solid #e8e4dd;
+  border-radius: 14px;
+  background: #fff;
+  box-shadow: 0 8px 24px rgba(17, 24, 39, 0.04);
+}
+
+body.app-orders.model-order.change-list table,
+body.app-orders.model-shippingorder.change-list table {
+  min-width: 1220px;
+  border-collapse: separate;
+  border-spacing: 0;
+}
+
+body.app-orders.model-order.change-list thead th,
+body.app-orders.model-shippingorder.change-list thead th {
+  position: sticky;
+  top: 0;
+  z-index: 3;
+  background: #f9f7f3 !important;
+  color: #4b5563 !important;
+  font-size: 12px;
+  letter-spacing: 0.02em;
+  text-transform: none;
+  border-bottom: 1px solid #e8e4dd !important;
+}
+
+body.app-orders.model-order.change-list tbody td,
+body.app-orders.model-shippingorder.change-list tbody td {
+  vertical-align: middle;
+  padding-top: 12px !important;
+  padding-bottom: 12px !important;
+  border-bottom-color: #f0ece4 !important;
+}
+
+body.app-orders.model-order.change-list tbody td:nth-child(2),
+body.app-orders.model-order.change-list tbody td:nth-child(5),
+body.app-orders.model-order.change-list tbody td:nth-child(6),
+body.app-orders.model-order.change-list tbody td:nth-child(7),
+body.app-orders.model-order.change-list tbody td:nth-child(8),
+body.app-orders.model-order.change-list tbody td:nth-child(9),
+body.app-orders.model-order.change-list tbody td:nth-child(10),
+body.app-orders.model-order.change-list tbody td:nth-child(11) {
+  white-space: nowrap;
+}
+
+body.app-orders.model-order.change-list tbody td:nth-child(3),
+body.app-orders.model-order.change-list tbody td:nth-child(4) {
+  max-width: 190px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+body.app-orders.model-order.change-list tbody td:nth-child(2) a {
+  font-weight: 700;
+  letter-spacing: 0.01em;
+}
+
+body.app-orders.model-order.change-list tbody td:nth-child(7) a,
+body.app-orders.model-order.change-list tbody td:nth-child(9) a,
+body.app-orders.model-order.change-list tbody td:nth-child(10) a,
+body.app-orders.model-order.change-list tbody td:nth-child(7) span,
+body.app-orders.model-order.change-list tbody td:nth-child(9) span,
+body.app-orders.model-order.change-list tbody td:nth-child(10) span {
+  min-width: 110px;
+  text-align: center;
+  border-radius: 8px !important;
+  line-height: 1.25;
+}
+
+body.app-orders.model-order.change-list tbody tr:hover td,
+body.app-orders.model-shippingorder.change-list tbody tr:hover td {
+  background-color: rgba(200, 151, 46, 0.08) !important;
+}
+
+@media (max-width: 1440px) {
+  body.app-orders.model-order.change-list table,
+  body.app-orders.model-shippingorder.change-list table {
+    min-width: 1120px;
+  }
+
+  body.app-orders.model-order.change-list tbody td,
+  body.app-orders.model-order.change-list thead th {
+    font-size: 13px;
+  }
+}
+
+@media (max-width: 1200px) {
+  body.app-orders.model-order.change-list table,
+  body.app-orders.model-shippingorder.change-list table {
+    min-width: 1020px;
+  }
+
+  body.app-orders.model-order.change-list tbody td:nth-child(3),
+  body.app-orders.model-order.change-list tbody td:nth-child(4) {
+    max-width: 150px;
+  }
+}
