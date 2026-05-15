@@ -8,6 +8,7 @@ import hashlib
 import hmac
 import json
 import logging
+import re
 import time
 from datetime import datetime, timezone as dt_timezone
 
@@ -155,6 +156,8 @@ class SolicitudVentaCreateView(APIView):
 # ─────────────────────────────────────────────────────────────────────────────
 
 _SVIX_MAX_AGE_SECONDS = 5 * 60  # rechazar payloads firmados hace > 5 min (anti-replay)
+_ORDER_ENTITY_REF_RE = re.compile(r"^order-([A-Z0-9]{6,8})(?:-([a-z0-9_]+))?$", re.IGNORECASE)
+_ORDER_CODE_IN_SUBJECT_RE = re.compile(r"\b([A-Z0-9]{6,8})\b")
 
 
 def _decode_svix_secret(secret: str) -> bytes | None:
@@ -203,6 +206,22 @@ def _parse_event_timestamp(value):
         return datetime.fromisoformat(value.replace("Z", "+00:00")).astimezone(dt_timezone.utc)
     except ValueError:
         return None
+
+
+def _extract_entity_ref(headers) -> str:
+    if not isinstance(headers, dict):
+        return ""
+    for key, value in headers.items():
+        if str(key).lower() == "x-entity-ref-id":
+            return str(value or "").strip()
+    return ""
+
+
+def _extract_order_code_from_subject(subject: str) -> str:
+    subject_value = (subject or "").upper()
+    for candidate in _ORDER_CODE_IN_SUBJECT_RE.findall(subject_value):
+        return candidate
+    return ""
 
 
 class ResendWebhookView(APIView):
@@ -255,6 +274,30 @@ class ResendWebhookView(APIView):
         event_at = _parse_event_timestamp(payload.get("created_at") or data.get("created_at"))
         from_email = str(data.get("from") or "")[:255]
         subject = str(data.get("subject") or "")[:512]
+        headers = data.get("headers") or {}
+        entity_ref = _extract_entity_ref(headers)
+
+        order_code = ""
+        flow_kind = ""
+        if entity_ref:
+            if entity_ref.lower().startswith("campaign-"):
+                flow_kind = "campaign"
+            else:
+                match = _ORDER_ENTITY_REF_RE.match(entity_ref)
+                if match:
+                    order_code = (match.group(1) or "").upper()
+                    flow_kind = (match.group(2) or "").lower()
+
+        if not order_code:
+            order_code = _extract_order_code_from_subject(subject)
+
+        order_obj = None
+        if order_code:
+            from apps.orders.models import Order
+
+            order_obj = Order.objects.filter(order_code__iexact=order_code).only("id", "order_code").first()
+            if not order_obj:
+                order_code = ""
 
         for recipient in recipients:
             delivery, _ = EmailDelivery.objects.get_or_create(
@@ -266,13 +309,25 @@ class ResendWebhookView(APIView):
                 },
             )
             # Completar metadatos si vinieron vacíos en el primer evento.
+            metadata_changed = False
             if from_email and not delivery.from_email:
                 delivery.from_email = from_email
+                metadata_changed = True
             if subject and not delivery.subject:
                 delivery.subject = subject
+                metadata_changed = True
+            if order_code and delivery.order_code != order_code:
+                delivery.order_code = order_code
+                metadata_changed = True
+            if flow_kind and delivery.flow_kind != flow_kind:
+                delivery.flow_kind = flow_kind
+                metadata_changed = True
+            if order_obj and delivery.order_id != order_obj.id:
+                delivery.order = order_obj
+                metadata_changed = True
 
             changed = delivery.apply_event(event_type, event_at, payload, svix_id)
-            if changed:
+            if changed or metadata_changed:
                 delivery.save()
 
         return Response(status=status.HTTP_200_OK)

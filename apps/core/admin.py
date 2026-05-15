@@ -382,23 +382,25 @@ class NotificationRecipientAdmin(ModelAdmin):
 
 @admin.register(EmailDelivery)
 class EmailDeliveryAdmin(ModelAdmin):
-    _RESERVATION_CODE_RE = re.compile(r"\b([ABCDEFGHJKMNPQRSTUVWXYZ23456789]{6,8})\b")
+    _RESERVATION_CODE_RE = re.compile(r"\b([A-Z0-9]{6,8})\b")
 
     list_display = (
         "last_received_at",
         "status_badge",
-        "order_column",
         "reservation_code",
         "subject",
         "milestones",
         "email_id_short",
     )
     list_filter = ("status", "last_received_at")
-    search_fields = ("to_email", "from_email", "subject", "email_id")
+    search_fields = ("order_code", "to_email", "from_email", "subject", "email_id")
     search_help_text = "Buscar por código de reserva (ej: A9K3X2), asunto o email ID."
     date_hierarchy = "last_received_at"
     readonly_fields = (
         "email_id",
+        "order",
+        "order_code",
+        "flow_kind",
         "to_email",
         "from_email",
         "subject",
@@ -425,6 +427,9 @@ class EmailDeliveryAdmin(ModelAdmin):
             {
                 "fields": (
                     "status",
+                    "order",
+                    "order_code",
+                    "flow_kind",
                     "to_email",
                     "from_email",
                     "subject",
@@ -511,12 +516,10 @@ class EmailDeliveryAdmin(ModelAdmin):
         if hasattr(obj, "_resolved_order_cache"):
             return obj._resolved_order_cache
 
-        reservation_code = self._extract_reservation_code(obj.subject)
+        reservation_code = (obj.order_code or "").upper() or self._extract_reservation_code(obj.subject)
         order = None
         if reservation_code:
-            candidate = self._get_orders_by_code().get(reservation_code)
-            if candidate and (candidate.customer_email or "").strip().lower() == (obj.to_email or "").strip().lower():
-                order = candidate
+            order = self._get_orders_by_code().get(reservation_code)
 
         obj._resolved_order_cache = order
         obj._reservation_code_cache = reservation_code
@@ -565,8 +568,9 @@ class EmailDeliveryAdmin(ModelAdmin):
             queryset
             .filter(to_email__in=customer_emails)
             .exclude(to_email__in=internal_emails)
+            .exclude(flow_kind="campaign")
             .exclude(subject__icontains="nueva orden")
-            .filter(purchase_subject_filter)
+            .filter(Q(order_code__gt="") | purchase_subject_filter)
         )
 
         non_campaign_ids = [
@@ -578,22 +582,24 @@ class EmailDeliveryAdmin(ModelAdmin):
     def get_search_results(self, request, queryset, search_term):
         queryset, use_distinct = super().get_search_results(request, queryset, search_term)
 
-        term = (search_term or "").strip().upper()
+        term = re.sub(r"\s+", "", (search_term or "").strip()).upper()
         if not term:
             return queryset, use_distinct
 
-        from apps.orders.models import Order
+        scoped_queryset = self.get_queryset(request)
 
-        order = Order.objects.filter(order_code__iexact=term).only("order_code", "customer_email").first()
-        if order:
-            code_queryset = self.get_queryset(request).filter(
-                to_email__iexact=(order.customer_email or "").strip()
-            ).filter(
-                Q(subject__icontains=order.order_code)
-                | Q(subject__icontains="tu compra está en camino")
-                | Q(subject__icontains="tu compra esta en camino")
-            )
+        code_queryset = scoped_queryset.filter(order_code__iexact=term)
+        if code_queryset.exists():
             queryset = queryset | code_queryset
+            use_distinct = True
+
+        matching_ids = [
+            delivery.id
+            for delivery in scoped_queryset.only("id", "subject")
+            if self._extract_reservation_code(delivery.subject) == term
+        ]
+        if matching_ids:
+            queryset = queryset | scoped_queryset.filter(id__in=matching_ids)
             use_distinct = True
 
         return queryset, use_distinct
@@ -626,19 +632,17 @@ class EmailDeliveryAdmin(ModelAdmin):
             )
         return format_html("".join(chips)) if chips else "—"
 
-    @admin.display(description="Orden")
-    def order_column(self, obj):
-        order = self._resolve_order_for_delivery(obj)
-        if not order:
-            return "—"
-
-        url = reverse("admin:orders_order_change", args=[order.pk])
-        return format_html('<a href="{}">#{}</a>', url, order.order_code)
-
     @admin.display(description="Codigo reserva")
     def reservation_code(self, obj):
-        self._resolve_order_for_delivery(obj)
-        return getattr(obj, "_reservation_code_cache", "") or "—"
+        order = self._resolve_order_for_delivery(obj)
+        code = getattr(obj, "_reservation_code_cache", "") or ""
+        if not code:
+            return "—"
+        if not order:
+            return code
+
+        url = reverse("admin:orders_order_change", args=[order.pk])
+        return format_html('<a href="{}">{}</a>', url, code)
 
     @admin.display(description="Email ID")
     def email_id_short(self, obj):

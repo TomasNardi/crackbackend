@@ -278,6 +278,16 @@ class EmailDelivery(models.Model):
         "ID del email", max_length=128, db_index=True,
         help_text="ID que asigna Resend al envío.",
     )
+    order = models.ForeignKey(
+        "orders.Order",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="email_deliveries",
+        verbose_name="Orden",
+    )
+    order_code = models.CharField("Codigo reserva", max_length=8, blank=True, default="", db_index=True)
+    flow_kind = models.CharField("Flujo", max_length=40, blank=True, default="", db_index=True)
     to_email = models.CharField("Para", max_length=512, db_index=True)
     from_email = models.CharField("Desde", max_length=255, blank=True, default="")
     subject = models.CharField("Asunto", max_length=512, blank=True, default="")

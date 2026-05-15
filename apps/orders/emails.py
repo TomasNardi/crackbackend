@@ -61,7 +61,7 @@ MP_TYPE_LABELS = {
 }
 
 
-def _send(to: list[str], subject: str, html: str) -> bool:
+def _send(to: list[str], subject: str, html: str, entity_ref_id: str = "") -> bool:
     """Envía un email via Resend. Retorna True si fue exitoso."""
     api_key = getattr(settings, "RESEND_API_KEY", "")
     if not api_key:
@@ -70,12 +70,16 @@ def _send(to: list[str], subject: str, html: str) -> bool:
 
     resend.api_key = api_key
     try:
-        resend.Emails.send({
+        payload = {
             "from": FROM_EMAIL,
             "to": to,
             "subject": subject,
             "html": html,
-        })
+        }
+        if entity_ref_id:
+            payload["headers"] = {"X-Entity-Ref-ID": entity_ref_id}
+
+        resend.Emails.send(payload)
         return True
     except Exception as exc:
         logger.exception("Error enviando email '%s': %s", subject, exc)
@@ -315,6 +319,7 @@ def send_order_confirmation(order_id: int) -> None:
         to=[order.customer_email],
         subject=f"✅ Pedido {order.order_code} recibido — CRACK TCG",
         html=html,
+        entity_ref_id=f"order-{order.order_code}-confirmation",
     )
 
 
@@ -331,6 +336,7 @@ def send_new_order_notification(order_id: int) -> None:
         to=get_internal_notification_recipients(),
         subject=f"🛒 Nueva orden {order.order_code} — {order.customer_name} (${order.total:,.0f})",
         html=html,
+        entity_ref_id=f"order-{order.order_code}-internal_notification",
     )
 
 
@@ -353,6 +359,7 @@ def send_refund_notification(order_id: int) -> None:
         to=[order.customer_email],
         subject=f"Confirmación de devolución de compra {order.order_code} — CRACK TCG",
         html=html,
+        entity_ref_id=f"order-{order.order_code}-refund",
     )
 
 
@@ -369,6 +376,7 @@ def send_payment_confirmed_email(order_id: int) -> None:
         to=[order.customer_email],
         subject=f"✅ Pago confirmado — Pedido {order.order_code} — CRACK TCG",
         html=html,
+        entity_ref_id=f"order-{order.order_code}-payment_confirmed",
     )
 
 
@@ -393,4 +401,5 @@ def send_shipment_notification(order_id: int, tracking_code: str) -> None:
         to=[order.customer_email],
         subject=f"Tu compra está en camino — Pedido {order.order_code}",
         html=html,
+        entity_ref_id=f"order-{order.order_code}-shipment",
     )
