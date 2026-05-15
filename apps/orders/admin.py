@@ -143,6 +143,8 @@ class OrderAdmin(ModelAdmin):
         "mp_preference_id",
     )
     ordering = ("-created_at",)
+    list_per_page = 40
+    list_max_show_all = 200
     inlines = [OrderItemInline, MercadoPagoPaymentInline]
     actions = [
         "action_mark_cash_paid",
@@ -187,7 +189,9 @@ class OrderAdmin(ModelAdmin):
         if obj.payment_method == Order.PAYMENT_CASH and obj.status == Order.STATUS_PENDING:
             url = reverse("admin:orders_order_mark_cash_paid", args=[obj.pk])
             return format_html(
-                '<a href="{}" class="order-action-btn order-action-btn--success" '
+                '<a href="{}" style="'
+                'background:#2ea44f;color:#fff;padding:4px 10px;border-radius:4px;'
+                'font-size:12px;font-weight:600;text-decoration:none;display:inline-block;"'
                 'title="Marcar orden en efectivo como pagada">Marcar pagada</a>',
                 url,
             )
@@ -200,10 +204,11 @@ class OrderAdmin(ModelAdmin):
         url = reverse("admin:orders_order_pdf_download", args=[obj.pk])
         _, _, color = self._payment_status_meta(obj)
         return format_html(
-            '<a href="{}" class="order-action-btn order-action-btn--pdf" style="background:{};" '
-            'title="Descargar orden en PDF">PDF</a>',
-            url,
-            color,
+            '<a href="{}" style="'
+            'background:{};color:#fff;padding:5px 12px;border-radius:4px;'
+            'font-size:12px;font-weight:600;text-decoration:none;display:inline-block;"'
+            'title="Descargar orden en PDF">📄 PDF</a>',
+            url, color,
         )
 
     @admin.display(description="Envíos")
@@ -213,19 +218,24 @@ class OrderAdmin(ModelAdmin):
 
         if obj.shipping_status == Order.SHIPPING_STATUS_SHIPPED:
             return format_html(
-                '<span class="order-action-btn order-action-btn--success is-static">Enviado</span>'
+                '<span style="'
+                'background:#2ea44f;color:#fff;padding:5px 12px;border-radius:4px;'
+                'font-size:12px;font-weight:600;display:inline-block;">🚚 Enviado</span>'
             )
 
         if obj.payment_method == Order.PAYMENT_CASH and obj.status == Order.STATUS_PENDING:
             return format_html(
-                '<span class="order-action-btn order-action-btn--disabled is-static" '
-                'title="Marcá la orden como pagada antes de cargar el envío.">Pendiente de pago</span>'
+                '<span style="'
+                'background:#9ca3af;color:#fff;padding:5px 12px;border-radius:4px;'
+                'font-size:12px;font-weight:600;display:inline-block;cursor:not-allowed;opacity:0.75;"'
+                ' title="Marcá la orden como pagada antes de cargar el envío.">Pendiente de pago</span>'
             )
 
         url = reverse("admin:orders_order_shipping_popup", args=[obj.pk])
         return format_html(
-            '<a href="{}" onclick="window.open(this.href, \'shipping-popup-{}\', \'width=560,height=520,resizable=yes,scrollbars=yes\'); return false;" '
-            'class="order-action-btn order-action-btn--primary" '
+            '<a href="{}" onclick="window.open(this.href, \'shipping-popup-{}\', \'width=560,height=520,resizable=yes,scrollbars=yes\'); return false;" style="'
+            'background:#2d6cdf;color:#fff;padding:5px 12px;border-radius:4px;'
+            'font-size:12px;font-weight:600;text-decoration:none;display:inline-block;"'
             'title="Cargar envío de esta orden">Cargar envío</a>',
             url,
             obj.pk,
