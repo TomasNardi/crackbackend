@@ -1,11 +1,12 @@
 import json
+import re
 from django import forms
 from django.contrib import admin
 from django.contrib.admin.sites import NotRegistered
 from django.shortcuts import redirect
 from django.http import HttpResponseRedirect, JsonResponse
 from django.urls import path, reverse
-from django.db.models import Sum
+from django.db.models import Q, Sum
 from django.utils.html import format_html
 from ckeditor.widgets import CKEditorWidget
 from unfold.admin import ModelAdmin
@@ -381,9 +382,20 @@ class NotificationRecipientAdmin(ModelAdmin):
 
 @admin.register(EmailDelivery)
 class EmailDeliveryAdmin(ModelAdmin):
-    list_display = ("last_received_at", "status_badge", "to_email", "subject", "milestones", "email_id_short")
+    _RESERVATION_CODE_RE = re.compile(r"\b([ABCDEFGHJKMNPQRSTUVWXYZ23456789]{6,8})\b")
+
+    list_display = (
+        "last_received_at",
+        "status_badge",
+        "order_column",
+        "reservation_code",
+        "subject",
+        "milestones",
+        "email_id_short",
+    )
     list_filter = ("status", "last_received_at")
     search_fields = ("to_email", "from_email", "subject", "email_id")
+    search_help_text = "Buscar por código de reserva (ej: A9K3X2), asunto o email ID."
     date_hierarchy = "last_received_at"
     readonly_fields = (
         "email_id",
@@ -474,6 +486,118 @@ class EmailDeliveryAdmin(ModelAdmin):
         EmailDelivery.Status.FAILED: "#991B1B",
     }
 
+    def _get_orders_by_code(self):
+        if hasattr(self, "_orders_by_code_cache"):
+            return self._orders_by_code_cache
+
+        from apps.orders.models import Order
+
+        self._orders_by_code_cache = {
+            (order.order_code or "").upper(): order
+            for order in Order.objects.only("id", "order_code", "customer_email")
+            if order.order_code
+        }
+        return self._orders_by_code_cache
+
+    def _extract_reservation_code(self, subject):
+        subject_value = (subject or "").upper()
+        orders_by_code = self._get_orders_by_code()
+        for candidate in self._RESERVATION_CODE_RE.findall(subject_value):
+            if candidate in orders_by_code:
+                return candidate
+        return ""
+
+    def _resolve_order_for_delivery(self, obj):
+        if hasattr(obj, "_resolved_order_cache"):
+            return obj._resolved_order_cache
+
+        reservation_code = self._extract_reservation_code(obj.subject)
+        order = None
+        if reservation_code:
+            candidate = self._get_orders_by_code().get(reservation_code)
+            if candidate and (candidate.customer_email or "").strip().lower() == (obj.to_email or "").strip().lower():
+                order = candidate
+
+        obj._resolved_order_cache = order
+        obj._reservation_code_cache = reservation_code
+        return order
+
+    def _is_campaign_delivery(self, obj):
+        payload = obj.last_payload or {}
+        if not isinstance(payload, dict):
+            return False
+
+        data = payload.get("data") or {}
+        if not isinstance(data, dict):
+            return False
+
+        headers = data.get("headers") or {}
+        if isinstance(headers, dict):
+            x_entity = headers.get("X-Entity-Ref-ID") or headers.get("x-entity-ref-id") or ""
+            return str(x_entity).lower().startswith("campaign-")
+        return False
+
+    def get_queryset(self, request):
+        queryset = super().get_queryset(request)
+
+        from apps.orders.models import Order
+
+        customer_emails = {
+            (email or "").strip().lower()
+            for email in Order.objects.exclude(customer_email="").values_list("customer_email", flat=True)
+            if email
+        }
+        internal_emails = {
+            (email or "").strip().lower()
+            for email in NotificationRecipient.objects.exclude(email="").values_list("email", flat=True)
+            if email
+        }
+
+        purchase_subject_filter = (
+            Q(subject__icontains="pedido")
+            | Q(subject__icontains="devolucion de compra")
+            | Q(subject__icontains="devolución de compra")
+            | Q(subject__icontains="tu compra está en camino")
+            | Q(subject__icontains="tu compra esta en camino")
+        )
+
+        queryset = (
+            queryset
+            .filter(to_email__in=customer_emails)
+            .exclude(to_email__in=internal_emails)
+            .exclude(subject__icontains="nueva orden")
+            .filter(purchase_subject_filter)
+        )
+
+        non_campaign_ids = [
+            item.id for item in queryset.only("id", "last_payload")
+            if not self._is_campaign_delivery(item)
+        ]
+        return queryset.filter(id__in=non_campaign_ids)
+
+    def get_search_results(self, request, queryset, search_term):
+        queryset, use_distinct = super().get_search_results(request, queryset, search_term)
+
+        term = (search_term or "").strip().upper()
+        if not term:
+            return queryset, use_distinct
+
+        from apps.orders.models import Order
+
+        order = Order.objects.filter(order_code__iexact=term).only("order_code", "customer_email").first()
+        if order:
+            code_queryset = self.get_queryset(request).filter(
+                to_email__iexact=(order.customer_email or "").strip()
+            ).filter(
+                Q(subject__icontains=order.order_code)
+                | Q(subject__icontains="tu compra está en camino")
+                | Q(subject__icontains="tu compra esta en camino")
+            )
+            queryset = queryset | code_queryset
+            use_distinct = True
+
+        return queryset, use_distinct
+
     @admin.display(description="Estado", ordering="status")
     def status_badge(self, obj):
         color = self._STATUS_COLORS.get(obj.status, "#999999")
@@ -501,6 +625,20 @@ class EmailDeliveryAdmin(ModelAdmin):
                 f'<span style="display:inline-block;background:{color};color:#fff;padding:2px 7px;border-radius:10px;font-size:10px;font-weight:600;margin-right:4px;">{label}</span>'
             )
         return format_html("".join(chips)) if chips else "—"
+
+    @admin.display(description="Orden")
+    def order_column(self, obj):
+        order = self._resolve_order_for_delivery(obj)
+        if not order:
+            return "—"
+
+        url = reverse("admin:orders_order_change", args=[order.pk])
+        return format_html('<a href="{}">#{}</a>', url, order.order_code)
+
+    @admin.display(description="Codigo reserva")
+    def reservation_code(self, obj):
+        self._resolve_order_for_delivery(obj)
+        return getattr(obj, "_reservation_code_cache", "") or "—"
 
     @admin.display(description="Email ID")
     def email_id_short(self, obj):

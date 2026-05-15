@@ -391,6 +391,6 @@ def send_shipment_notification(order_id: int, tracking_code: str) -> None:
 
     _send(
         to=[order.customer_email],
-        subject="Tu compra está en camino",
+        subject=f"Tu compra está en camino — Pedido {order.order_code}",
         html=html,
     )
