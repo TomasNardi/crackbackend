@@ -209,11 +209,28 @@ def _parse_event_timestamp(value):
 
 
 def _extract_entity_ref(headers) -> str:
-    if not isinstance(headers, dict):
-        return ""
-    for key, value in headers.items():
-        if str(key).lower() == "x-entity-ref-id":
-            return str(value or "").strip()
+    if isinstance(headers, dict):
+        for key, value in headers.items():
+            if str(key).lower() == "x-entity-ref-id":
+                return str(value or "").strip()
+
+    # Algunos webhooks pueden serializar headers como lista de pares o lista de objetos.
+    if isinstance(headers, list):
+        for item in headers:
+            if isinstance(item, (list, tuple)) and len(item) >= 2:
+                key = str(item[0] or "").lower()
+                if key == "x-entity-ref-id":
+                    return str(item[1] or "").strip()
+            elif isinstance(item, dict):
+                key = str(item.get("key") or item.get("name") or "").lower()
+                if key == "x-entity-ref-id":
+                    return str(item.get("value") or "").strip()
+
+    if isinstance(headers, str) and "x-entity-ref-id" in headers.lower():
+        parts = headers.split(":", 1)
+        if len(parts) == 2:
+            return parts[1].strip()
+
     return ""
 
 
@@ -222,6 +239,19 @@ def _extract_order_code_from_subject(subject: str) -> str:
     for candidate in _ORDER_CODE_IN_SUBJECT_RE.findall(subject_value):
         return candidate
     return ""
+
+
+def _collect_code_candidates(*values) -> list[str]:
+    """Extrae posibles códigos de orden (6-8 alfanuméricos) desde múltiples textos."""
+    found: list[str] = []
+    for value in values:
+        if value is None:
+            continue
+        text = value if isinstance(value, str) else json.dumps(value, ensure_ascii=False)
+        for candidate in _ORDER_CODE_IN_SUBJECT_RE.findall(text.upper()):
+            if candidate not in found:
+                found.append(candidate)
+    return found
 
 
 def _extract_order_code_from_entity_ref(entity_ref: str) -> tuple[str, str]:
@@ -240,12 +270,17 @@ def _extract_order_code_from_entity_ref(entity_ref: str) -> tuple[str, str]:
     if match:
         return (match.group(1) or "").upper(), (match.group(2) or "").lower()
 
-    parts = value.split("-")
+    normalized = value.replace("_", "-")
+    parts = normalized.split("-")
     if len(parts) >= 2 and parts[0].lower() == "order":
         code = (parts[1] or "").strip().upper()
         if re.fullmatch(r"[A-Z0-9]{6,8}", code):
             flow_kind = "_".join(part.strip().lower() for part in parts[2:] if part.strip())
             return code, flow_kind
+
+    # Fallback ultra robusto: busca un token tipo código en cualquier segmento.
+    for candidate in _collect_code_candidates(value):
+        return candidate, ""
 
     return "", ""
 
@@ -314,16 +349,35 @@ class ResendWebhookView(APIView):
         if not order_code:
             order_code = _extract_order_code_from_subject(subject)
 
+        data_candidates = _collect_code_candidates(
+            entity_ref,
+            subject,
+            data.get("subject"),
+            data.get("text"),
+            data.get("html"),
+            data.get("tags"),
+            headers,
+        )
+
         order_obj = None
-        if order_code:
+        if order_code or data_candidates:
             from apps.orders.models import Order
 
-            order_obj = Order.objects.filter(order_code__iexact=order_code).only("id", "order_code").first()
+            candidate_codes = []
+            if order_code:
+                candidate_codes.append(order_code)
+            for candidate in data_candidates:
+                if candidate not in candidate_codes:
+                    candidate_codes.append(candidate)
+
+            for candidate in candidate_codes:
+                order_obj = Order.objects.filter(order_code__iexact=candidate).only("id", "order_code").first()
+                if order_obj:
+                    order_code = order_obj.order_code
+                    break
+
             if not order_obj:
                 order_code = ""
-            else:
-                # Normaliza el código según la orden encontrada para trazabilidad consistente.
-                order_code = order_obj.order_code
 
         for recipient in recipients:
             delivery, _ = EmailDelivery.objects.get_or_create(

@@ -523,10 +523,23 @@ class EmailDeliveryAdmin(ModelAdmin):
             return ""
 
         headers = data.get("headers") or {}
-        if not isinstance(headers, dict):
-            return ""
+        entity_ref = ""
 
-        entity_ref = str(headers.get("X-Entity-Ref-ID") or headers.get("x-entity-ref-id") or "").strip()
+        if isinstance(headers, dict):
+            entity_ref = str(headers.get("X-Entity-Ref-ID") or headers.get("x-entity-ref-id") or "").strip()
+        elif isinstance(headers, list):
+            for item in headers:
+                if isinstance(item, dict):
+                    key = str(item.get("name") or item.get("key") or "").strip().lower()
+                    if key == "x-entity-ref-id":
+                        entity_ref = str(item.get("value") or "").strip()
+                        break
+                elif isinstance(item, (list, tuple)) and len(item) >= 2:
+                    key = str(item[0] or "").strip().lower()
+                    if key == "x-entity-ref-id":
+                        entity_ref = str(item[1] or "").strip()
+                        break
+
         if not entity_ref:
             return ""
 
