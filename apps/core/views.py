@@ -22,7 +22,7 @@ from rest_framework import permissions, status
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from .models import SiteConfig, ExchangeRate, ContactMessage, EmailSubscription, EmailDelivery
+from .models import SiteConfig, ExchangeRate, ContactMessage, EmailSubscription, EmailDelivery, NotificationRecipient
 from .serializers import (
     SiteConfigSerializer, EmailSubscribeSerializer, ExchangeRateSerializer,
     ContactMessageSerializer, SolicitudVentaSerializer
