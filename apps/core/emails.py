@@ -1,17 +1,43 @@
 """Emails transaccionales del módulo core."""
 
 import logging
+from urllib.parse import quote
 
 import resend
 from django.conf import settings
 from django.template.loader import render_to_string
 from django.utils import timezone
 
-from .models import NotificationRecipient, SolicitudVenta
+from .contact_tokens import make_mark_read_token
+from .models import ContactMessage, NotificationRecipient, SolicitudVenta
 
 logger = logging.getLogger(__name__)
 
 FROM_EMAIL = getattr(settings, "RESEND_FROM_EMAIL", "onboarding@resend.dev")
+
+
+def _resolve_public_site_url() -> str:
+    frontend_url = str(getattr(settings, "FRONTEND_URL", "") or "").strip()
+    if frontend_url.startswith("http"):
+        return frontend_url.rstrip("/")
+
+    site_url = str(getattr(settings, "SITE_URL", "https://cracktcg.com") or "").strip()
+    if site_url.startswith("http"):
+        return site_url.rstrip("/")
+
+    return "https://cracktcg.com"
+
+
+def _resolve_backend_url() -> str:
+    backend_url = str(getattr(settings, "BACKEND_PUBLIC_URL", "") or "").strip()
+    if not backend_url.startswith("http"):
+        backend_url = str(getattr(settings, "SITE_URL", "https://cracktcg.com") or "").strip()
+    return (backend_url or "https://cracktcg.com").rstrip("/")
+
+
+def build_contact_mark_read_url(contact_message_id: int, recipient_email: str) -> str:
+    token = make_mark_read_token(contact_message_id, recipient_email)
+    return f"{_resolve_backend_url()}/api/v1/contact/mark-read/?token={quote(token)}"
 
 
 def _send(to: list[str], subject: str, html: str) -> bool:
@@ -73,3 +99,46 @@ def send_sale_request_status_email(solicitud_id: int) -> bool:
     }
     html = render_to_string("emails/sale_request_status.html", context)
     return _send([solicitud.email], "Actualización de tu solicitud de venta", html)
+
+
+def send_contact_notification_email(contact_message_id: int) -> bool:
+    contact = ContactMessage.objects.get(id=contact_message_id)
+    destinatarios = NotificationRecipient.get_active_recipients()
+    if not destinatarios:
+        logger.warning("No hay destinatarios activos para notificaciones de contacto")
+        return False
+
+    site_url = _resolve_public_site_url()
+    created_at = timezone.localtime(contact.created_at).strftime("%d/%m/%Y %H:%M")
+    sent_count = 0
+
+    for destinatario in destinatarios:
+        recipient_email = destinatario["email"]
+        recipient_name = destinatario["name"]
+        context = {
+            "contact": contact,
+            "created_at": created_at,
+            "mark_read_url": build_contact_mark_read_url(contact.id, recipient_email),
+            "brand_image_url": f"{site_url}/brand/logo2.png",
+            "recipient_name": recipient_name,
+        }
+        html = render_to_string("emails/contact_notification_admin.html", context)
+        if _send([recipient_email], f"Contacto {contact.name}", html):
+            sent_count += 1
+
+    if sent_count == 0:
+        logger.warning("No se pudo enviar ninguna notificación de contacto para %s", contact.id)
+        return False
+
+    return True
+
+
+def send_contact_acknowledgement_email(contact_message_id: int) -> bool:
+    contact = ContactMessage.objects.get(id=contact_message_id)
+    site_url = _resolve_public_site_url()
+    context = {
+        "contact": contact,
+        "brand_image_url": f"{site_url}/brand/logo2.png",
+    }
+    html = render_to_string("emails/contact_acknowledgement.html", context)
+    return _send([contact.email], "Contacto recibido - CRACK TCG", html)

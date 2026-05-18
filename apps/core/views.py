@@ -13,7 +13,10 @@ import time
 from datetime import datetime, timezone as dt_timezone
 
 from django.conf import settings
+from django.db import transaction
+from django.http import HttpResponse
 from django.utils.decorators import method_decorator
+from django.utils import timezone
 from django_ratelimit.decorators import ratelimit
 from rest_framework import permissions, status
 from rest_framework.response import Response
@@ -24,7 +27,12 @@ from .serializers import (
     SiteConfigSerializer, EmailSubscribeSerializer, ExchangeRateSerializer,
     ContactMessageSerializer, SolicitudVentaSerializer
 )
-from .emails import send_new_sale_request_notification
+from .contact_tokens import read_mark_read_token
+from .emails import (
+    send_contact_acknowledgement_email,
+    send_contact_notification_email,
+    send_new_sale_request_notification,
+)
 from .newsletter_tokens import read_unsubscribe_token
 
 logger = logging.getLogger(__name__)
@@ -121,9 +129,72 @@ class ContactView(APIView):
     def post(self, request):
         serializer = ContactMessageSerializer(data=request.data)
         if serializer.is_valid():
-            serializer.save()
+            contact = serializer.save()
+            try:
+                send_contact_notification_email(contact.id)
+            except Exception:
+                logger.exception("Error enviando notificación de contacto %s", contact.id)
             return Response({"message": "Mensaje recibido. Te respondemos pronto."}, status=status.HTTP_201_CREATED)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+
+class ContactMarkReadView(APIView):
+    permission_classes = [permissions.AllowAny]
+
+    def get(self, request):
+        token = str(request.query_params.get("token") or "").strip()
+        token_payload = read_mark_read_token(token)
+        if not token_payload:
+            return HttpResponse(
+                "<h2>Enlace inválido</h2><p>El enlace para marcar el mensaje como leído no es válido.</p>",
+                status=400,
+            )
+        contact_id, recipient_email = token_payload
+
+        is_valid_recipient = NotificationRecipient.objects.filter(
+            is_active=True,
+            email__iexact=recipient_email,
+        ).exists()
+        if not is_valid_recipient:
+            return HttpResponse(
+                "<h2>Acceso denegado</h2><p>El destinatario de este enlace ya no tiene permisos para marcar mensajes.</p>",
+                status=403,
+            )
+
+        with transaction.atomic():
+            contact = ContactMessage.objects.select_for_update().filter(id=contact_id).first()
+            if not contact:
+                return HttpResponse(
+                    "<h2>Mensaje no encontrado</h2><p>El mensaje ya no existe o fue eliminado.</p>",
+                    status=404,
+                )
+
+            pending_updates = []
+            if not contact.read:
+                contact.read = True
+                contact.read_at = timezone.now()
+                contact.read_by_email = recipient_email
+                pending_updates.extend(["read", "read_at", "read_by_email"])
+
+            should_send_ack = contact.customer_ack_sent_at is None
+            if should_send_ack:
+                try:
+                    sent = send_contact_acknowledgement_email(contact.id)
+                except Exception:
+                    sent = False
+                    logger.exception("Error enviando acuse de contacto %s", contact.id)
+
+                if sent:
+                    contact.customer_ack_sent_at = timezone.now()
+                    pending_updates.append("customer_ack_sent_at")
+
+            if pending_updates:
+                contact.save(update_fields=pending_updates)
+
+        return HttpResponse(
+            "<h2>Mensaje marcado como leído</h2><p>El mensaje fue actualizado en admin y el cliente recibió la confirmación por email.</p>",
+            status=200,
+        )
 
 
 class SolicitudVentaCreateView(APIView):

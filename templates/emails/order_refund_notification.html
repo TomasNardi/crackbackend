@@ -3,53 +3,60 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Confirmación de devolución {{ order.order_code }} — CRACK TCG</title>
+  <meta name="x-apple-disable-message-reformatting" />
+  <title>Confirmación de devolución {{ order.order_code }} - CRACK TCG</title>
 </head>
-<body style="margin:0;padding:24px;background:#f4f4f4;font-family:Arial,Helvetica,sans-serif;color:#1f2937;">
-  <table role="presentation" cellpadding="0" cellspacing="0" width="100%">
+<body style="margin:0;padding:0;background-color:#111111;-webkit-text-size-adjust:100%;-ms-text-size-adjust:100%;font-family:Arial,Helvetica,sans-serif;">
+  <table role="presentation" border="0" cellpadding="0" cellspacing="0" width="100%" style="background-color:#111111;">
     <tr>
-      <td align="center">
-        <table role="presentation" cellpadding="0" cellspacing="0" width="600" style="max-width:600px;background:#ffffff;border-radius:12px;overflow:hidden;box-shadow:0 4px 20px rgba(0,0,0,.08);">
+      <td align="center" style="padding:32px 14px;">
+        <table role="presentation" border="0" cellpadding="0" cellspacing="0" width="600" style="width:100%;max-width:600px;">
           <tr>
-            <td align="center" style="padding:32px 24px 18px 24px;background:#f8f8f8;">
-              <img src="{{ logo_url }}" alt="CRACK TCG" width="220" style="display:block;max-width:220px;width:100%;height:auto;border:0;">
+            <td align="center" style="background-color:#0d0d0d;padding:30px 24px 22px;border-radius:12px 12px 0 0;border-bottom:1px solid #2a2a2a;">
+              <img src="{{ logo_url }}" alt="CRACK TCG" width="190" style="display:block;width:190px;max-width:190px;height:auto;border:0;outline:none;text-decoration:none;margin:0 auto;">
+              <p style="margin:12px 0 0;font-size:10px;letter-spacing:2px;color:#6f6f6f;text-transform:uppercase;">Confirmacion de devolucion</p>
             </td>
           </tr>
 
           <tr>
-            <td style="padding:28px 30px 10px 30px;text-align:center;">
-              <h1 style="margin:0;font-size:30px;line-height:1.2;color:#111827;">CONFIRMACION DE DEVOLUCION</h1>
+            <td align="center" style="background-color:#161616;padding:30px 26px 20px;border-bottom:1px solid #2a2a2a;">
+              <p style="margin:0 0 8px;font-size:11px;font-weight:700;color:#C8972E;text-transform:uppercase;letter-spacing:2px;">Solicitud resuelta</p>
+              <h1 style="margin:0;font-family:Georgia,'Times New Roman',serif;font-size:30px;line-height:1.2;color:#ffffff;font-weight:700;">Devolucion confirmada</h1>
             </td>
           </tr>
 
           <tr>
-            <td style="padding:0 30px 18px 30px;text-align:center;">
-              <p style="margin:0;font-size:18px;line-height:1.45;color:#4b5563;">
+            <td align="center" style="background-color:#121212;padding:0 26px 24px;border-bottom:1px solid #2a2a2a;">
+              <p style="margin:0;font-size:16px;line-height:1.6;color:#d1d5db;max-width:470px;">
                 La devolución de tu compra fue gestionada correctamente.
               </p>
             </td>
           </tr>
 
           <tr>
-            <td style="padding:0 30px 26px 30px;text-align:center;">
-              <p style="margin:0;font-size:16px;line-height:1.55;color:#374151;">
+            <td align="center" style="background-color:#121212;padding:0 26px 26px;border-bottom:1px solid #2a2a2a;">
+              <p style="margin:0;font-size:14px;line-height:1.65;color:#9ca3af;max-width:500px;">
                 Recibirás el importe en el método de pago original en un plazo máximo de 14 días, dependiendo de tu banco.
               </p>
             </td>
           </tr>
 
           <tr>
-            <td style="padding:0 30px 32px 30px;">
-              <table role="presentation" cellpadding="0" cellspacing="0" width="100%" style="border-collapse:separate;border-spacing:0 10px;">
+            <td align="center" style="background-color:#0f0f0f;padding:24px 22px 10px;border-bottom:1px solid #2a2a2a;">
+              <table role="presentation" border="0" cellpadding="0" cellspacing="0" width="100%" style="max-width:520px;">
                 <tr>
-                  <td style="width:48%;background:#f9fafb;border:1px solid #e5e7eb;border-radius:8px;padding:14px 14px;">
-                    <p style="margin:0 0 6px 0;font-size:12px;letter-spacing:.06em;text-transform:uppercase;color:#6b7280;">Codigo de reserva</p>
-                    <p style="margin:0;font-size:20px;font-weight:700;color:#111827;">{{ order.order_code }}</p>
+                  <td align="center" style="background:#181818;border:1px solid #2f2f2f;border-radius:8px;padding:14px 12px;">
+                    <p style="margin:0 0 6px 0;font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:#8b8b8b;">Codigo de reserva</p>
+                    <p style="margin:0;font-size:22px;line-height:1.2;font-weight:700;color:#ffffff;font-family:Georgia,'Times New Roman',serif;">{{ order.order_code }}</p>
                   </td>
-                  <td style="width:4%;"></td>
-                  <td style="width:48%;background:#f9fafb;border:1px solid #e5e7eb;border-radius:8px;padding:14px 14px;">
-                    <p style="margin:0 0 6px 0;font-size:12px;letter-spacing:.06em;text-transform:uppercase;color:#6b7280;">Fecha de devolucion</p>
-                    <p style="margin:0;font-size:20px;font-weight:700;color:#111827;">{{ refund_date }}</p>
+                </tr>
+                <tr>
+                  <td height="10" style="font-size:0;line-height:0;">&nbsp;</td>
+                </tr>
+                <tr>
+                  <td align="center" style="background:#181818;border:1px solid #2f2f2f;border-radius:8px;padding:14px 12px;">
+                    <p style="margin:0 0 6px 0;font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:#8b8b8b;">Fecha de devolucion</p>
+                    <p style="margin:0;font-size:20px;line-height:1.2;font-weight:700;color:#C8972E;font-family:Georgia,'Times New Roman',serif;">{{ refund_date }}</p>
                   </td>
                 </tr>
               </table>
@@ -57,9 +64,9 @@
           </tr>
 
           <tr>
-            <td style="padding:0 30px 32px 30px;text-align:center;">
-              <p style="margin:0;font-size:14px;line-height:1.6;color:#6b7280;">
-                Si tenés alguna duda, contactate con nostros.
+            <td align="center" style="background-color:#161616;padding:24px 24px 30px;border-radius:0 0 12px 12px;">
+              <p style="margin:0;font-size:13px;line-height:1.7;color:#8b8b8b;max-width:480px;">
+                Si tenés alguna duda, contactate con nosotros.
               </p>
             </td>
           </tr>

@@ -34,6 +34,7 @@ from apps.core.views import (
     PingView,
     ExchangeRateView,
     ContactView,
+    ContactMarkReadView,
     SolicitudVentaCreateView,
     ResendWebhookView,
 )
@@ -71,6 +72,7 @@ urlpatterns = [
     path("subscribe/", EmailSubscribeView.as_view(), name="email_subscribe"),
     path("unsubscribe/", EmailUnsubscribeView.as_view(), name="email_unsubscribe"),
     path("contact/", ContactView.as_view(), name="contact"),
+    path("contact/mark-read/", ContactMarkReadView.as_view(), name="contact_mark_read"),
     path("sale-requests/", SolicitudVentaCreateView.as_view(), name="sale_requests"),
     path("ping/", PingView.as_view(), name="ping"),
 

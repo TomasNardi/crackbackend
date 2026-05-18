@@ -196,6 +196,9 @@ class ContactMessage(models.Model):
     email = models.EmailField("Email")
     message = models.TextField("Mensaje")
     read = models.BooleanField("Leído", default=False)
+    read_at = models.DateTimeField("Leído el", null=True, blank=True)
+    read_by_email = models.EmailField("Leído por", blank=True, default="")
+    customer_ack_sent_at = models.DateTimeField("Acuse enviado al cliente", null=True, blank=True)
     created_at = models.DateTimeField("Creado", auto_now_add=True)
 
     class Meta:
@@ -235,6 +238,18 @@ class NotificationRecipient(models.Model):
         return list(
             cls.objects.filter(is_active=True).order_by("email").values_list("email", flat=True)
         )
+
+    @classmethod
+    def get_active_recipients(cls) -> list[dict[str, str]]:
+        rows = cls.objects.filter(is_active=True).order_by("email").values("email", "name")
+        return [
+            {
+                "email": str(row.get("email") or "").strip().lower(),
+                "name": str(row.get("name") or "").strip(),
+            }
+            for row in rows
+            if row.get("email")
+        ]
 
 
 class EmailDelivery(models.Model):
