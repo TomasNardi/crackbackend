@@ -11,10 +11,11 @@ import logging
 import re
 import time
 from datetime import datetime, timezone as dt_timezone
+from urllib.parse import quote
 
 from django.conf import settings
 from django.db import transaction
-from django.http import HttpResponse
+from django.http import HttpResponse, HttpResponseRedirect
 from django.utils.decorators import method_decorator
 from django.utils import timezone
 from django_ratelimit.decorators import ratelimit
@@ -36,6 +37,86 @@ from .emails import (
 from .newsletter_tokens import read_unsubscribe_token
 
 logger = logging.getLogger(__name__)
+
+
+def _resolve_public_frontend_url() -> str:
+    frontend_url = str(getattr(settings, "FRONTEND_URL", "") or "").strip()
+    if frontend_url.startswith("http"):
+        return frontend_url.rstrip("/")
+
+    site_url = str(getattr(settings, "SITE_URL", "https://cracktcg.com") or "").strip()
+    if site_url.startswith("http"):
+        return site_url.rstrip("/")
+
+    return "https://cracktcg.com"
+
+
+def _process_contact_mark_read(token: str) -> tuple[int, dict]:
+    token_payload = read_mark_read_token(token)
+    if not token_payload:
+        return 400, {"detail": "El enlace para marcar el mensaje como leido no es valido."}
+
+    contact_id, recipient_email = token_payload
+    is_valid_recipient = NotificationRecipient.objects.filter(
+        is_active=True,
+        email__iexact=recipient_email,
+    ).exists()
+    if not is_valid_recipient:
+        return 403, {"detail": "El destinatario de este enlace ya no tiene permisos."}
+
+    with transaction.atomic():
+        contact = ContactMessage.objects.select_for_update().filter(id=contact_id).first()
+        if not contact:
+            return 404, {"detail": "El mensaje ya no existe o fue eliminado."}
+
+        pending_updates = []
+        marked_now = False
+        if not contact.read:
+            contact.read = True
+            contact.read_at = timezone.now()
+            contact.read_by_email = recipient_email
+            pending_updates.extend(["read", "read_at", "read_by_email"])
+            marked_now = True
+
+        ack_sent_now = False
+        should_send_ack = contact.customer_ack_sent_at is None
+        if should_send_ack:
+            try:
+                sent = send_contact_acknowledgement_email(contact.id)
+            except Exception:
+                sent = False
+                logger.exception("Error enviando acuse de contacto %s", contact.id)
+
+            if sent:
+                contact.customer_ack_sent_at = timezone.now()
+                pending_updates.append("customer_ack_sent_at")
+                ack_sent_now = True
+
+        if pending_updates:
+            contact.save(update_fields=pending_updates)
+
+        contact.refresh_from_db()
+
+    status_message = "Mensaje marcado como leido." if marked_now else "El mensaje ya estaba marcado como leido."
+    if contact.customer_ack_sent_at:
+        status_message += " El cliente fue notificado por email."
+
+    return 200, {
+        "message": status_message,
+        "recipient_email": recipient_email,
+        "ack_sent": bool(contact.customer_ack_sent_at),
+        "ack_sent_now": ack_sent_now,
+        "contact": {
+            "id": contact.id,
+            "name": contact.name,
+            "email": contact.email,
+            "message": contact.message,
+            "created_at": timezone.localtime(contact.created_at).strftime("%d/%m/%Y %H:%M"),
+            "read": contact.read,
+            "read_at": timezone.localtime(contact.read_at).strftime("%d/%m/%Y %H:%M") if contact.read_at else None,
+            "read_by_email": contact.read_by_email,
+        },
+    }
 
 
 class ExchangeRateView(APIView):
@@ -143,58 +224,21 @@ class ContactMarkReadView(APIView):
 
     def get(self, request):
         token = str(request.query_params.get("token") or "").strip()
-        token_payload = read_mark_read_token(token)
-        if not token_payload:
-            return HttpResponse(
-                "<h2>Enlace inválido</h2><p>El enlace para marcar el mensaje como leído no es válido.</p>",
-                status=400,
-            )
-        contact_id, recipient_email = token_payload
+        frontend_url = _resolve_public_frontend_url()
+        route = f"{frontend_url}/contacto/mensaje-leido"
+        if token:
+            route = f"{route}?token={quote(token)}"
+        return HttpResponseRedirect(route)
 
-        is_valid_recipient = NotificationRecipient.objects.filter(
-            is_active=True,
-            email__iexact=recipient_email,
-        ).exists()
-        if not is_valid_recipient:
-            return HttpResponse(
-                "<h2>Acceso denegado</h2><p>El destinatario de este enlace ya no tiene permisos para marcar mensajes.</p>",
-                status=403,
-            )
 
-        with transaction.atomic():
-            contact = ContactMessage.objects.select_for_update().filter(id=contact_id).first()
-            if not contact:
-                return HttpResponse(
-                    "<h2>Mensaje no encontrado</h2><p>El mensaje ya no existe o fue eliminado.</p>",
-                    status=404,
-                )
+class ContactMarkReadConfirmView(APIView):
+    permission_classes = [permissions.AllowAny]
 
-            pending_updates = []
-            if not contact.read:
-                contact.read = True
-                contact.read_at = timezone.now()
-                contact.read_by_email = recipient_email
-                pending_updates.extend(["read", "read_at", "read_by_email"])
-
-            should_send_ack = contact.customer_ack_sent_at is None
-            if should_send_ack:
-                try:
-                    sent = send_contact_acknowledgement_email(contact.id)
-                except Exception:
-                    sent = False
-                    logger.exception("Error enviando acuse de contacto %s", contact.id)
-
-                if sent:
-                    contact.customer_ack_sent_at = timezone.now()
-                    pending_updates.append("customer_ack_sent_at")
-
-            if pending_updates:
-                contact.save(update_fields=pending_updates)
-
-        return HttpResponse(
-            "<h2>Mensaje marcado como leído</h2><p>El mensaje fue actualizado en admin y el cliente recibió la confirmación por email.</p>",
-            status=200,
-        )
+    @method_decorator(ratelimit(key="ip", rate="15/m", method="POST", block=True))
+    def post(self, request):
+        token = str(request.data.get("token") or "").strip()
+        http_status, payload = _process_contact_mark_read(token)
+        return Response(payload, status=http_status)
 
 
 class SolicitudVentaCreateView(APIView):

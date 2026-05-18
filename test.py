@@ -1,40 +1,46 @@
-# Los metodos abstractos obligaran a la clase instanciada a implementar el metodo en la instancia 
-from abc import abstractmethod
-# ABC Meta se usa para declarar la clase como una interfaz
-from abc import ABCMeta
+# Clase encargada de enviar emails
+# Esta seria la "dependencia"
+class EmailService:
 
-# Creo la interface con abc (abstract base class)
-# El decorador abstractmethod, obliga a los herederos a implementar el metodo 
-class Mando(metaclass=ABCMeta):
-    @abstractmethod
-    def siguiente_canal(self):
-        pass
+    # Metodo para enviar un mensaje
+    def enviar(self, mensaje):
 
-    @abstractmethod
-    def canal_anterior(self):
-        pass
-
-    @abstractmethod
-    def subir_volumen(self):
-        pass
-
-    @abstractmethod
-    def bajar_volumen(self):
-        pass
-
-# Creo la  clase y firmo el contrato con Mando
-# Mando no es una clase comun, es una interfaz
-class MandoSamsung(Mando):
-    def siguiente_canal(self):
-        print("Samsung->Siguiente")
-    def canal_anterior(self):
-        print("Samsung->Anterior")
-    def subir_volumen(self):
-        print("Samsung->Subir")
-    def bajar_volumen(self):
-        print("Samsung->Bajar")
+        # Simulamos el envio del email
+        print(f"Enviando email: {mensaje}")
 
 
-m1 = MandoSamsung()
+# Clase principal de negocio
+class UsuarioService:
 
-m1.subir_volumen()
+    # El constructor recibe una dependencia
+    # En este caso: email_service
+    # NO la crea adentro, la recibe desde afuera
+    def __init__(self, email_service):
+
+        # Guardamos la dependencia en la instancia
+        self.email_service = email_service
+
+    # Metodo para registrar usuarios
+    def registrar_usuario(self, nombre):
+
+        # Simulamos el registro
+        print(f"Usuario {nombre} registrado")
+
+        # Usamos la dependencia inyectada
+        # para enviar el email
+        self.email_service.enviar("Bienvenido!")
+
+
+# =========================
+# INYECCION DE DEPENDENCIA
+# =========================
+
+# Creamos la dependencia
+email_service = EmailService()
+
+# Creamos UsuarioService
+# y le INYECTAMOS la dependencia
+usuario_service = UsuarioService(email_service)
+
+# Ejecutamos el metodo
+usuario_service.registrar_usuario("Tomas")
