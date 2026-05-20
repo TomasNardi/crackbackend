@@ -7,6 +7,7 @@ from django.urls import reverse, path
 from django.http import HttpResponse, HttpResponseRedirect
 from django.utils.html import format_html
 from django.contrib import messages
+from django.db.models import Q
 import logging
 from unfold.admin import ModelAdmin, TabularInline
 
@@ -191,6 +192,33 @@ class OrderAdmin(ModelAdmin):
 
         return "none", "—", "#888"
 
+    def _requires_shipping_dispatch(self, obj):
+        """Detect if an order requires shipment even when legacy has_shipping is desynced."""
+        if obj.shipping_type == Order.SHIPPING_PICKUP:
+            return False
+
+        if obj.shipping_method == Order.SHIPPING_METHOD_STORE_PICKUP:
+            return False
+
+        if obj.shipping_type == Order.SHIPPING_HOME:
+            return True
+
+        if obj.shipping_method in {
+            Order.SHIPPING_METHOD_HOME,
+            Order.SHIPPING_METHOD_BRANCH_NORMAL,
+            Order.SHIPPING_METHOD_BRANCH_EXPRESS,
+        }:
+            return True
+
+        return bool(
+            obj.has_shipping
+            or obj.shipping_address
+            or obj.shipping_branch
+            or obj.shipping_city
+            or obj.shipping_province
+            or obj.shipping_zip
+        )
+
     @admin.display(description="Cobro")
     def payment_status_display(self, obj):
         if obj.payment_method == Order.PAYMENT_CASH and obj.status == Order.STATUS_PENDING:
@@ -220,7 +248,7 @@ class OrderAdmin(ModelAdmin):
 
     @admin.display(description="Envíos")
     def shipping_hub_button(self, obj):
-        if not obj.has_shipping or obj.shipping_type == Order.SHIPPING_PICKUP:
+        if not self._requires_shipping_dispatch(obj):
             return format_html('<span style="color:#999;">—</span>')
 
         if obj.shipping_status == Order.SHIPPING_STATUS_SHIPPED:
@@ -275,7 +303,7 @@ class OrderAdmin(ModelAdmin):
         except Order.DoesNotExist:
             return HttpResponse("Orden no encontrada.", status=404)
 
-        if order.shipping_type == Order.SHIPPING_PICKUP:
+        if not self._requires_shipping_dispatch(order):
             return HttpResponse("Esta orden es retiro en persona y no requiere despacho.", status=400)
 
         if order.status != Order.STATUS_PAID:
@@ -578,7 +606,15 @@ class ShippingOrderAdmin(ModelAdmin):
         return (
             super()
             .get_queryset(request)
-            .filter(has_shipping=True)
+            .filter(
+                Q(has_shipping=True)
+                | Q(shipping_type=Order.SHIPPING_HOME)
+                | Q(shipping_method__in=[
+                    Order.SHIPPING_METHOD_HOME,
+                    Order.SHIPPING_METHOD_BRANCH_NORMAL,
+                    Order.SHIPPING_METHOD_BRANCH_EXPRESS,
+                ])
+            )
             .select_related("shipment")
             .order_by("-created_at")
         )
