@@ -130,7 +130,7 @@ class OrderAdmin(ModelAdmin):
         "cancelled": "#d73a49",
         "refunded": "#d73a49",
         "charged_back": "#d73a49",
-        "expired": "#d73a49",
+        "expired": "#C8972E",
     }
 
     list_display = (
@@ -165,9 +165,11 @@ class OrderAdmin(ModelAdmin):
         return local.strftime("%d/%m/%Y %H:%M")
 
     def _payment_status_meta(self, obj):
-        # Order-level refunded/cancelled override — always red regardless of payment method
+        # Order-level terminal overrides.
         if obj.status == Order.STATUS_REFUNDED:
             return "refunded", "Devolución", "#d73a49"
+        if obj.status == Order.STATUS_EXPIRED:
+            return "expired", "Vencida", "#C8972E"
         if obj.status == Order.STATUS_CANCELLED:
             return "cancelled", "Cancelada", "#d73a49"
 

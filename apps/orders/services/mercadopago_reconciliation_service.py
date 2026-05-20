@@ -248,6 +248,7 @@ def reconcile_payment(payment_data, source="webhook"):
         status_updated = False
         refund_statuses = {"refunded", "charged_back"}
         cancellation_statuses = {"rejected", "cancelled"}
+        expired_statuses = {"expired"}
 
         if payment_status in refund_statuses and order.status != Order.STATUS_REFUNDED:
             order.status = Order.STATUS_REFUNDED
@@ -266,6 +267,11 @@ def reconcile_payment(payment_data, source="webhook"):
                 apply_order_confirmed_side_effects(order)
                 notify_order_id = order.id
             logger.info("Orden %s marcada como PAGADA (pago %s aprobado)", order.order_code, payment_id)
+        elif payment_status in expired_statuses and order.status not in {Order.STATUS_PAID, Order.STATUS_REFUNDED}:
+            if order.status != Order.STATUS_EXPIRED:
+                order.status = Order.STATUS_EXPIRED
+                status_updated = True
+            logger.info("Orden %s marcada como VENCIDA (pago %s: %s)", order.order_code, payment_id, payment_status)
         elif payment_status in cancellation_statuses and order.status not in {Order.STATUS_PAID, Order.STATUS_REFUNDED}:
             if order.status != Order.STATUS_CANCELLED:
                 order.status = Order.STATUS_CANCELLED
@@ -373,11 +379,11 @@ def reconcile_merchant_order_event(merchant_order_data, source="webhook"):
         mp_payment.raw_response = merchant_order_data
         mp_payment.save()
 
-        order.status = Order.STATUS_CANCELLED
+        order.status = Order.STATUS_EXPIRED
         order.save(update_fields=["status", "updated_at"])
 
         logger.info(
-            "Orden %s marcada como CANCELADA por expiracion de checkout MP (merchant_order_id=%s)",
+            "Orden %s marcada como VENCIDA por expiracion de checkout MP (merchant_order_id=%s)",
             order.order_code,
             merchant_order_id,
         )

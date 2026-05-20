@@ -188,6 +188,7 @@ def generate_order_pdf(order):
     status_color = {
         "pending": "#e36209",
         "paid": "#2ea44f",
+        "expired": "#C8972E",
         "cancelled": "#d73a49",
         "refunded": "#d73a49",
     }.get(order.status, "#666")

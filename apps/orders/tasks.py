@@ -114,7 +114,7 @@ def expire_stale_mercadopago_checkouts(batch_size=300):
                 update_fields=["status", "expires_at", "expired_at", "last_validated_at", "updated_at"]
             )
 
-            locked_order.status = Order.STATUS_CANCELLED
+            locked_order.status = Order.STATUS_EXPIRED
             locked_order.save(update_fields=["status", "updated_at"])
             expired += 1
 

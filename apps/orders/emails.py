@@ -129,6 +129,8 @@ def _resolve_payment_status(order) -> tuple[str, object | None]:
 
     if order.status == Order.STATUS_REFUNDED:
         return "Devolución", None
+    if order.status == Order.STATUS_EXPIRED:
+        return "Vencida", None
     if order.status == Order.STATUS_CANCELLED:
         return "Cancelada", None
 
