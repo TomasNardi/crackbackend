@@ -118,10 +118,10 @@ class OrderCreateSerializer(serializers.Serializer):
             else:
                 shipping_method = Order.SHIPPING_METHOD_HOME
 
-        is_home = shipping_method == Order.SHIPPING_METHOD_HOME
         is_store_pickup = shipping_method == Order.SHIPPING_METHOD_STORE_PICKUP
+        is_home = not is_store_pickup
         data["shipping_method"] = shipping_method
-        data["shipping_type"] = Order.SHIPPING_HOME if is_home else Order.SHIPPING_PICKUP
+        data["shipping_type"] = Order.SHIPPING_PICKUP if is_store_pickup else Order.SHIPPING_HOME
 
         if is_store_pickup:
             data["shipping_zone"] = ""

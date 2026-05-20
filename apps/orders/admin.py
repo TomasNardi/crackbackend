@@ -194,20 +194,20 @@ class OrderAdmin(ModelAdmin):
 
     def _requires_shipping_dispatch(self, obj):
         """Detect if an order requires shipment even when legacy has_shipping is desynced."""
-        if obj.shipping_type == Order.SHIPPING_PICKUP:
-            return False
-
         if obj.shipping_method == Order.SHIPPING_METHOD_STORE_PICKUP:
             return False
-
-        if obj.shipping_type == Order.SHIPPING_HOME:
-            return True
 
         if obj.shipping_method in {
             Order.SHIPPING_METHOD_HOME,
             Order.SHIPPING_METHOD_BRANCH_NORMAL,
             Order.SHIPPING_METHOD_BRANCH_EXPRESS,
         }:
+            return True
+
+        if obj.shipping_type == Order.SHIPPING_PICKUP:
+            return False
+
+        if obj.shipping_type == Order.SHIPPING_HOME:
             return True
 
         return bool(
