@@ -13,6 +13,14 @@ from django.core.exceptions import ValidationError
 from django.db import models
 from django.utils import timezone
 
+from apps.orders.services.shipping_carriers import (
+    CARRIER_ANDREANI,
+    CARRIER_CHOICES,
+    CARRIER_CORREO_ARGENTINO,
+    DEFAULT_CARRIER,
+    get_carrier_tracking_url,
+)
+
 
 # Caracteres usados en order_code — excluye caracteres confusos (0/O, 1/I, L)
 _CODE_ALPHABET = "ABCDEFGHJKMNPQRSTUVWXYZ23456789"
@@ -347,6 +355,10 @@ class Shipment(models.Model):
         (STATUS_SHIPPED, "Despachado"),
     ]
 
+    CARRIER_CORREO_ARGENTINO = CARRIER_CORREO_ARGENTINO
+    CARRIER_ANDREANI = CARRIER_ANDREANI
+    CARRIER_CHOICES = CARRIER_CHOICES
+
     order = models.OneToOneField(
         Order,
         on_delete=models.CASCADE,
@@ -354,6 +366,12 @@ class Shipment(models.Model):
         verbose_name="Orden",
     )
     tracking_code = models.CharField("Código de seguimiento", max_length=120, blank=True)
+    carrier = models.CharField(
+        "Empresa de correo",
+        max_length=30,
+        choices=CARRIER_CHOICES,
+        default=DEFAULT_CARRIER,
+    )
     status = models.CharField("Estado", max_length=20, choices=STATUS_CHOICES, default=STATUS_PENDING)
     shipped_at = models.DateTimeField("Fecha de despacho", null=True, blank=True)
     created_at = models.DateTimeField("Creado", auto_now_add=True)
@@ -365,6 +383,10 @@ class Shipment(models.Model):
 
     def __str__(self):
         return f"Shipment #{self.id} - Orden {self.order.order_code}"
+
+    @property
+    def carrier_tracking_url(self) -> str:
+        return get_carrier_tracking_url(self.carrier)
 
 
 class ShippingOrder(Order):

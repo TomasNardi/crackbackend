@@ -19,6 +19,8 @@ from django.template.loader import render_to_string
 from django.utils import timezone
 import resend
 
+from apps.orders.services.shipping_carriers import get_carrier_label, get_carrier_tracking_url
+
 logger = logging.getLogger(__name__)
 
 def get_internal_notification_recipients() -> list[str]:
@@ -380,16 +382,28 @@ def send_payment_confirmed_email(order_id: int) -> None:
     )
 
 
-def send_shipment_notification(order_id: int, tracking_code: str) -> None:
+def send_shipment_notification(order_id: int, tracking_code: str, carrier: str | None = None) -> None:
     """Email al cliente cuando su orden fue despachada."""
     from .models import Order
 
     order = Order.objects.get(id=order_id)
     site_url = _resolve_public_site_url()
 
+    carrier_value = (carrier or "").strip()
+    if not carrier_value:
+        shipment = getattr(order, "shipment", None)
+        carrier_value = getattr(shipment, "carrier", "")
+
+    carrier_label = get_carrier_label(carrier_value)
+    tracking_url = get_carrier_tracking_url(carrier_value)
+    tracking_button_label = f"Ir a {carrier_label}" if tracking_url else ""
+
     context = {
         "order": order,
         "tracking_code": tracking_code,
+        "shipping_carrier": carrier_label,
+        "tracking_url": tracking_url,
+        "tracking_button_label": tracking_button_label,
         "brand_image_url": f"{site_url}/brand/mantenimientofoto.png",
         "whatsapp_url": f"{site_url}/wa",
         "shipped_at": timezone.localtime(timezone.now()).strftime("%d/%m/%Y %H:%M"),

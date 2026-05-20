@@ -42,4 +42,4 @@ def shipment_post_save(sender, instance: Shipment, **kwargs):
     )
 
     if getattr(instance, "_should_notify_shipping", False):
-        send_shipment_notification(instance.order_id, instance.tracking_code)
+        send_shipment_notification(instance.order_id, instance.tracking_code, instance.carrier)

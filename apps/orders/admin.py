@@ -60,7 +60,7 @@ class ShipmentInline(TabularInline):
     model = Shipment
     extra = 0
     max_num = 1
-    fields = ("tracking_code", "status", "shipped_at", "created_at")
+    fields = ("carrier", "tracking_code", "status", "shipped_at", "created_at")
     readonly_fields = ("created_at",)
 
     def get_readonly_fields(self, request, obj=None):
@@ -78,6 +78,11 @@ class ShipmentInline(TabularInline):
 
 
 class ShipmentQuickUpdateForm(forms.Form):
+    carrier = forms.ChoiceField(
+        label="Empresa de correo",
+        required=True,
+        choices=Shipment.CARRIER_CHOICES,
+    )
     tracking_code = forms.CharField(
         label="Código de seguimiento",
         max_length=120,
@@ -282,9 +287,10 @@ class OrderAdmin(ModelAdmin):
         if request.method == "POST":
             form = ShipmentQuickUpdateForm(request.POST)
             if form.is_valid():
+                shipment.carrier = form.cleaned_data["carrier"]
                 shipment.tracking_code = form.cleaned_data["tracking_code"].strip()
                 shipment.status = Shipment.STATUS_SHIPPED
-                shipment.save(update_fields=["tracking_code", "status", "shipped_at"])
+                shipment.save(update_fields=["carrier", "tracking_code", "status", "shipped_at"])
 
                 return HttpResponse(
                     "<script>"
@@ -293,7 +299,10 @@ class OrderAdmin(ModelAdmin):
                     "</script>"
                 )
         else:
-            form = ShipmentQuickUpdateForm(initial={"tracking_code": shipment.tracking_code})
+            form = ShipmentQuickUpdateForm(initial={
+                "carrier": shipment.carrier,
+                "tracking_code": shipment.tracking_code,
+            })
 
         context = {
             "title": "Cargar envío",
@@ -464,8 +473,8 @@ class ShippingConfigAdmin(ModelAdmin):
 
 @admin.register(Shipment)
 class ShipmentAdmin(ModelAdmin):
-    list_display = ("order", "tracking_code", "status", "shipped_at", "created_at")
-    list_filter = ("status",)
+    list_display = ("order", "carrier", "tracking_code", "status", "shipped_at", "created_at")
+    list_filter = ("status", "carrier")
     search_fields = ("order__order_code", "order__customer_name", "tracking_code")
     readonly_fields = ("created_at",)
 
@@ -523,6 +532,7 @@ class ShippingOrderAdmin(ModelAdmin):
         "customer_name",
         "shipping_method_display",
         "shipping_status_display",
+        "shipping_carrier_display",
         "tracking_code",
         "created_at_ar",
         "shipped_at_display",
@@ -583,6 +593,13 @@ class ShippingOrderAdmin(ModelAdmin):
     def tracking_code(self, obj):
         shipment = getattr(obj, "shipment", None)
         return shipment.tracking_code if shipment and shipment.tracking_code else "—"
+
+    @admin.display(description="Correo")
+    def shipping_carrier_display(self, obj):
+        shipment = getattr(obj, "shipment", None)
+        if not shipment:
+            return "—"
+        return shipment.get_carrier_display()
 
     @admin.display(description="Método envío", ordering="shipping_method")
     def shipping_method_display(self, obj):
