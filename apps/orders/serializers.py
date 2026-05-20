@@ -46,7 +46,11 @@ class OrderCreateSerializer(serializers.Serializer):
         required=False,
         allow_blank=True,
     )
-    shipping_zone = serializers.ChoiceField(choices=Order.SHIPPING_ZONE_CHOICES, required=False)
+    shipping_zone = serializers.ChoiceField(
+        choices=Order.SHIPPING_ZONE_CHOICES,
+        required=False,
+        allow_blank=True,
+    )
     shipping_address = serializers.CharField(max_length=500, required=False, allow_blank=True)
     shipping_city = serializers.CharField(max_length=100, required=False, allow_blank=True)
     shipping_province = serializers.CharField(max_length=100, required=False, allow_blank=True)
