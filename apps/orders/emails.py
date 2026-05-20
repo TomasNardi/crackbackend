@@ -419,3 +419,26 @@ def send_shipment_notification(order_id: int, tracking_code: str, carrier: str |
         html=html,
         entity_ref_id=f"order-{order.order_code}-shipment",
     )
+
+
+def send_pickup_ready_notification(order_id: int) -> None:
+    """Email al cliente cuando su pedido de retiro en local está preparado."""
+    from .models import Order
+
+    order = Order.objects.prefetch_related("items").get(id=order_id)
+    context = _build_order_email_context(order)
+
+    # Fallback explícito de dirección de retiro si no está cargada en la orden.
+    context["pickup_branch_address"] = (
+        order.shipping_branch
+        or "Deheza 2921, PB, Saavedra, Buenos Aires, Argentina"
+    )
+
+    html = render_to_string("emails/order_pickup_ready_notification.html", context)
+
+    _send(
+        to=[order.customer_email],
+        subject=f"✅ Tu pedido {order.order_code} está listo para retirar — CRACK TCG",
+        html=html,
+        entity_ref_id=f"order-{order.order_code}-pickup_ready",
+    )

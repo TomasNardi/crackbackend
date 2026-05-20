@@ -219,6 +219,11 @@ class OrderAdmin(ModelAdmin):
             or obj.shipping_zip
         )
 
+    def _is_store_pickup(self, obj):
+        if obj.shipping_method == Order.SHIPPING_METHOD_STORE_PICKUP:
+            return True
+        return obj.shipping_type == Order.SHIPPING_PICKUP
+
     @admin.display(description="Cobro")
     def payment_status_display(self, obj):
         if obj.payment_method == Order.PAYMENT_CASH and obj.status == Order.STATUS_PENDING:
@@ -248,6 +253,24 @@ class OrderAdmin(ModelAdmin):
 
     @admin.display(description="Envíos")
     def shipping_hub_button(self, obj):
+        if self._is_store_pickup(obj):
+            if obj.status != Order.STATUS_PAID:
+                return format_html(
+                    '<span style="'
+                    'background:#9ca3af;color:#fff;padding:5px 12px;border-radius:4px;'
+                    'font-size:12px;font-weight:600;display:inline-block;cursor:not-allowed;opacity:0.75;"'
+                    ' title="La orden debe estar pagada antes de avisar que está preparada para retiro.">Preparado</span>'
+                )
+
+            url = reverse("admin:orders_order_pickup_ready", args=[obj.pk])
+            return format_html(
+                '<a href="{}" style="'
+                'background:#2ea44f;color:#fff;padding:5px 12px;border-radius:4px;'
+                'font-size:12px;font-weight:600;text-decoration:none;display:inline-block;"'
+                'title="Enviar email para coordinar retiro">Preparado</a>',
+                url,
+            )
+
         if not self._requires_shipping_dispatch(obj):
             return format_html('<span style="color:#999;">—</span>')
 
@@ -294,8 +317,55 @@ class OrderAdmin(ModelAdmin):
                 self.admin_site.admin_view(self.shipping_popup_view),
                 name="orders_order_shipping_popup",
             ),
+            path(
+                "<int:order_id>/pickup-ready/",
+                self.admin_site.admin_view(self.pickup_ready_view),
+                name="orders_order_pickup_ready",
+            ),
         ]
         return custom + urls
+
+    def pickup_ready_view(self, request, order_id):
+        try:
+            order = Order.objects.get(pk=order_id)
+        except Order.DoesNotExist:
+            self.message_user(request, "Orden no encontrada.", level=messages.ERROR)
+            return HttpResponseRedirect(reverse("admin:orders_order_changelist"))
+
+        if not self._is_store_pickup(order):
+            self.message_user(
+                request,
+                f"La orden #{order.order_code} no es retiro en local.",
+                level=messages.WARNING,
+            )
+            return HttpResponseRedirect(request.META.get("HTTP_REFERER") or reverse("admin:orders_order_changelist"))
+
+        if order.status != Order.STATUS_PAID:
+            self.message_user(
+                request,
+                "La orden debe estar pagada antes de enviar el aviso de retiro preparado.",
+                level=messages.WARNING,
+            )
+            return HttpResponseRedirect(request.META.get("HTTP_REFERER") or reverse("admin:orders_order_changelist"))
+
+        try:
+            from .emails import send_pickup_ready_notification
+
+            send_pickup_ready_notification(order.id)
+            self.message_user(
+                request,
+                f"Se envió el email de retiro preparado para la orden #{order.order_code}.",
+                level=messages.SUCCESS,
+            )
+        except Exception as exc:
+            logger.exception("Error enviando email de retiro preparado para orden %s: %s", order.order_code, exc)
+            self.message_user(
+                request,
+                f"No se pudo enviar el email de retiro preparado: {exc}",
+                level=messages.ERROR,
+            )
+
+        return HttpResponseRedirect(request.META.get("HTTP_REFERER") or reverse("admin:orders_order_changelist"))
 
     def shipping_popup_view(self, request, order_id):
         try:
