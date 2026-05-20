@@ -111,15 +111,25 @@ class OrderCreateSerializer(serializers.Serializer):
         shipping_method = data.get("shipping_method")
         shipping_type = data.get("shipping_type", Order.SHIPPING_HOME)
 
-        # Compatibilidad con clientes viejos: mapear shipping_type a shipping_method.
-        if not shipping_method:
-            if shipping_type == Order.SHIPPING_PICKUP:
-                shipping_method = Order.SHIPPING_METHOD_STORE_PICKUP
-            else:
-                shipping_method = Order.SHIPPING_METHOD_HOME
+        # shipping_type tiene prioridad para evitar inconsistencias cuando el cliente
+        # deja un shipping_method previo al cambiar a retiro.
+        if shipping_type == Order.SHIPPING_PICKUP:
+            shipping_method = Order.SHIPPING_METHOD_STORE_PICKUP
+        elif not shipping_method:
+            shipping_method = Order.SHIPPING_METHOD_HOME
 
         is_store_pickup = shipping_method == Order.SHIPPING_METHOD_STORE_PICKUP
-        is_home = not is_store_pickup
+        is_home_delivery = shipping_method == Order.SHIPPING_METHOD_HOME
+        is_branch_delivery = shipping_method in {
+            Order.SHIPPING_METHOD_BRANCH_NORMAL,
+            Order.SHIPPING_METHOD_BRANCH_EXPRESS,
+        }
+
+        if not (is_store_pickup or is_home_delivery or is_branch_delivery):
+            raise serializers.ValidationError(
+                {"shipping_method": "Método de envío inválido."}
+            )
+
         data["shipping_method"] = shipping_method
         data["shipping_type"] = Order.SHIPPING_PICKUP if is_store_pickup else Order.SHIPPING_HOME
 
@@ -134,21 +144,19 @@ class OrderCreateSerializer(serializers.Serializer):
 
         if is_store_pickup:
             required_fields = {}
-        elif is_home:
+        elif is_home_delivery:
             required_fields = {
                 "shipping_address": "La dirección es obligatoria para envío a domicilio.",
                 "shipping_city": "La ciudad es obligatoria para envío a domicilio.",
                 "shipping_province": "La provincia es obligatoria para envío a domicilio.",
                 "shipping_zip": "El código postal es obligatorio para envío a domicilio.",
             }
-            if shipping_method == Order.SHIPPING_METHOD_BRANCH_EXPRESS:
-                raise serializers.ValidationError(
-                    {"shipping_method": "Domicilio no tiene modalidad express."}
-                )
-        else:
+        elif is_branch_delivery:
             required_fields = {
                 "shipping_branch": "La sucursal es obligatoria para retiro en punto.",
             }
+        else:
+            required_fields = {}
 
         shipping_errors = {
             field: message

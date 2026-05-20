@@ -158,3 +158,51 @@ class OrderProductImageIntegrityTests(TestCase):
         self.assertEqual(product.image_url_2, "https://cdn.example.com/charizard-2.jpg")
         self.assertEqual(product.image_url_3, "https://cdn.example.com/charizard-3.jpg")
         self.assertTrue(ProductImage.objects.filter(pk=image.pk, product=product).exists())
+
+
+class OrderShippingValidationTests(TestCase):
+    def setUp(self):
+        category = ProductCategory.objects.create(name="Single")
+        self.product = Product.objects.create(
+            category=category,
+            name="Test Card",
+            price_usd=Decimal("10.00"),
+            in_stock=True,
+            stock_quantity=5,
+        )
+
+    def test_pickup_shipping_type_overrides_stale_shipping_method(self):
+        serializer = OrderCreateSerializer(
+            data={
+                "customer_name": "Cliente Pickup",
+                "customer_email": "pickup@test.com",
+                "shipping_type": Order.SHIPPING_PICKUP,
+                "shipping_method": Order.SHIPPING_METHOD_BRANCH_EXPRESS,
+                "items": [{"product_id": self.product.id, "quantity": 1}],
+            }
+        )
+
+        self.assertTrue(serializer.is_valid(), serializer.errors)
+        self.assertEqual(
+            serializer.validated_data["shipping_method"],
+            Order.SHIPPING_METHOD_STORE_PICKUP,
+        )
+        self.assertEqual(
+            serializer.validated_data["shipping_type"],
+            Order.SHIPPING_PICKUP,
+        )
+
+    def test_branch_express_is_valid_for_shipping(self):
+        serializer = OrderCreateSerializer(
+            data={
+                "customer_name": "Cliente Sucursal",
+                "customer_email": "sucursal@test.com",
+                "shipping_type": Order.SHIPPING_HOME,
+                "shipping_method": Order.SHIPPING_METHOD_BRANCH_EXPRESS,
+                "shipping_province": "Buenos Aires",
+                "shipping_branch": "Sucursal Andreani Palermo",
+                "items": [{"product_id": self.product.id, "quantity": 1}],
+            }
+        )
+
+        self.assertTrue(serializer.is_valid(), serializer.errors)
