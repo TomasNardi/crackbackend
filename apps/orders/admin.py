@@ -262,6 +262,14 @@ class OrderAdmin(ModelAdmin):
                     ' title="La orden debe estar pagada antes de avisar que está preparada para retiro.">Preparado</span>'
                 )
 
+            if obj.pickup_ready_notified_at:
+                return format_html(
+                    '<span style="'
+                    'background:#2ea44f;color:#fff;padding:5px 12px;border-radius:4px;'
+                    'font-size:12px;font-weight:600;display:inline-block;cursor:not-allowed;opacity:0.85;"'
+                    ' title="Ya se envió el aviso de retiro preparado al cliente.">✅ Preparado y listo</span>'
+                )
+
             url = reverse("admin:orders_order_pickup_ready", args=[obj.pk])
             return format_html(
                 '<a href="{}" style="'
@@ -348,10 +356,20 @@ class OrderAdmin(ModelAdmin):
             )
             return HttpResponseRedirect(request.META.get("HTTP_REFERER") or reverse("admin:orders_order_changelist"))
 
+        if order.pickup_ready_notified_at:
+            self.message_user(
+                request,
+                f"La orden #{order.order_code} ya estaba marcada como retiro preparado.",
+                level=messages.INFO,
+            )
+            return HttpResponseRedirect(request.META.get("HTTP_REFERER") or reverse("admin:orders_order_changelist"))
+
         try:
             from .emails import send_pickup_ready_notification
 
             send_pickup_ready_notification(order.id)
+            order.pickup_ready_notified_at = timezone.now()
+            order.save(update_fields=["pickup_ready_notified_at", "updated_at"])
             self.message_user(
                 request,
                 f"Se envió el email de retiro preparado para la orden #{order.order_code}.",

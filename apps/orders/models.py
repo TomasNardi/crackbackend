@@ -234,6 +234,12 @@ class Order(models.Model):
         choices=SHIPPING_STATUS_CHOICES,
         default=SHIPPING_STATUS_PENDING,
     )
+    pickup_ready_notified_at = models.DateTimeField(
+        "Aviso de retiro preparado",
+        null=True,
+        blank=True,
+        help_text="Fecha en la que se envio el aviso de retiro preparado al cliente.",
+    )
 
     # Descuento aplicado
     discount_code = models.CharField("Código descuento", max_length=20, blank=True)
