@@ -65,14 +65,14 @@ class ShipmentInline(TabularInline):
 
     def get_readonly_fields(self, request, obj=None):
         base = list(super().get_readonly_fields(request, obj))
-        if obj and obj.payment_method == Order.PAYMENT_CASH and obj.status == Order.STATUS_PENDING:
+        if obj and obj.status != Order.STATUS_PAID:
             for field in ("tracking_code", "status", "shipped_at"):
                 if field not in base:
                     base.append(field)
         return tuple(base)
 
     def has_add_permission(self, request, obj=None):
-        if obj and obj.payment_method == Order.PAYMENT_CASH and obj.status == Order.STATUS_PENDING:
+        if obj and obj.status != Order.STATUS_PAID:
             return False
         return super().has_add_permission(request, obj)
 
@@ -228,12 +228,12 @@ class OrderAdmin(ModelAdmin):
                 'font-size:12px;font-weight:600;display:inline-block;">🚚 Enviado</span>'
             )
 
-        if obj.payment_method == Order.PAYMENT_CASH and obj.status == Order.STATUS_PENDING:
+        if obj.status != Order.STATUS_PAID:
             return format_html(
                 '<span style="'
                 'background:#9ca3af;color:#fff;padding:5px 12px;border-radius:4px;'
                 'font-size:12px;font-weight:600;display:inline-block;cursor:not-allowed;opacity:0.75;"'
-                ' title="Marcá la orden como pagada antes de cargar el envío.">Pendiente de pago</span>'
+                ' title="La orden debe estar pagada antes de cargar el envío.">Pendiente de pago</span>'
             )
 
         url = reverse("admin:orders_order_shipping_popup", args=[obj.pk])
@@ -276,9 +276,9 @@ class OrderAdmin(ModelAdmin):
         if order.shipping_type == Order.SHIPPING_PICKUP:
             return HttpResponse("Esta orden es retiro en persona y no requiere despacho.", status=400)
 
-        if order.payment_method == Order.PAYMENT_CASH and order.status == Order.STATUS_PENDING:
+        if order.status != Order.STATUS_PAID:
             return HttpResponse(
-                "La orden está pendiente de pago en efectivo. Marcala como pagada antes de cargar el envío.",
+                "La orden debe estar pagada antes de cargar el envío.",
                 status=403,
             )
 
