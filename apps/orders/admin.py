@@ -123,7 +123,7 @@ class OrderAdmin(ModelAdmin):
         "expired": "Checkout vencido",
     }
     MP_STATUS_COLORS = {
-        "preference_created": "#888",
+        "preference_created": "#888888",
         "approved": "#2ea44f",
         "pending": "#e36209",
         "in_process": "#C8972E",
@@ -135,10 +135,10 @@ class OrderAdmin(ModelAdmin):
     }
 
     list_display = (
-        "order_code", "customer_name", "customer_email",
-        "total", "payment_method", "payment_status_display", "shipping_type",
-        "shipping_hub_button", "pdf_download_button", "created_at_ar",
+        "order_summary", "customer_summary", "total_display",
+        "payment_summary", "shipping_summary", "pdf_download_button",
     )
+    list_display_links = ("order_summary",)
     list_filter = ("payment_method", "shipping_type", "shipping_method", "shipping_status")
     search_fields = (
         "order_code", "customer_name", "customer_email", "discount_code",
@@ -160,10 +160,83 @@ class OrderAdmin(ModelAdmin):
     def has_add_permission(self, request):
         return False
 
-    @admin.display(description="Fecha (AR)", ordering="created_at")
-    def created_at_ar(self, obj):
+    @admin.display(description="Orden", ordering="created_at")
+    def order_summary(self, obj):
+        """Código de orden + fecha en una sola celda compacta."""
         local = timezone.localtime(obj.created_at)
-        return local.strftime("%d/%m/%Y %H:%M")
+        return format_html(
+            '<div style="line-height:1.45;">'
+            '<div style="font-weight:700;font-size:13px;letter-spacing:0.03em;">{}</div>'
+            '<div style="color:#9ca3af;font-size:11px;margin-top:2px;white-space:nowrap;">{}</div>'
+            '</div>',
+            obj.order_code,
+            local.strftime("%d/%m/%Y · %H:%M"),
+        )
+
+    @admin.display(description="Cliente", ordering="customer_name")
+    def customer_summary(self, obj):
+        """Nombre + email en una sola celda, con recorte para evitar desbordes."""
+        return format_html(
+            '<div style="line-height:1.45;max-width:240px;">'
+            '<div style="font-weight:600;color:#1a1a1a;white-space:nowrap;'
+            'overflow:hidden;text-overflow:ellipsis;">{}</div>'
+            '<div style="color:#9ca3af;font-size:11px;margin-top:2px;white-space:nowrap;'
+            'overflow:hidden;text-overflow:ellipsis;" title="{}">{}</div>'
+            '</div>',
+            obj.customer_name or "—",
+            obj.customer_email or "",
+            obj.customer_email or "—",
+        )
+
+    @admin.display(description="Total", ordering="total")
+    def total_display(self, obj):
+        """Total con formato de moneda argentino ($ 1.234,56)."""
+        amount = f"{obj.total:,.2f}".replace(",", "@").replace(".", ",").replace("@", ".")
+        return format_html(
+            '<span style="font-weight:700;font-size:13px;white-space:nowrap;">$ {}</span>',
+            amount,
+        )
+
+    @admin.display(description="Pago", ordering="payment_method")
+    def payment_summary(self, obj):
+        """Método de pago + estado de cobro (badge o botón de acción)."""
+        method = obj.get_payment_method_display()
+        if obj.payment_method == Order.PAYMENT_CASH and obj.status == Order.STATUS_PENDING:
+            url = reverse("admin:orders_order_mark_cash_paid", args=[obj.pk])
+            badge = format_html(
+                '<a href="{}" style="background:#2ea44f;color:#fff;padding:3px 9px;'
+                'border-radius:6px;font-size:11px;font-weight:600;text-decoration:none;'
+                'display:inline-block;" title="Marcar orden en efectivo como pagada">'
+                '✓ Marcar pagada</a>',
+                url,
+            )
+        else:
+            _, label, color = self._payment_status_meta(obj)
+            badge = format_html(
+                '<span style="display:inline-block;padding:2px 9px;border-radius:6px;'
+                'font-size:11px;font-weight:600;color:{};background:{}1f;">{}</span>',
+                color, color, label,
+            )
+        return format_html(
+            '<div style="line-height:1.6;">'
+            '<div style="font-size:11px;color:#6b7280;margin-bottom:4px;">{}</div>'
+            '<div>{}</div>'
+            '</div>',
+            method,
+            badge,
+        )
+
+    @admin.display(description="Envío", ordering="shipping_type")
+    def shipping_summary(self, obj):
+        """Tipo de envío + botón/estado de despacho en una sola celda."""
+        return format_html(
+            '<div style="line-height:1.6;">'
+            '<div style="font-size:11px;color:#6b7280;margin-bottom:4px;">{}</div>'
+            '<div>{}</div>'
+            '</div>',
+            obj.get_shipping_type_display(),
+            self.shipping_hub_button(obj),
+        )
 
     def _payment_status_meta(self, obj):
         # Order-level terminal overrides.
@@ -182,15 +255,15 @@ class OrderAdmin(ModelAdmin):
         if obj.payment_method == Order.PAYMENT_MERCADOPAGO:
             mp_payment = obj.mp_payments.order_by("-updated_at", "-created_at").first()
             if not mp_payment:
-                return "none", "Sin novedades", "#888"
+                return "none", "Sin novedades", "#888888"
 
             status_raw = (mp_payment.status or "").strip()
             status_key = status_raw.lower()
             label = self.MP_STATUS_LABELS.get(status_key, status_raw or "Sin estado")
-            color = self.MP_STATUS_COLORS.get(status_key, "#888")
+            color = self.MP_STATUS_COLORS.get(status_key, "#888888")
             return status_key, label, color
 
-        return "none", "—", "#888"
+        return "none", "—", "#888888"
 
     def _requires_shipping_dispatch(self, obj):
         """Detect if an order requires shipment even when legacy has_shipping is desynced."""
