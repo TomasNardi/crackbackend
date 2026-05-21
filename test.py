@@ -1,46 +1,62 @@
-# Clase encargada de enviar emails
-# Esta seria la "dependencia"
-class EmailService:
+# =========================
+# MOTORES
+# =========================
 
-    # Metodo para enviar un mensaje
-    def enviar(self, mensaje):
+class MotorNafta:
 
-        # Simulamos el envio del email
-        print(f"Enviando email: {mensaje}")
+    def arrancar(self):
+        print('Motor a nafta encendido')
 
 
-# Clase principal de negocio
-class UsuarioService:
+class MotorElectrico:
 
-    # El constructor recibe una dependencia
-    # En este caso: email_service
-    # NO la crea adentro, la recibe desde afuera
-    def __init__(self, email_service):
-
-        # Guardamos la dependencia en la instancia
-        self.email_service = email_service
-
-    # Metodo para registrar usuarios
-    def registrar_usuario(self, nombre):
-
-        # Simulamos el registro
-        print(f"Usuario {nombre} registrado")
-
-        # Usamos la dependencia inyectada
-        # para enviar el email
-        self.email_service.enviar("Bienvenido!")
+    def arrancar(self):
+        print('Motor electrico encendido')
 
 
 # =========================
-# INYECCION DE DEPENDENCIA
+# AUTO
 # =========================
 
-# Creamos la dependencia
-email_service = EmailService()
+class Auto:
 
-# Creamos UsuarioService
-# y le INYECTAMOS la dependencia
-usuario_service = UsuarioService(email_service)
+    # Inyeccion de dependencias:
+    # el auto RECIBE el motor desde afuera
+    def __init__(self, motor):
 
-# Ejecutamos el metodo
-usuario_service.registrar_usuario("Tomas")
+        # guardo el objeto motor dentro del auto
+        self.motor = motor
+
+    def arrancar_auto(self):
+
+        print('El auto intenta arrancar...')
+
+        # uso el motor que me pasaron
+        self.motor.arrancar()
+
+
+# =========================
+# CREO LOS MOTORES
+# =========================
+
+motor_nafta = MotorNafta()
+motor_electrico = MotorElectrico()
+
+
+# =========================
+# CREO AUTOS
+# =========================
+
+auto1 = Auto(motor_nafta)
+auto2 = Auto(motor_electrico)
+
+
+# =========================
+# PRUEBO
+# =========================
+
+auto1.arrancar_auto()
+
+print('---')
+
+auto2.arrancar_auto()

@@ -96,9 +96,11 @@ def _build_items_context(order) -> list[dict]:
         product = getattr(item, "product", None)
         price_before = None
         discount_percent = 0
+        image_url = ""
         if product:
             price_before = getattr(product, "price_ars", None)
             discount_percent = getattr(product, "discount_percent", 0)
+            image_url = getattr(product, "image_url", "") or ""
         # Si no hay producto (borrado), usar el precio actual
         if not price_before:
             price_before = item.unit_price
@@ -108,6 +110,7 @@ def _build_items_context(order) -> list[dict]:
             "price": f"${item.unit_price:,.0f}",
             "price_before": f"${price_before:,.0f}" if price_before and price_before != item.unit_price else None,
             "discount_percent": discount_percent if discount_percent else None,
+            "image_url": image_url,
         })
     return items
 
@@ -378,7 +381,7 @@ def send_checkout_expired_notification(order_id: int) -> None:
 
     _send(
         to=[order.customer_email],
-        subject=f"Todavía estás a tiempo para volver — Pedido {order.order_code} — CRACK TCG",
+        subject=f"{order.customer_name}, ya casi es tuyo en CRACK TCG",
         html=html,
         entity_ref_id=f"order-{order.order_code}-checkout_expired",
     )
