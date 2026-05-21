@@ -7,7 +7,7 @@ from django.utils import timezone
 from django.utils.dateparse import parse_datetime
 
 from .models import Order, MercadoPagoPayment
-from .emails import send_refund_notification
+from .emails import send_refund_notification, send_checkout_expired_notification
 
 logger = logging.getLogger(__name__)
 
@@ -15,6 +15,11 @@ logger = logging.getLogger(__name__)
 def send_refund_notification_task(order_id: int) -> None:
     """Wrapper para cola: envía email de devolución al cliente."""
     send_refund_notification(order_id)
+
+
+def send_checkout_expired_notification_task(order_id: int) -> None:
+    """Wrapper para cola: envía email suave cuando expira el checkout MP."""
+    send_checkout_expired_notification(order_id)
 
 
 def _normalize_mp_datetime(value):
@@ -72,6 +77,7 @@ def expire_stale_mercadopago_checkouts(batch_size=300):
 
     processed = 0
     expired = 0
+    expired_order_ids = []
     for mp_payment in candidates:
         processed += 1
         expires_at = _resolve_expires_at(mp_payment)
@@ -117,8 +123,22 @@ def expire_stale_mercadopago_checkouts(batch_size=300):
             locked_order.status = Order.STATUS_EXPIRED
             locked_order.save(update_fields=["status", "updated_at"])
             expired += 1
+            expired_order_ids.append(locked_order.id)
 
     if expired:
         logger.info("Sweep MP expiraciones: expiradas=%s procesadas=%s", expired, processed)
+
+    for order_id in expired_order_ids:
+        try:
+            from django_q.tasks import async_task
+
+            async_task("apps.orders.tasks.send_checkout_expired_notification_task", order_id)
+        except Exception as exc:
+            logger.warning(
+                "No se pudo encolar email de checkout vencido para order_id=%s. Se envia en sync. Error: %s",
+                order_id,
+                exc,
+            )
+            send_checkout_expired_notification_task(order_id)
 
     return {"processed": processed, "expired": expired}

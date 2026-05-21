@@ -367,6 +367,23 @@ def send_refund_notification(order_id: int) -> None:
     )
 
 
+def send_checkout_expired_notification(order_id: int) -> None:
+    """Email suave al cliente cuando su checkout de Mercado Pago vence."""
+    from .models import Order
+
+    order = Order.objects.prefetch_related("items").get(id=order_id)
+    context = _build_order_email_context(order)
+
+    html = render_to_string("emails/order_checkout_expired_notification.html", context)
+
+    _send(
+        to=[order.customer_email],
+        subject=f"Todavía estás a tiempo para volver — Pedido {order.order_code} — CRACK TCG",
+        html=html,
+        entity_ref_id=f"order-{order.order_code}-checkout_expired",
+    )
+
+
 def send_payment_confirmed_email(order_id: int) -> None:
     """Email al cliente cuando el admin confirma manualmente el pago de su orden."""
     from .models import Order

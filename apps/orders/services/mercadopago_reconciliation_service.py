@@ -21,7 +21,7 @@ from apps.orders.mercadopago_service import (
     search_payments_by_external_reference,
     MercadoPagoServiceError,
 )
-from apps.orders.emails import send_refund_notification
+from apps.orders.emails import send_refund_notification, send_checkout_expired_notification
 from .order_confirmation_service import apply_order_confirmed_side_effects, send_order_emails
 
 logger = logging.getLogger(__name__)
@@ -183,6 +183,7 @@ def reconcile_payment(payment_data, source="webhook"):
 
     notify_order_id = None
     notify_refund_order_id = None
+    notify_expired_order_id = None
 
     with transaction.atomic():
         order = None
@@ -271,6 +272,7 @@ def reconcile_payment(payment_data, source="webhook"):
             if order.status != Order.STATUS_EXPIRED:
                 order.status = Order.STATUS_EXPIRED
                 status_updated = True
+                notify_expired_order_id = order.id
             logger.info("Orden %s marcada como VENCIDA (pago %s: %s)", order.order_code, payment_id, payment_status)
         elif payment_status in cancellation_statuses and order.status not in {Order.STATUS_PAID, Order.STATUS_REFUNDED}:
             if order.status != Order.STATUS_CANCELLED:
@@ -284,6 +286,19 @@ def reconcile_payment(payment_data, source="webhook"):
 
         if status_updated:
             order.save(update_fields=["status", "updated_at"])
+
+    if notify_expired_order_id:
+        try:
+            from django_q.tasks import async_task
+
+            async_task("apps.orders.tasks.send_checkout_expired_notification_task", notify_expired_order_id)
+        except Exception as exc:
+            logger.warning(
+                "No se pudo encolar email de checkout vencido para orden_id=%s. Se envia en sync. Error: %s",
+                notify_expired_order_id,
+                exc,
+            )
+            send_checkout_expired_notification(notify_expired_order_id)
 
     if notify_order_id:
         send_order_emails(notify_order_id)
@@ -312,6 +327,8 @@ def reconcile_merchant_order_event(merchant_order_data, source="webhook"):
     merchant_order_status = str(
         merchant_order_data.get("order_status") or merchant_order_data.get("status") or ""
     ).strip().lower()
+
+    notify_expired_order_id = None
 
     with transaction.atomic():
         order = None
@@ -379,13 +396,30 @@ def reconcile_merchant_order_event(merchant_order_data, source="webhook"):
         mp_payment.raw_response = merchant_order_data
         mp_payment.save()
 
-        order.status = Order.STATUS_EXPIRED
-        order.save(update_fields=["status", "updated_at"])
+        if order.status != Order.STATUS_EXPIRED:
+            order.status = Order.STATUS_EXPIRED
+            order.save(update_fields=["status", "updated_at"])
+            notify_expired_order_id = order.id
+        else:
+            order.save(update_fields=["updated_at"])
 
         logger.info(
             "Orden %s marcada como VENCIDA por expiracion de checkout MP (merchant_order_id=%s)",
             order.order_code,
             merchant_order_id,
         )
+
+    if notify_expired_order_id:
+        try:
+            from django_q.tasks import async_task
+
+            async_task("apps.orders.tasks.send_checkout_expired_notification_task", notify_expired_order_id)
+        except Exception as exc:
+            logger.warning(
+                "No se pudo encolar email de checkout vencido para orden_id=%s. Se envia en sync. Error: %s",
+                notify_expired_order_id,
+                exc,
+            )
+            send_checkout_expired_notification(notify_expired_order_id)
 
     return order, False
