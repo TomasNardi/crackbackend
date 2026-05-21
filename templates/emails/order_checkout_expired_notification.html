@@ -4,7 +4,7 @@
   <meta http-equiv="Content-Type" content="text/html; charset=UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <meta name="x-apple-disable-message-reformatting" />
-  <title>{{ order.customer_name }}, ya casi es tuyo | CRACK TCG</title>
+  <title>{{ order.customer_name }}, estas solo a un paso. </title>
 </head>
 <body style="margin:0;padding:0;background-color:#111111;-webkit-text-size-adjust:100%;-ms-text-size-adjust:100%;">
 
@@ -38,36 +38,50 @@
                 {{ order.customer_name }}, ya casi es tuyo
               </h1>
               <p style="margin:0;font-family:Arial,sans-serif;font-size:15px;color:#b8b8b8;line-height:1.7;max-width:460px;">
-                Te escribimos para recordarte CRACK TCG. Si te quedaste con ganas de ese producto,
+                Estas a un paso de llevarte lo que buscas. Si te quedaste con ganas de ese producto,
                 aca lo tenes a un click para volver a verlo.
               </p>
             </td>
           </tr>
 
-          {% if items and items.0 %}
+          {% if items %}
           <tr>
-            <td style="background-color:#121212;padding:0 28px 24px;border-bottom:1px solid #2a2a2a;">
-              <table border="0" cellpadding="0" cellspacing="0" width="100%" style="background-color:#1a1a1a;border:1px solid #2e2e2e;border-radius:12px;">
+            <td style="background-color:#121212;padding:20px 28px 28px;border-bottom:1px solid #2a2a2a;">
+              <p style="margin:0 0 14px;font-family:Arial,sans-serif;font-size:13px;letter-spacing:0.4px;color:#8f8f8f;text-transform:uppercase;">Productos en tu carrito</p>
+              <table border="0" cellpadding="0" cellspacing="0" width="100%">
+                {% for item in items %}
                 <tr>
-                  <td style="width:78px;padding:14px 10px 14px 14px;" valign="top">
-                    <img src="{{ items.0.image_url|default:brand_image_url }}" alt="{{ items.0.name }}" width="64" height="64" style="display:block;width:64px;height:64px;border-radius:10px;object-fit:cover;border:0;outline:none;text-decoration:none;" />
-                  </td>
-                  <td style="padding:14px 14px 14px 0;" valign="middle">
-                    <p style="margin:0 0 4px;font-family:Arial,sans-serif;font-size:24px;line-height:1;font-weight:700;color:#ffffff;">{{ order.customer_name }}, ¡ya casi es tuyo!</p>
-                    <p style="margin:0;font-family:Arial,sans-serif;font-size:14px;color:#b8b8b8;line-height:1.45;">{{ items.0.name|truncatechars:60 }} te esta esperando.</p>
+                  <td style="padding:0;">
+                    <table border="0" cellpadding="0" cellspacing="0" width="100%" style="background-color:#1a1a1a;border:1px solid #2e2e2e;border-radius:12px;">
+                      <tr>
+                        <td style="width:78px;padding:14px 10px 14px 14px;" valign="top">
+                          <img src="{{ item.image_url|default:brand_image_url }}" alt="{{ item.name }}" width="64" height="64" style="display:block;width:64px;height:64px;border-radius:10px;object-fit:cover;border:0;outline:none;text-decoration:none;" />
+                        </td>
+                        <td style="padding:14px 14px 14px 0;" valign="middle">
+                          <p style="margin:0 0 6px;font-family:Arial,sans-serif;font-size:21px;line-height:1.15;font-weight:700;color:#ffffff;">{{ item.name|truncatechars:70 }}</p>
+                          <p style="margin:0;font-family:Arial,sans-serif;font-size:14px;color:#b8b8b8;line-height:1.45;">Cantidad: {{ item.qty }} · {{ item.price }}</p>
+                        </td>
+                      </tr>
+                    </table>
                   </td>
                 </tr>
+                {% if not forloop.last %}
+                <tr>
+                  <td style="height:12px;line-height:12px;font-size:12px;">&nbsp;</td>
+                </tr>
+                {% endif %}
+                {% endfor %}
               </table>
             </td>
           </tr>
           {% endif %}
 
           <tr>
-            <td align="center" style="background-color:#161616;padding:32px 40px 40px;border-radius:0 0 12px 12px;">
-              <a href="{{ site_url }}" style="display:inline-block;background-color:#C8972E;color:#0d0d0d;text-decoration:none;font-family:Arial,sans-serif;font-size:14px;font-weight:800;letter-spacing:1px;text-transform:uppercase;padding:14px 28px;border-radius:999px;">
-                Volver a CRACK TCG
+            <td align="center" style="background-color:#161616;padding:38px 40px 44px;border-radius:0 0 12px 12px;">
+              <a href="https://cracktcg.com/" style="display:inline-block;background-color:#C8972E;color:#0d0d0d;text-decoration:none;font-family:Arial,sans-serif;font-size:14px;font-weight:800;letter-spacing:1px;text-transform:uppercase;padding:14px 28px;border-radius:999px;">
+                Click Aqui
               </a>
-              <p style="margin:18px 0 0;font-family:Arial,sans-serif;font-size:12px;line-height:1.7;color:#8b8b8b;max-width:440px;">
+              <p style="margin:22px 0 0;font-family:Arial,sans-serif;font-size:12px;line-height:1.7;color:#8b8b8b;max-width:440px;">
                 Este email es un recordatorio. Tu pago anterior vencio y no se reanuda automaticamente.
               </p>
             </td>
