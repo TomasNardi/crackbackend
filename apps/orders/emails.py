@@ -100,7 +100,11 @@ def _build_items_context(order) -> list[dict]:
         if product:
             price_before = getattr(product, "price_ars", None)
             discount_percent = getattr(product, "discount_percent", 0)
-            image_url = getattr(product, "image_url", "") or ""
+            from apps.products.services.cloudinary_service import (
+                DELIVERY_TRANSFORM_THUMB,
+                optimize_cloudinary_url,
+            )
+            image_url = optimize_cloudinary_url(getattr(product, "image_url", "") or "", DELIVERY_TRANSFORM_THUMB)
         # Si no hay producto (borrado), usar el precio actual
         if not price_before:
             price_before = item.unit_price

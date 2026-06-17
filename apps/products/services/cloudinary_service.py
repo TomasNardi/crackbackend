@@ -1,6 +1,7 @@
 import hashlib
 import hmac
 import json
+import re
 import time
 from dataclasses import dataclass
 from datetime import timedelta
@@ -16,6 +17,46 @@ from apps.products.models import ProductImage
 MAX_PRODUCT_IMAGES = 3
 ALLOWED_IMAGE_EXTENSIONS = {"jpg", "jpeg", "png", "webp", "avif"}
 MAX_IMAGE_SIZE_BYTES = 10 * 1024 * 1024
+
+# Transformaciones de entrega recomendadas por Cloudinary para ahorrar ancho de banda:
+#   f_auto -> mejor formato (WebP/AVIF) según el navegador
+#   q_auto -> calidad automática sin pérdida visible
+#   c_limit,w_* -> nunca agranda; solo limita el ancho máximo entregado
+DELIVERY_TRANSFORM_LIST = "c_limit,w_700,f_auto,q_auto"      # grillas / cards
+DELIVERY_TRANSFORM_DETAIL = "c_limit,w_1200,f_auto,q_auto"   # galería del detalle
+DELIVERY_TRANSFORM_THUMB = "c_fill,w_400,h_400,f_auto,q_auto"  # miniatura cuadrada
+DELIVERY_TRANSFORM_SEARCH = "c_limit,w_160,f_auto,q_auto"    # dropdown de búsqueda
+
+_UPLOAD_MARKER = "/image/upload/"
+# Prefijos de parámetros de transformación de Cloudinary (c_, w_, f_, q_, etc.).
+_TRANSFORM_TOKEN = re.compile(
+    r"^(c|w|h|f|q|g|e|a|r|o|b|l|t|x|y|z|dpr|fl|so|du|vc|ac|br|cs|bo|co|pg)_"
+)
+
+
+def _looks_like_transformation(segment: str) -> bool:
+    """True si el primer segmento tras /upload/ ya es un bloque de transformación."""
+    parts = segment.split(",")
+    return any(_TRANSFORM_TOKEN.match(part) for part in parts)
+
+
+def optimize_cloudinary_url(url: str, transformation: str = "f_auto,q_auto") -> str:
+    """
+    Inserta una transformación de entrega en una URL de Cloudinary.
+
+    - No modifica URLs que no sean de Cloudinary (S3, externas, etc.).
+    - Es idempotente: si ya hay un bloque de transformación tras /upload/, devuelve la URL tal cual.
+    - No toca los datos almacenados; se aplica al serializar la respuesta.
+    """
+    if not url or _UPLOAD_MARKER not in url:
+        return url
+
+    head, _, tail = url.partition(_UPLOAD_MARKER)
+    first_segment = tail.split("/", 1)[0]
+    if _looks_like_transformation(first_segment):
+        return url
+
+    return f"{head}{_UPLOAD_MARKER}{transformation}/{tail}"
 
 
 @dataclass(frozen=True)

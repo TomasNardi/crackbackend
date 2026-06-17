@@ -5,14 +5,25 @@ Products Serializers
 
 from rest_framework import serializers
 from .models import TCG, ProductCategory, CardCondition, CertificationEntity, CertificationGrade, Product, ProductImage
+from .services.cloudinary_service import (
+    DELIVERY_TRANSFORM_DETAIL,
+    DELIVERY_TRANSFORM_LIST,
+    DELIVERY_TRANSFORM_SEARCH,
+    DELIVERY_TRANSFORM_THUMB,
+    optimize_cloudinary_url,
+)
 
 
 class ProductImageSerializer(serializers.ModelSerializer):
+    secure_url = serializers.SerializerMethodField()
+    thumbnail_url = serializers.SerializerMethodField()
+
     class Meta:
         model = ProductImage
         fields = (
             "id",
             "secure_url",
+            "thumbnail_url",
             "public_id",
             "order_index",
             "source",
@@ -22,6 +33,12 @@ class ProductImageSerializer(serializers.ModelSerializer):
             "bytes",
             "format",
         )
+
+    def get_secure_url(self, obj):
+        return optimize_cloudinary_url(obj.secure_url, DELIVERY_TRANSFORM_DETAIL)
+
+    def get_thumbnail_url(self, obj):
+        return optimize_cloudinary_url(obj.secure_url, DELIVERY_TRANSFORM_THUMB)
 
 
 class TCGSerializer(serializers.ModelSerializer):
@@ -58,8 +75,12 @@ class ProductSearchSerializer(serializers.ModelSerializer):
     """Serializer liviano para autocomplete — solo campos esenciales."""
     category = serializers.StringRelatedField()
     tcg = serializers.StringRelatedField()
+    image_url = serializers.SerializerMethodField()
     price_ars = serializers.DecimalField(max_digits=12, decimal_places=2, read_only=True)
     final_price = serializers.DecimalField(max_digits=12, decimal_places=2, read_only=True)
+
+    def get_image_url(self, obj):
+        return optimize_cloudinary_url(obj.image_url, DELIVERY_TRANSFORM_SEARCH)
 
     class Meta:
         model = Product
@@ -76,9 +97,13 @@ class ProductListSerializer(serializers.ModelSerializer):
     condition = CardConditionSerializer(read_only=True)
     certification_entity = serializers.StringRelatedField()
     certification_grade = serializers.StringRelatedField()
+    image_url = serializers.SerializerMethodField()
     price_ars = serializers.DecimalField(max_digits=12, decimal_places=2, read_only=True)
     final_price = serializers.DecimalField(max_digits=12, decimal_places=2, read_only=True)
     images = ProductImageSerializer(many=True, read_only=True)
+
+    def get_image_url(self, obj):
+        return optimize_cloudinary_url(obj.image_url, DELIVERY_TRANSFORM_LIST)
 
     class Meta:
         model = Product
@@ -92,9 +117,13 @@ class ProductListSerializer(serializers.ModelSerializer):
 
 class ProductSuggestedSerializer(serializers.ModelSerializer):
     category = serializers.StringRelatedField()
+    image_url = serializers.SerializerMethodField()
     price_ars = serializers.DecimalField(max_digits=12, decimal_places=2, read_only=True)
     final_price = serializers.DecimalField(max_digits=12, decimal_places=2, read_only=True)
     images = ProductImageSerializer(many=True, read_only=True)
+
+    def get_image_url(self, obj):
+        return optimize_cloudinary_url(obj.image_url, DELIVERY_TRANSFORM_LIST)
 
     class Meta:
         model = Product
@@ -113,8 +142,20 @@ class ProductDetailSerializer(serializers.ModelSerializer):
     certification_grade = CertificationGradeSerializer(read_only=True)
     price_ars = serializers.DecimalField(max_digits=12, decimal_places=2, read_only=True)
     final_price = serializers.DecimalField(max_digits=12, decimal_places=2, read_only=True)
+    image_url = serializers.SerializerMethodField()
+    image_url_2 = serializers.SerializerMethodField()
+    image_url_3 = serializers.SerializerMethodField()
     suggested_products = serializers.SerializerMethodField()
     images = ProductImageSerializer(many=True, read_only=True)
+
+    def get_image_url(self, obj):
+        return optimize_cloudinary_url(obj.image_url, DELIVERY_TRANSFORM_DETAIL)
+
+    def get_image_url_2(self, obj):
+        return optimize_cloudinary_url(obj.image_url_2, DELIVERY_TRANSFORM_DETAIL)
+
+    def get_image_url_3(self, obj):
+        return optimize_cloudinary_url(obj.image_url_3, DELIVERY_TRANSFORM_DETAIL)
 
     def get_suggested_products(self, obj):
         from apps.orders.models import SuggestedProductsCarousel

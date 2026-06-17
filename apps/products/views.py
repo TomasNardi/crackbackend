@@ -32,10 +32,12 @@ from .serializers import (
 )
 from .filters import ProductFilter
 from .services.cloudinary_service import (
+    DELIVERY_TRANSFORM_DETAIL,
     CloudinaryConfigurationError,
     CloudinaryValidationError,
     create_pending_image,
     generate_signed_upload_payload,
+    optimize_cloudinary_url,
     remove_cloudinary_asset,
     verify_notification_signature,
 )
@@ -405,7 +407,7 @@ class ProductViewSet(viewsets.ModelViewSet):
             for url in urls:
                 if url and url not in seen:
                     seen.add(url)
-                    out.append(url)
+                    out.append(optimize_cloudinary_url(url, DELIVERY_TRANSFORM_DETAIL))
             return out
 
         data = [
