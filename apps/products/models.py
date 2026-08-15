@@ -158,6 +158,19 @@ class Product(models.Model):
     slug = models.SlugField(max_length=280, unique=True, blank=True)
     description = RichTextField("Descripción", blank=True)
 
+    # Carta del catálogo de referencia (TCGplayer). Es opcional: sirve para
+    # autocompletar la carga y para tener una imagen cuando no sacaste foto.
+    # Sellados y accesorios normalmente no la usan.
+    catalog_card = models.ForeignKey(
+        "catalog.CatalogCard",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="products",
+        verbose_name="Carta del catálogo",
+        help_text="Buscá la carta para autocompletar nombre, set, número, rareza e imagen.",
+    )
+
     # Precio en USD (el admin lo carga en dólares)
     price_usd = models.DecimalField(
         "Precio USD", max_digits=10, decimal_places=2,
@@ -245,8 +258,22 @@ class Product(models.Model):
         if self.stock_quantity is not None:
             self.in_stock = self.stock_quantity > 0
 
+    def apply_catalog_image_fallback(self):
+        """
+        Si no cargaste ninguna foto propia, usa la imagen del catálogo.
+
+        Tus fotos siempre mandan: esto solo llena el hueco cuando no hay. Así un
+        single NM sale publicado con la imagen linda sin sacarle una foto, y un
+        slab o una carta jugada muestra la foto real apenas la subís.
+        """
+        if self.image_url:
+            return
+        if self.catalog_card_id and self.catalog_card and self.catalog_card.has_image:
+            self.image_url = self.catalog_card.image_url
+
     def save(self, *args, **kwargs):
         self.normalize_stock()
+        self.apply_catalog_image_fallback()
         self.slug = _build_unique_slug(Product, self.name, self.pk, max_length=280)
         super().save(*args, **kwargs)
 

@@ -41,6 +41,9 @@ django-unfold==0.46.0
 # PDF Generation
 reportlab==4.0.9
 
+# Cloudflare R2 (S3-compatible) — imágenes del catálogo
+boto3==1.35.76
+
 # Utils
 Pillow==11.3.0
 requests==2.31.0

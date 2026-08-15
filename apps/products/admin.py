@@ -65,7 +65,17 @@ class ProductAdmin(ModelAdmin):
         return f"${obj.price_ars:,.0f}"
     price_ars_display.short_description = "Precio ARS"
 
+    autocomplete_fields = ("catalog_card",)
+
     fieldsets = (
+        ("Carta del catálogo", {
+            "fields": ("catalog_card",),
+            "description": (
+                "Buscá la carta por nombre, número o set —por ejemplo <code>charizard 4/102</code>— "
+                "y se completan solos el nombre, el TCG y la imagen. "
+                "Para sellados y accesorios, dejalo vacío."
+            ),
+        }),
         ("Identificación", {
             "fields": ("name", "description", "tcg", "category"),
         }),
@@ -93,6 +103,7 @@ class ProductAdmin(ModelAdmin):
         return request.user.has_perm("products.delete_product")
 
     def save_model(self, request, obj, form, change):
+        self._ensure_catalog_image(request, obj)
         super().save_model(request, obj, form, change)
 
         cleaned_data = getattr(form, "cleaned_data", {}) or {}
@@ -113,6 +124,33 @@ class ProductAdmin(ModelAdmin):
             attach_images_to_product(product=obj, draft_token=draft_token, ordered_image_ids=image_ids)
         except (ValueError, json.JSONDecodeError, CloudinaryValidationError) as exc:
             self.message_user(request, f"No se pudieron sincronizar las imágenes: {exc}", level=messages.ERROR)
+
+    def _ensure_catalog_image(self, request, obj):
+        """
+        Baja la imagen del catálogo en el momento, si esa carta todavía no la tiene.
+
+        Cubre el caso de cargar stock de un set recién importado sin haber corrido
+        `sync_catalog_images`. Si falla, el producto se guarda igual: no vale
+        frenar una carga por una imagen.
+        """
+        card = obj.catalog_card
+        if not card or card.has_image:
+            return
+
+        from apps.catalog.services import images as catalog_images
+        from apps.catalog.services import r2
+
+        if not r2.is_configured():
+            return
+
+        try:
+            catalog_images.process_card(card)
+        except Exception as exc:  # noqa: BLE001 — nunca frenar el guardado por esto
+            self.message_user(
+                request,
+                f"No se pudo bajar la imagen del catálogo: {exc}",
+                level=messages.WARNING,
+            )
 
     class Media:
         css = {

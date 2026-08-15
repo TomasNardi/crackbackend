@@ -68,6 +68,7 @@ THIRD_PARTY_APPS = [
 LOCAL_APPS = [
     "apps.core",
     "apps.products",
+    "apps.catalog",
     "apps.orders",
     "apps.users",
 ]
@@ -312,7 +313,7 @@ GLOBAL_API_RATELIMIT_EXEMPT_PATHS = [
 # ---------------------------------------------------------------------------
 # Email (Resend)
 # ---------------------------------------------------------------------------
-RESEND_API_KEY = os.environ.get("RESEND_API_KEY", "re_7nKA3kPy_2qFTu2Kwa3iyMVXrWgXbctNd")
+RESEND_API_KEY = os.environ.get("RESEND_API_KEY", "")
 
 # Remitente productivo: tienda@cracktcg.com (dominio verificado en Resend, MX/SPF/DKIM en Namecheap).
 # El friendly name "CRACK TCG" mejora entregabilidad y reconocimiento de marca.
@@ -330,14 +331,8 @@ RESEND_WEBHOOK_SECRET = os.environ.get("RESEND_WEBHOOK_SECRET", "")
 # MP_ACCESS_TOKEN=...
 # BACKEND_PUBLIC_URL=https://tu-api.com
 # FRONTEND_URL=https://tu-frontend.com
-MERCADOPAGO_PUBLIC_KEY = os.environ.get(
-    "MP_PUBLIC_KEY",
-    "APP_USR-f93fc978-d364-447f-af2f-0f55d494005c",
-)
-MERCADOPAGO_ACCESS_TOKEN = os.environ.get(
-    "MP_ACCESS_TOKEN",
-    "APP_USR-126784700889279-041314-5d53c1bfe2976f356c1f3a226d077c18-2149863724",
-)
+MERCADOPAGO_PUBLIC_KEY = os.environ.get("MP_PUBLIC_KEY", "")
+MERCADOPAGO_ACCESS_TOKEN = os.environ.get("MP_ACCESS_TOKEN", "")
 MERCADOPAGO_WEBHOOK_SECRET = os.environ.get("MP_WEBHOOK_SECRET", "")
 try:
     MERCADOPAGO_PREFERENCE_EXPIRATION_HOURS = int(os.environ.get("MP_PREFERENCE_EXPIRATION_HOURS", "24"))
@@ -384,6 +379,27 @@ if _cloudinary_url and (not CLOUDINARY_CLOUD_NAME or not CLOUDINARY_API_KEY or n
         CLOUDINARY_CLOUD_NAME = CLOUDINARY_CLOUD_NAME or (_parts.hostname or "")
         CLOUDINARY_API_KEY = CLOUDINARY_API_KEY or (_parts.username or "")
         CLOUDINARY_API_SECRET = CLOUDINARY_API_SECRET or (_parts.password or "")
+
+# ---------------------------------------------------------------------------
+# Cloudflare R2 — Imágenes del catálogo de cartas
+# ---------------------------------------------------------------------------
+# Guarda las imágenes del catálogo importado desde TCGplayer. Se usa R2 y no S3
+# porque R2 no cobra egress: servir el catálogo entero sale prácticamente cero.
+#
+# Las fotos propias de los productos siguen yendo a Cloudinary. Son dos cosas
+# distintas: R2 es el catálogo de referencia, Cloudinary es lo que subís vos.
+#
+# Completar en .env:
+#   R2_ACCOUNT_ID=...            (Cloudflare dashboard → R2 → Account ID)
+#   R2_ACCESS_KEY_ID=...         (R2 → Manage API Tokens)
+#   R2_SECRET_ACCESS_KEY=...
+#   R2_BUCKET=crack-catalog
+#   R2_PUBLIC_BASE_URL=https://s3.cracktcg.com   (dominio público del bucket)
+R2_ACCOUNT_ID = os.environ.get("R2_ACCOUNT_ID", "")
+R2_ACCESS_KEY_ID = os.environ.get("R2_ACCESS_KEY_ID", "")
+R2_SECRET_ACCESS_KEY = os.environ.get("R2_SECRET_ACCESS_KEY", "")
+R2_BUCKET = os.environ.get("R2_BUCKET", "")
+R2_PUBLIC_BASE_URL = os.environ.get("R2_PUBLIC_BASE_URL", "")
 
 # ---------------------------------------------------------------------------
 # Paq.ar (Correo Argentino) — Integración de envíos
@@ -535,6 +551,18 @@ UNFOLD = {
                         "icon": "category",
                         "link": "/admin/products/productcategory/",
                         "permission": admin_has_perm("products.view_productcategory"),
+                    },
+                    {
+                        "title": "Catálogo de cartas",
+                        "icon": "search",
+                        "link": "/admin/catalog/catalogcard/",
+                        "permission": admin_has_perm("catalog.view_catalogcard"),
+                    },
+                    {
+                        "title": "Expansiones",
+                        "icon": "collections_bookmark",
+                        "link": "/admin/catalog/cardset/",
+                        "permission": admin_has_perm("catalog.view_cardset"),
                     },
                     {
                         "title": "Condiciones",
