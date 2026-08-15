@@ -23,6 +23,11 @@ logger = logging.getLogger(__name__)
 _client_lock = threading.Lock()
 _client = None
 
+# Tope de conexiones HTTP reutilizables hacia R2. Tiene que quedar por encima de
+# los hilos de `sync_catalog_images --workers`, si no el pool se llena y se
+# pierde la conexión persistente.
+MAX_POOL_CONNECTIONS = 64
+
 
 class R2ConfigurationError(Exception):
     pass
@@ -71,6 +76,11 @@ def get_client():
             config=Config(
                 retries={"max_attempts": 3, "mode": "standard"},
                 s3={"addressing_style": "path"},
+                # El pool por defecto es de 10. La sincronización de imágenes
+                # corre con más hilos que eso, y cuando el pool se llena boto3
+                # descarta la conexión: la próxima request paga un handshake TLS
+                # nuevo, que es justo lo que más tarda. Con holgura no pasa.
+                max_pool_connections=MAX_POOL_CONNECTIONS,
             ),
         )
         return _client
