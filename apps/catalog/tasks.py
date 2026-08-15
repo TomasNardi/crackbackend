@@ -49,6 +49,12 @@ def refresh_catalog():
 
     call_command("sync_catalog_images", limit=MAX_IMAGES_PER_RUN, verbosity=0)
 
+    # Los productos cargados antes de que llegara la imagen quedan sin foto:
+    # el fallback del modelo solo corre al guardar. Esto los repara solos.
+    from apps.products.tasks import backfill_product_images
+
+    backfill_product_images()
+
     still_pending = CatalogCard.objects.filter(image_status=CatalogCard.IMAGE_PENDING).count()
     return (
         f"{new_cards} cartas nuevas, {pending - still_pending} imágenes bajadas"

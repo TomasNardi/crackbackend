@@ -1,0 +1,16 @@
+{% extends "admin/change_list.html" %}
+{% load i18n admin_urls %}
+
+{% comment %}
+Reemplaza el "Agregar producto" de Django por la carga de stock, que ya cubre
+todo lo que hacía el formulario clásico: catálogo, productos manuales, slabs con
+certificadora y nota, fotos a Cloudinary y URLs.
+{% endcomment %}
+
+{% block object-tools-items %}
+  <a href="{% url 'admin:products_product_bulk_load' %}"
+     class="addlink bg-primary-600 flex items-center gap-2 h-9 -my-1 px-4 rounded-full text-white text-sm font-semibold hover:bg-primary-700 transition-colors">
+    <span class="material-symbols-outlined text-white md-18">add</span>
+    Carga de stock
+  </a>
+{% endblock %}

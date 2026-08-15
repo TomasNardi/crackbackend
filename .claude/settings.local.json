@@ -3,7 +3,17 @@
     "allow": [
       "Bash(xargs grep:*)",
       "Bash(pip install:*)",
-      "Bash(python:*)"
+      "Bash(python:*)",
+      "Read(//c/Users/ar035053/Desktop/Sistema/Crack/**)",
+      "Bash(/c/Users/ar035053/AppData/Local/Programs/Python/Python312/python.exe manage.py shell -c ' *)",
+      "Bash(/c/Users/ar035053/AppData/Local/Programs/Python/Python312/python.exe manage.py check)",
+      "Bash(/c/Users/ar035053/AppData/Local/Programs/Python/Python312/python.exe manage.py runserver 8009 --noreload)",
+      "Bash(/c/Users/ar035053/AppData/Local/Programs/Python/Python312/python.exe -c ' *)",
+      "Bash(sed -i 's/^Carga de stock$/Carga de stock/; s/^=====================$/==============/' apps/products/bulk_load.py)",
+      "Bash(sed -i 's/La carga rápida encola/La carga de stock encola/' apps/products/tasks.py)",
+      "Bash(npx --no-install eslint src/components/ui/ProductCard.jsx)",
+      "Bash(node --input-type=module -e \"1\")",
+      "Bash(timeout 400 npx --no-install next build)"
     ]
   }
 }

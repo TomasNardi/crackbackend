@@ -105,6 +105,8 @@ class ProductViewSet(viewsets.ModelViewSet):
         return Product.objects.select_related(
             "tcg", "category", "condition",
             "certification_entity", "certification_grade",
+            # El bloque `catalog` del serializer llega hasta la expansión.
+            "catalog_card", "catalog_card__card_set",
         ).prefetch_related("images")
 
     def get_queryset(self):

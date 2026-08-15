@@ -1,0 +1,946 @@
+{% extends "admin/base_site.html" %}
+{% load i18n %}
+
+{% block extrastyle %}
+{{ block.super }}
+<style>
+  .cl-wrap { --cl-bg:#ffffff; --cl-soft:#f7f6f4; --cl-line:#e3e0da; --cl-text:#1a1a1a;
+             --cl-dim:#6b6560; --cl-accent:#b8860b; --cl-accent-soft:#fdf6e3;
+             --cl-ok:#15803d; --cl-ok-soft:#f0fdf4; --cl-warn:#b91c1c;
+             color:var(--cl-text); font-size:14px; }
+  .cl-wrap * { box-sizing:border-box; }
+
+  .cl-bar { display:flex; flex-wrap:wrap; gap:12px; align-items:flex-end;
+            background:var(--cl-soft); border:1px solid var(--cl-line);
+            border-radius:12px; padding:13px 15px; margin-bottom:12px; }
+  .cl-field { display:flex; flex-direction:column; gap:5px; }
+  .cl-field > label { font-size:10px; text-transform:uppercase; letter-spacing:.08em;
+                      color:var(--cl-dim); font-weight:600; }
+
+  .cl-wrap select, .cl-wrap input[type=number], .cl-wrap input[type=text] {
+      background:#fff; color:var(--cl-text); border:1px solid var(--cl-line);
+      border-radius:8px; padding:8px 10px; font-size:14px; height:38px; }
+
+  /* Unfold ya le dibuja una flecha al select. Sin esto quedan dos. */
+  .cl-wrap select {
+      appearance:none; -webkit-appearance:none; -moz-appearance:none;
+      padding-right:32px; background-repeat:no-repeat;
+      background-position:right 10px center; background-size:16px;
+      background-image:url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%236b6560' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E");
+  }
+  .cl-wrap select::-ms-expand { display:none; }
+
+  .cl-wrap select:focus, .cl-wrap input:focus {
+      outline:2px solid var(--cl-accent); outline-offset:1px; border-color:var(--cl-accent); }
+
+  .cl-check { display:flex; align-items:center; gap:7px; font-size:13px; height:38px;
+              color:var(--cl-text); cursor:pointer; white-space:nowrap; }
+  .cl-check input { width:16px; height:16px; accent-color:var(--cl-accent); cursor:pointer; }
+  .cl-check:focus-within { outline:2px solid var(--cl-accent); outline-offset:3px; border-radius:5px; }
+
+  .cl-hint { font-size:11px; color:var(--cl-dim); margin-left:auto; text-align:right; line-height:1.8; }
+  .cl-hint kbd { background:#fff; border:1px solid var(--cl-line); border-radius:4px;
+                 padding:1px 6px; font-size:10px; font-family:inherit; }
+  .cl-reset { background:#fff; border:1px solid var(--cl-line); border-radius:8px;
+              padding:0 12px; height:38px; font-size:13px; color:var(--cl-dim); cursor:pointer; }
+  .cl-reset:hover { border-color:var(--cl-accent); color:var(--cl-accent); }
+
+  /* Agregar Manual: es la salida cuando la carta no está en el catálogo, así
+     que tiene que verse sin buscarla. */
+  .cl-manual { background:#7c3aed; color:#fff; border:none; border-radius:20px;
+               height:28px; padding:0 14px; font-size:11.5px; font-weight:700;
+               letter-spacing:.02em; text-transform:none; cursor:pointer;
+               box-shadow:0 2px 7px rgba(124,58,237,.32); white-space:nowrap; }
+  .cl-manual:hover { background:#6d28d9; box-shadow:0 3px 11px rgba(124,58,237,.45); }
+  .cl-manual:focus-visible { outline:2px solid #1a1a1a; outline-offset:2px; }
+
+  /* Fila manual: se distingue de las que vienen del catálogo. */
+  .cl-batch-item.is-manual { box-shadow:inset 3px 0 0 #7c3aed; background:#faf7ff; }
+
+  /* --- Combo buscable (expansiones: son 672, un select nativo no sirve) --- */
+  .cl-combo { position:relative; }
+  .cl-combo > input { width:290px; padding-right:30px; }
+  .cl-combo-clear { position:absolute; right:8px; top:50%; transform:translateY(-50%);
+                    background:none; border:none; color:var(--cl-dim); cursor:pointer;
+                    font-size:17px; line-height:1; display:none; padding:0 3px; }
+  .cl-combo.has-value .cl-combo-clear { display:block; }
+  .cl-combo-list { position:absolute; z-index:60; top:calc(100% + 4px); left:0; right:0;
+                   background:#fff; border:1px solid var(--cl-line); border-radius:10px;
+                   box-shadow:0 10px 26px rgba(0,0,0,.13); max-height:290px; overflow-y:auto;
+                   display:none; }
+  .cl-combo-list.is-open { display:block; }
+  .cl-combo-opt { padding:8px 11px; font-size:13px; cursor:pointer; white-space:nowrap;
+                  overflow:hidden; text-overflow:ellipsis; }
+  .cl-combo-opt:hover, .cl-combo-opt.is-active { background:var(--cl-accent-soft); }
+  .cl-combo-none { padding:12px; font-size:12px; color:var(--cl-dim); text-align:center; }
+
+  #cl-search { width:100%; font-size:18px; padding:0 18px; height:52px; border-radius:12px;
+               margin-bottom:12px; }
+
+  .cl-grid { display:grid; grid-template-columns:1fr 420px; gap:16px; align-items:start; }
+  @media (max-width:1250px){ .cl-grid { grid-template-columns:1fr; } }
+
+  .cl-panel { background:var(--cl-bg); border:1px solid var(--cl-line);
+              border-radius:12px; overflow:hidden; }
+  .cl-panel h2 { margin:0; padding:12px 16px; font-size:11px; text-transform:uppercase;
+                 letter-spacing:.08em; color:var(--cl-dim); background:var(--cl-soft);
+                 border-bottom:1px solid var(--cl-line);
+                 display:flex; justify-content:space-between; align-items:center;
+                 gap:10px; font-weight:600; }
+  .cl-badge { background:#fff; border:1px solid var(--cl-line); border-radius:20px;
+              padding:2px 10px; font-size:11px; color:var(--cl-text); font-weight:700;
+              letter-spacing:0; text-transform:none; }
+  #cl-results { max-height:62vh; overflow-y:auto; }
+
+  .cl-row { display:flex; align-items:center; gap:13px; padding:9px 14px;
+            border-bottom:1px solid var(--cl-line); cursor:pointer; }
+  .cl-row:last-child { border-bottom:none; }
+  .cl-row:hover { background:var(--cl-soft); }
+  .cl-row.is-active { background:var(--cl-accent-soft); box-shadow:inset 3px 0 0 var(--cl-accent); }
+
+  /* Alto y ancho fijos: la fila no salta cuando entra la imagen. */
+  .cl-thumb { width:48px; height:67px; flex-shrink:0; border-radius:5px;
+              background:var(--cl-soft); border:1px solid var(--cl-line);
+              overflow:hidden; display:flex; align-items:center; justify-content:center; }
+  .cl-thumb.is-mini { width:32px; height:45px; border-radius:4px; }
+  .cl-thumb img { width:100%; height:100%; object-fit:contain; opacity:0; transition:opacity .18s; }
+  .cl-thumb img.is-in { opacity:1; }
+  .cl-thumb span { font-size:8px; color:var(--cl-dim); text-align:center; line-height:1.2; padding:2px; }
+
+  .cl-id { flex:1; min-width:0; }
+  .cl-name { font-weight:700; font-size:14px; white-space:nowrap; overflow:hidden;
+             text-overflow:ellipsis; }
+  .cl-sub { font-size:12px; color:var(--cl-dim); margin-top:2px; white-space:nowrap;
+            overflow:hidden; text-overflow:ellipsis; }
+  .cl-tags { display:flex; gap:6px; align-items:center; flex-shrink:0; }
+  .cl-tag { font-size:10px; font-weight:700; padding:3px 7px; border-radius:4px;
+            background:var(--cl-soft); border:1px solid var(--cl-line); color:var(--cl-dim); }
+  .cl-tag.is-loaded { background:var(--cl-accent-soft); border-color:var(--cl-accent); color:var(--cl-accent); }
+
+  .cl-add { background:var(--cl-accent); color:#fff; border:none; border-radius:8px;
+            padding:9px 15px; font-weight:700; cursor:pointer; flex-shrink:0; font-size:13px; }
+  .cl-add:hover { filter:brightness(1.12); }
+  .cl-add:focus-visible { outline:2px solid var(--cl-text); outline-offset:2px; }
+
+  #cl-batch { max-height:52vh; overflow-y:auto; }
+  .cl-batch-item { border-bottom:1px solid var(--cl-line); }
+  .cl-batch-item:last-child { border-bottom:none; }
+  .cl-batch-row { display:flex; align-items:center; gap:8px; padding:8px 12px; font-size:13px; }
+  .cl-batch-row .cl-name { font-size:13px; }
+  .cl-batch-row input { width:74px; padding:5px 7px; font-size:13px; height:32px; }
+  .cl-batch-row input.cl-qty { width:52px; }
+  .cl-del { background:none; border:none; color:var(--cl-warn); cursor:pointer;
+            font-size:19px; line-height:1; padding:0 4px; }
+  .cl-more { background:none; border:1px solid var(--cl-line); border-radius:6px;
+             color:var(--cl-dim); cursor:pointer; font-size:11px; padding:4px 7px;
+             white-space:nowrap; }
+  .cl-more:hover { border-color:var(--cl-accent); color:var(--cl-accent); }
+  .cl-more.has-data { border-color:var(--cl-accent); color:var(--cl-accent);
+                      background:var(--cl-accent-soft); font-weight:700; }
+
+  /* Detalle opcional de cada fila: foto propia, URLs, condición. */
+  .cl-detail { display:none; padding:4px 12px 13px 12px; background:var(--cl-soft);
+               border-top:1px dashed var(--cl-line); }
+  .cl-detail.is-open { display:block; }
+  .cl-detail label { display:block; font-size:10px; text-transform:uppercase;
+                     letter-spacing:.07em; color:var(--cl-dim); font-weight:600;
+                     margin:9px 0 4px 0; }
+  .cl-detail input[type=text], .cl-detail textarea, .cl-detail select {
+      width:100%; font-size:12px; }
+  .cl-detail textarea { border:1px solid var(--cl-line); border-radius:8px; padding:7px 9px;
+                        font-family:inherit; resize:vertical; min-height:52px; background:#fff; }
+  .cl-detail .cl-note { font-size:11px; color:var(--cl-dim); margin-top:5px; line-height:1.5; }
+  .cl-shots { display:flex; gap:7px; align-items:center; flex-wrap:wrap; margin-top:4px; }
+  .cl-shot { width:40px; height:56px; border-radius:5px; border:1px solid var(--cl-line);
+             object-fit:cover; background:#fff; }
+  .cl-upload { display:inline-flex; align-items:center; gap:6px; background:#fff;
+               border:1px dashed var(--cl-line); border-radius:8px; padding:7px 11px;
+               font-size:12px; color:var(--cl-dim); cursor:pointer; }
+  .cl-upload:hover { border-color:var(--cl-accent); color:var(--cl-accent); }
+  .cl-upload input { display:none; }
+
+  .cl-foot { padding:14px 16px; border-top:1px solid var(--cl-line); background:var(--cl-soft); }
+  .cl-total { display:flex; justify-content:space-between; font-size:13px; margin-bottom:11px;
+              color:var(--cl-dim); }
+  .cl-total b { font-size:15px; color:var(--cl-text); }
+  .cl-save { width:100%; background:var(--cl-ok); color:#fff; border:none;
+             border-radius:9px; padding:13px; font-weight:700; font-size:15px; cursor:pointer; }
+  .cl-save:disabled { opacity:.35; cursor:not-allowed; }
+  .cl-empty { padding:34px 16px; text-align:center; color:var(--cl-dim); font-size:13px; }
+  .cl-msg { padding:11px 14px; border-radius:9px; margin-bottom:12px; font-size:13px; display:none; }
+  .cl-msg.ok { background:var(--cl-ok-soft); color:var(--cl-ok); border:1px solid #bbf7d0; }
+  .cl-msg.err { background:#fef2f2; color:var(--cl-warn); border:1px solid #fecaca; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="cl-wrap">
+
+  <div id="cl-msg" class="cl-msg"></div>
+
+  <!-- Fila 1: qué se va a crear ------------------------------------------- -->
+  <div class="cl-bar">
+    <div class="cl-field">
+      <label for="cl-category" title="Es el valor con el que entran las filas nuevas, y define qué busca el catálogo. Cada fila la podés cambiar después desde su ✎.">Categoría <span style="text-transform:none;letter-spacing:0;">(por defecto)</span></label>
+      <select id="cl-category" tabindex="1">
+        {% for c in categories %}
+          <option value="{{ c.id }}" data-kind="{{ c.kind }}"
+            {% if default_category and c.id == default_category.id %}selected{% endif %}>{{ c.name }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div class="cl-field">
+      <label for="cl-condition">Condición</label>
+      <select id="cl-condition" tabindex="2">
+        <option value="">— sin condición —</option>
+        {% for c in conditions %}<option value="{{ c.id }}">{{ c }}</option>{% endfor %}
+      </select>
+    </div>
+    <div class="cl-field">
+      <label for="cl-price">Precio USD</label>
+      <input type="number" id="cl-price" step="0.01" min="0.01" value="1.00" style="width:105px" tabindex="3">
+    </div>
+    <div class="cl-field">
+      <label for="cl-qty" title="En Singles y Slabs cada copia es un producto aparte (el modelo fuerza stock 1), así que cantidad 3 crea 3 productos. En Sellados y Accesorios va a stock_quantity.">Cantidad</label>
+      <input type="number" id="cl-qty" min="1" max="99" value="1" style="width:72px" tabindex="4">
+    </div>
+    <div class="cl-field">
+      <label for="cl-discount">% Desc.</label>
+      <input type="number" id="cl-discount" min="0" max="100" value="0" style="width:72px" tabindex="5">
+    </div>
+    <div class="cl-hint">
+      <kbd>Tab</kbd> recorre todo &nbsp;·&nbsp; <kbd>Enter</kbd> agrega &nbsp;·&nbsp;
+      <kbd>↑</kbd><kbd>↓</kbd> se mueve &nbsp;·&nbsp; <kbd>Esc</kbd> limpia<br>
+      Dólar hoy: <b>${{ usd_to_ars }}</b> &nbsp;·&nbsp; máx. {{ max_batch_size }} por lote
+    </div>
+  </div>
+
+  <!-- Fila 2: en qué se busca --------------------------------------------- -->
+  <div class="cl-bar">
+    <div class="cl-field">
+      <label for="cl-lang">Idioma</label>
+      <select id="cl-lang" class="cl-filter" tabindex="6">
+        <option value="">Todos</option>
+        <option value="en">EN — Inglés</option>
+        <option value="ja">JP — Japonés</option>
+      </select>
+    </div>
+    <div class="cl-field">
+      <label for="cl-set-input">Expansión <span style="text-transform:none;letter-spacing:0;">(escribí para filtrar)</span></label>
+      <div class="cl-combo" id="cl-set-combo">
+        <input type="text" id="cl-set-input" placeholder="Todas las expansiones"
+               autocomplete="off" role="combobox" aria-expanded="false" tabindex="7">
+        <button type="button" class="cl-combo-clear" id="cl-set-clear" title="Quitar expansión" tabindex="-1">&times;</button>
+        <input type="hidden" id="cl-set" class="cl-filter">
+        <div class="cl-combo-list" id="cl-set-list"></div>
+      </div>
+    </div>
+    <div class="cl-field">
+      <label for="cl-rarity">Rareza</label>
+      <select id="cl-rarity" class="cl-filter" style="max-width:190px" tabindex="8">
+        <option value="">Todas</option>
+        {% for r in rarities %}<option value="{{ r }}">{{ r }}</option>{% endfor %}
+      </select>
+    </div>
+    <label class="cl-check" title="Oculta las cartas cuya imagen todavía no se bajó.">
+      <input type="checkbox" id="cl-with-image" class="cl-filter" tabindex="9"> Solo con imagen
+    </label>
+    <label class="cl-check" title="Oculta promos, decks, tins y Code Cards.">
+      <input type="checkbox" id="cl-hide-extras" class="cl-filter" checked tabindex="10"> Ocultar promos y packs
+    </label>
+    <button type="button" class="cl-reset" id="cl-reset" tabindex="11">Limpiar filtros</button>
+  </div>
+
+  <input type="text" id="cl-search" tabindex="12" autofocus autocomplete="off"
+         placeholder="Buscá por nombre, número o set — ej: charizard 4/102 (o elegí una expansión y dejalo vacío)">
+
+  <div class="cl-grid">
+    <div class="cl-panel">
+      <h2>
+        <span>Resultados del catálogo</span>
+        <span class="cl-badge" id="cl-count">—</span>
+      </h2>
+      <div id="cl-results">
+        <div class="cl-empty">Escribí algo, o elegí una expansión para recorrerla entera.</div>
+      </div>
+    </div>
+
+    <div class="cl-panel">
+      <h2>
+        <span>Lote a cargar</span>
+        <span style="display:flex;gap:8px;align-items:center;">
+          <button type="button" class="cl-manual" id="cl-add-manual"
+                  title="Para lo que no está en el catálogo de TCGplayer: sellados sueltos, accesorios, slabs certificados.">
+            ✚ Agregar Manual
+          </button>
+          <span class="cl-badge" id="cl-batch-count">0</span>
+        </span>
+      </h2>
+      <div id="cl-batch"><div class="cl-empty">Todavía no agregaste nada.</div></div>
+      <div class="cl-foot">
+        <div class="cl-total">
+          <span>Total del lote</span>
+          <b><span id="cl-total-usd">USD 0.00</span> · <span id="cl-total-ars">$0 ARS</span></b>
+        </div>
+        <button class="cl-save" id="cl-save" tabindex="13" disabled>Guardar todo</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+{{ card_sets|json_script:"cl-sets-data" }}
+
+{# Listas para los desplegables que se dibujan desde JS en cada fila del lote. #}
+<select id="cl-src-entities" hidden>
+  {% for e in cert_entities %}<option value="{{ e.id }}">{{ e }}</option>{% endfor %}
+</select>
+<select id="cl-src-grades" hidden>
+  {% for g in cert_grades %}<option value="{{ g.id }}">{{ g }}</option>{% endfor %}
+</select>
+<select id="cl-src-tcgs" hidden>
+  {% for t in tcgs %}<option value="{{ t.id }}">{{ t }}</option>{% endfor %}
+</select>
+
+<script>
+(function () {
+  const SEARCH_URL = "{{ search_url }}";
+  const SAVE_URL   = "{{ save_url }}";
+  const RATE       = parseFloat("{{ usd_to_ars }}");
+  const MAX_BATCH  = parseInt("{{ max_batch_size }}", 10);
+  const SETS       = JSON.parse(document.getElementById("cl-sets-data").textContent);
+  const CLOUDINARY_ON = {{ cloudinary_enabled|yesno:"true,false" }};
+  const CLOUDINARY_SIGN_URL     = "{{ cloudinary_signature_url }}";
+  const CLOUDINARY_REGISTER_URL = "{{ cloudinary_register_url }}";
+  // Ojo: `$` todavía no existe en estas líneas, por eso el getElementById directo.
+  const optionsOf = (id) => Array.from(document.getElementById(id).options)
+    .filter((o) => o.value)
+    .map((o) => ({ id: o.value, label: o.text }));
+
+  const CONDITIONS = optionsOf("cl-condition");
+  const ENTITIES   = optionsOf("cl-src-entities");
+  const GRADES     = optionsOf("cl-src-grades");
+  const TCGS       = optionsOf("cl-src-tcgs");
+
+  // Categorías con su tipo (single/slab/sealed/other), que es lo que decide
+  // qué campos pide cada fila del lote.
+  const CATEGORIES = Array.from(document.getElementById("cl-category").options)
+    .map((o) => ({ id: o.value, label: o.text, kind: o.dataset.kind || "other" }));
+  const kindOf = (categoryId) =>
+    (CATEGORIES.find((c) => String(c.id) === String(categoryId)) || {}).kind || "other";
+
+  // Token propio de cada fila: agrupa las fotos que se suben antes de que el
+  // producto exista. Es el mismo mecanismo del formulario clásico.
+  const newToken = () => (crypto.randomUUID
+    ? crypto.randomUUID()
+    : "d-" + Date.now() + "-" + Math.random().toString(16).slice(2));
+
+  const $ = (id) => document.getElementById(id);
+  const searchInput = $("cl-search");
+
+  let results = [];
+  let active = 0;
+  let batch = [];
+  let seq = 0;
+  let reqId = 0;   // descarta respuestas viejas que llegan tarde
+
+  const csrf = () =>
+    (document.cookie.match(/(^|;\s*)csrftoken=([^;]+)/) || [])[2] || "";
+  const money = (n) => n.toLocaleString("es-AR", { maximumFractionDigits: 0 });
+  const esc = (s) => String(s == null ? "" : s).replace(/[&<>"']/g,
+    (m) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[m]));
+
+  const thumbHtml = (url, mini) =>
+    `<div class="cl-thumb${mini ? " is-mini" : ""}">${
+      url ? `<img src="${esc(url)}" alt="" loading="lazy" decoding="async"
+                  onload="this.classList.add('is-in')">`
+          : `<span>sin<br>imagen</span>`}</div>`;
+
+  function flash(text, kind) {
+    const box = $("cl-msg");
+    box.textContent = text;
+    box.className = "cl-msg " + kind;
+    box.style.display = "block";
+    if (kind === "ok") setTimeout(() => { box.style.display = "none"; }, 6000);
+  }
+
+  // ------------------------------------------- combo buscable de expansiones
+  const setCombo  = $("cl-set-combo");
+  const setInput  = $("cl-set-input");
+  const setHidden = $("cl-set");
+  const setList   = $("cl-set-list");
+  let setOptions = [];
+  let setActive = 0;
+
+  const setLabel = (s) =>
+    (s.language === "ja" ? "JP · " : "EN · ") + s.name + (s.abbreviation ? " (" + s.abbreviation + ")" : "");
+
+  function openSetList(filterText) {
+    const needle = (filterText || "").trim().toLowerCase();
+    // El idioma elegido arriba también acota la lista: si estás cargando JP no
+    // tiene sentido ofrecerte las 217 expansiones inglesas.
+    const lang = $("cl-lang").value;
+    setOptions = SETS
+      .filter((s) => !lang || s.language === lang)
+      .filter((s) => !needle || setLabel(s).toLowerCase().includes(needle))
+      .slice(0, 80);
+
+    setActive = 0;
+    setList.innerHTML = setOptions.length
+      ? setOptions.map((s, i) =>
+          `<div class="cl-combo-opt${i === 0 ? " is-active" : ""}" data-id="${s.id}" data-i="${i}">${esc(setLabel(s))}</div>`
+        ).join("")
+      : '<div class="cl-combo-none">Ninguna expansión coincide.</div>';
+    setList.classList.add("is-open");
+    setInput.setAttribute("aria-expanded", "true");
+  }
+
+  function closeSetList() {
+    setList.classList.remove("is-open");
+    setInput.setAttribute("aria-expanded", "false");
+  }
+
+  function pickSet(option) {
+    if (!option) return;
+    setHidden.value = option.id;
+    setInput.value = setLabel(option);
+    setCombo.classList.add("has-value");
+    closeSetList();
+    runSearch();
+  }
+
+  function clearSet(refocus) {
+    setHidden.value = "";
+    setInput.value = "";
+    setCombo.classList.remove("has-value");
+    closeSetList();
+    if (refocus) setInput.focus();
+    runSearch();
+  }
+
+  setInput.addEventListener("focus", () => openSetList(""));
+  setInput.addEventListener("input", () => {
+    // Mientras escribís no hay expansión elegida: si no, el filtro quedaría
+    // pegado al set anterior sin que se note.
+    if (setHidden.value) { setHidden.value = ""; setCombo.classList.remove("has-value"); runSearch(); }
+    openSetList(setInput.value);
+  });
+  setInput.addEventListener("keydown", (e) => {
+    if (e.key === "Escape") { closeSetList(); return; }
+    if (e.key === "Tab")    { closeSetList(); return; }
+    if (!setList.classList.contains("is-open")) return;
+    if (e.key === "ArrowDown" || e.key === "ArrowUp") {
+      e.preventDefault();
+      setActive = e.key === "ArrowDown"
+        ? Math.min(setActive + 1, setOptions.length - 1)
+        : Math.max(setActive - 1, 0);
+      setList.querySelectorAll(".cl-combo-opt").forEach((el, i) =>
+        el.classList.toggle("is-active", i === setActive));
+      const el = setList.querySelector(".is-active");
+      if (el) el.scrollIntoView({ block: "nearest" });
+    } else if (e.key === "Enter") {
+      e.preventDefault();
+      pickSet(setOptions[setActive]);
+      searchInput.focus();
+    }
+  });
+  setList.addEventListener("mousedown", (e) => {
+    const opt = e.target.closest(".cl-combo-opt");
+    if (opt) { e.preventDefault(); pickSet(setOptions[parseInt(opt.dataset.i, 10)]); }
+  });
+  $("cl-set-clear").addEventListener("click", () => clearSet(true));
+  document.addEventListener("click", (e) => {
+    if (!setCombo.contains(e.target)) closeSetList();
+  });
+
+  // ---------------------------------------------------------------- búsqueda
+  let timer = null;
+  searchInput.addEventListener("input", () => {
+    clearTimeout(timer);
+    timer = setTimeout(runSearch, 200);
+  });
+  document.querySelectorAll(".cl-filter").forEach((el) => {
+    el.addEventListener("change", () => { clearTimeout(timer); runSearch(); });
+  });
+  // Cambiar de categoría cambia qué se busca, así que rehace la búsqueda.
+  $("cl-category").addEventListener("change", () => { clearTimeout(timer); runSearch(); });
+  // Cambiar de idioma acota las expansiones: si la elegida ya no aplica, se cae.
+  $("cl-lang").addEventListener("change", () => {
+    const current = SETS.find((s) => String(s.id) === setHidden.value);
+    const lang = $("cl-lang").value;
+    if (current && lang && current.language !== lang) clearSet(false);
+  });
+
+  $("cl-reset").addEventListener("click", () => {
+    $("cl-lang").value = "";
+    $("cl-rarity").value = "";
+    $("cl-with-image").checked = false;
+    $("cl-hide-extras").checked = true;
+    clearSet(false);
+    searchInput.focus();
+  });
+
+  // Lo que buscás depende de qué estás cargando: con "Singles" el catálogo
+  // muestra solo cartas sueltas, con "Sellados" solo tins, boxes y collections.
+  const currentKind = () => {
+    const sel = $("cl-category");
+    return sel.options[sel.selectedIndex]?.dataset.kind || "";
+  };
+
+  function buildParams() {
+    const p = new URLSearchParams();
+    p.set("q", searchInput.value.trim());
+    const kind = currentKind();
+    if (kind && kind !== "other") p.set("kind", kind);
+    if ($("cl-lang").value)   p.set("lang", $("cl-lang").value);
+    if (setHidden.value)      p.set("set", setHidden.value);
+    if ($("cl-rarity").value) p.set("rarity", $("cl-rarity").value);
+    if ($("cl-with-image").checked)  p.set("with_image", "1");
+    if ($("cl-hide-extras").checked) p.set("hide_extras", "1");
+    return p;
+  }
+
+  async function runSearch() {
+    const params = buildParams();
+    const hasFilter = params.has("lang") || params.has("set") ||
+                      params.has("rarity") || params.has("with_image");
+
+    if (params.get("q").length < 2 && !hasFilter) {
+      results = [];
+      $("cl-count").textContent = "—";
+      $("cl-results").innerHTML =
+        '<div class="cl-empty">Escribí al menos 2 letras, o elegí una expansión.</div>';
+      return;
+    }
+
+    const mine = ++reqId;
+    $("cl-count").textContent = "buscando...";
+
+    let data;
+    try {
+      const res = await fetch(SEARCH_URL + "?" + params.toString());
+      if (!res.ok) { flash("La búsqueda falló.", "err"); return; }
+      data = await res.json();
+    } catch (e) { flash("Error de red en la búsqueda.", "err"); return; }
+
+    if (mine !== reqId) return;   // llegó tarde, ya hay una búsqueda más nueva
+    results = data.results;
+    active = 0;
+    renderResults();
+  }
+
+  function renderResults() {
+    const box = $("cl-results");
+    $("cl-count").textContent = results.length ? results.length : "0";
+
+    if (!results.length) {
+      box.innerHTML = '<div class="cl-empty">No encontré cartas con esos filtros.</div>';
+      return;
+    }
+
+    box.innerHTML = results.map((c, i) => `
+      <div class="cl-row ${i === active ? "is-active" : ""}" data-i="${i}">
+        ${thumbHtml(c.thumb, false)}
+        <div class="cl-id">
+          <div class="cl-name">${esc(c.name)} ${esc(c.number)}</div>
+          <div class="cl-sub">${esc(c.set_name)}${c.rarity ? " · " + esc(c.rarity) : ""}</div>
+        </div>
+        <div class="cl-tags">
+          <span class="cl-tag">${c.language === "ja" ? "JP" : "EN"}</span>
+          ${c.loaded ? `<span class="cl-tag is-loaded">ya tenés ${c.loaded}</span>` : ""}
+        </div>
+        <button class="cl-add" data-i="${i}" tabindex="-1">Agregar</button>
+      </div>`).join("");
+
+    const activeEl = box.querySelector(".is-active");
+    if (activeEl) activeEl.scrollIntoView({ block: "nearest" });
+  }
+
+  $("cl-results").addEventListener("click", (e) => {
+    const btn = e.target.closest(".cl-add");
+    if (btn) { addToBatch(parseInt(btn.dataset.i, 10)); return; }
+    const row = e.target.closest(".cl-row");
+    if (row) { active = parseInt(row.dataset.i, 10); renderResults(); }
+  });
+
+  // Teclado: la razón de ser de la pantalla. Buscás, flechas, Enter, seguís.
+  searchInput.addEventListener("keydown", (e) => {
+    if (e.key === "Escape") { searchInput.value = ""; runSearch(); return; }
+    if (!results.length) return;
+    if (e.key === "ArrowDown") { e.preventDefault(); active = Math.min(active + 1, results.length - 1); renderResults(); }
+    else if (e.key === "ArrowUp") { e.preventDefault(); active = Math.max(active - 1, 0); renderResults(); }
+    else if (e.key === "Enter")  { e.preventDefault(); addToBatch(active); }
+  });
+
+  // ------------------------------------------------------------------- lote
+  function newBatchItem(card) {
+    const conditionSel = $("cl-condition");
+    return {
+      key: ++seq,
+      // Sin carta es un producto manual: nombre y TCG los ponés a mano.
+      card_id: card ? card.id : null,
+      // Arranca con la categoría de arriba, pero después es de la fila.
+      category_id: $("cl-category").value,
+      label: card ? card.name + " " + card.number : "(sin nombre)",
+      set_name: card ? card.set_name : "Sin carta del catálogo",
+      thumb: card ? card.thumb : "",
+      name: "",
+      tcg_id: TCGS.length === 1 ? TCGS[0].id : null,
+      price_usd: parseFloat($("cl-price").value) || 0,
+      quantity: parseInt($("cl-qty").value, 10) || 1,
+      discount_percent: parseInt($("cl-discount").value, 10) || 0,
+      condition_id: conditionSel.value || null,
+      condition_label: conditionSel.value ? conditionSel.options[conditionSel.selectedIndex].text : "—",
+      // Opcionales por fila, todos vacíos por defecto.
+      certification_entity_id: null,
+      certification_grade_id: null,
+      image_url: "",
+      pricecharting_url: "",
+      description: "",
+      shots: [],
+      draft_token: newToken(),
+      uploading: false,
+      open: false,
+    };
+  }
+
+  $("cl-add-manual").addEventListener("click", () => {
+    if (batch.length >= MAX_BATCH) {
+      flash("Llegaste al máximo de " + MAX_BATCH + " por lote. Guardá y seguí.", "err");
+      return;
+    }
+    const item = newBatchItem(null);
+    item.open = true;   // hay que completar nombre y TCG sí o sí
+    batch.push(item);
+    renderBatch();
+    const input = $("cl-batch").querySelector(".cl-batch-item:last-child .cl-f-name");
+    if (input) input.focus();
+  });
+
+  function addToBatch(index) {
+    const card = results[index];
+    if (!card) return;
+    if (batch.length >= MAX_BATCH) {
+      flash("Llegaste al máximo de " + MAX_BATCH + " por lote. Guardá y seguí.", "err");
+      return;
+    }
+
+    batch.push(newBatchItem(card));
+
+    renderBatch();
+
+    // Con una expansión elegida estás recorriéndola: conviene quedarse en la
+    // lista y bajar a la siguiente. Con texto libre, limpiar y volver a escribir.
+    if (setHidden.value && !searchInput.value.trim()) {
+      active = Math.min(index + 1, results.length - 1);
+      renderResults();
+    } else {
+      searchInput.value = "";
+      results = [];
+      renderResults();
+    }
+    searchInput.focus();
+  }
+
+  function renderBatch() {
+    const box = $("cl-batch");
+    $("cl-batch-count").textContent = batch.length;
+    $("cl-save").disabled = batch.length === 0;
+
+    if (!batch.length) {
+      box.innerHTML = '<div class="cl-empty">Todavía no agregaste nada.</div>';
+      updateTotals();
+      return;
+    }
+
+    const opts = (list, selected) => list.map((o) =>
+      `<option value="${o.id}"${String(o.id) === String(selected) ? " selected" : ""}>${esc(o.label)}</option>`
+    ).join("");
+
+    box.innerHTML = batch.map((it) => {
+      // Cada fila tiene su propia categoría, y de ella sale qué campos pide.
+      const rowKind = kindOf(it.category_id);
+      const extras = (it.image_url ? 1 : 0) + (it.pricecharting_url ? 1 : 0) +
+                     (it.description ? 1 : 0) + it.shots.length +
+                     (it.certification_grade_id ? 1 : 0);
+      return `
+      <div class="cl-batch-item${it.card_id ? "" : " is-manual"}" data-key="${it.key}">
+        <div class="cl-batch-row">
+          ${thumbHtml(it.shots[0] || it.thumb, true)}
+          <div class="cl-id">
+            <div class="cl-name">${esc(it.label)}</div>
+            <div class="cl-sub">${esc(it.set_name)} · ${esc(it.condition_label)}</div>
+          </div>
+          <button class="cl-more${extras ? " has-data" : ""}" title="Foto propia, URLs y condición">
+            ${extras ? "✎ " + extras : "✎"}
+          </button>
+          <input type="number" class="cl-price" step="0.01" min="0.01" value="${it.price_usd}" title="Precio USD">
+          <input type="number" class="cl-qty" min="1" max="99" value="${it.quantity}" title="Cantidad">
+          <button class="cl-del" title="Quitar">&times;</button>
+        </div>
+
+        <div class="cl-detail${it.open ? " is-open" : ""}">
+          <label>Categoría de este producto</label>
+          <select class="cl-f-category">${opts(CATEGORIES, it.category_id)}</select>
+
+          ${it.card_id ? "" : `
+            <label>Nombre del producto <span style="color:var(--cl-warn)">*</span></label>
+            <input type="text" class="cl-f-name" placeholder="Ej: Elite Trainer Box Surging Sparks" value="${esc(it.name)}">
+            <label>TCG <span style="color:var(--cl-warn)">*</span></label>
+            <select class="cl-f-tcg">
+              <option value="">— elegí el TCG —</option>
+              ${opts(TCGS, it.tcg_id)}
+            </select>`}
+
+          ${rowKind === "slab" ? `
+            <label>Certificadora <span style="color:var(--cl-warn)">*</span></label>
+            <select class="cl-f-entity">
+              <option value="">— elegí la certificadora —</option>
+              ${opts(ENTITIES, it.certification_entity_id)}
+            </select>
+            <label>Nota <span style="color:var(--cl-warn)">*</span></label>
+            <select class="cl-f-grade">
+              <option value="">— elegí la nota —</option>
+              ${opts(GRADES, it.certification_grade_id)}
+            </select>` : ""}
+
+          <label>Condición ${rowKind === "single" || rowKind === "slab" ? '<span style="color:var(--cl-warn)">*</span>' : ""}</label>
+          <select class="cl-f-condition">
+            <option value="">— sin condición —</option>
+            ${opts(CONDITIONS, it.condition_id)}
+          </select>
+
+          <label>% Descuento</label>
+          <input type="number" class="cl-f-discount" min="0" max="100" value="${it.discount_percent}">
+
+          <label>URL de imagen propia <span style="text-transform:none;letter-spacing:0;">(opcional)</span></label>
+          <input type="text" class="cl-f-image" placeholder="https://..." value="${esc(it.image_url)}">
+
+          ${CLOUDINARY_ON ? `
+          <label>O subí fotos <span style="text-transform:none;letter-spacing:0;">(máx. 3)</span></label>
+          <div class="cl-shots">
+            ${it.shots.map((u) => `<img class="cl-shot" src="${esc(u)}" alt="">`).join("")}
+            ${it.shots.length < 3 ? `
+              <label class="cl-upload">
+                <input type="file" class="cl-f-file" accept="image/*">
+                ${it.uploading ? "Subiendo..." : "＋ Subir foto"}
+              </label>` : ""}
+          </div>` : ""}
+
+          <label>URL de referencia <span style="text-transform:none;letter-spacing:0;">(PriceCharting)</span></label>
+          <input type="text" class="cl-f-ref" placeholder="https://www.pricecharting.com/..." value="${esc(it.pricecharting_url)}">
+
+          <label>Descripción <span style="text-transform:none;letter-spacing:0;">(opcional)</span></label>
+          <textarea class="cl-f-desc" placeholder="Detalles de esta unidad...">${esc(it.description)}</textarea>
+
+          <div class="cl-note">
+            Si no cargás foto ni URL, se usa la imagen del catálogo.
+            ${it.quantity > 1 ? "<br><b>Ojo:</b> con cantidad mayor a 1, las fotos propias van solo a la primera unidad." : ""}
+          </div>
+        </div>
+      </div>`;
+    }).join("");
+
+    updateTotals();
+  }
+
+  const itemOf = (el) => {
+    const wrap = el.closest(".cl-batch-item");
+    return wrap ? batch.find((b) => b.key === parseInt(wrap.dataset.key, 10)) : null;
+  };
+
+  // Los campos que no cambian el alto se escriben en vivo, sin re-renderizar:
+  // redibujar mientras tipeás te sacaría el foco del input.
+  $("cl-batch").addEventListener("input", (e) => {
+    const item = itemOf(e.target);
+    if (!item) return;
+    const t = e.target;
+    if (t.classList.contains("cl-price"))      item.price_usd = parseFloat(t.value) || 0;
+    else if (t.classList.contains("cl-qty"))   item.quantity = parseInt(t.value, 10) || 1;
+    else if (t.classList.contains("cl-f-discount")) item.discount_percent = parseInt(t.value, 10) || 0;
+    else if (t.classList.contains("cl-f-image"))    item.image_url = t.value.trim();
+    else if (t.classList.contains("cl-f-ref"))      item.pricecharting_url = t.value.trim();
+    else if (t.classList.contains("cl-f-desc"))     item.description = t.value;
+    else if (t.classList.contains("cl-f-name")) {
+      item.name = t.value;
+      // El título de la fila sigue al nombre, pero sin re-render: perdería el foco.
+      const title = t.closest(".cl-batch-item").querySelector(".cl-batch-row .cl-name");
+      if (title) title.textContent = t.value || "(sin nombre)";
+    }
+    updateTotals();
+  });
+
+  $("cl-batch").addEventListener("change", (e) => {
+    const item = itemOf(e.target);
+    if (!item) return;
+    const t = e.target;
+    if (t.classList.contains("cl-f-condition")) {
+      item.condition_id = t.value || null;
+      item.condition_label = t.value ? t.options[t.selectedIndex].text : "—";
+      renderBatch();
+    } else if (t.classList.contains("cl-f-entity")) {
+      item.certification_entity_id = t.value || null;
+      renderBatch();
+    } else if (t.classList.contains("cl-f-grade")) {
+      item.certification_grade_id = t.value || null;
+      renderBatch();
+    } else if (t.classList.contains("cl-f-category")) {
+      item.category_id = t.value;
+      // Cambiar de categoría cambia qué campos aplican: una certificación que
+      // quedó de un slab no puede viajar a un accesorio.
+      if (kindOf(item.category_id) !== "slab") {
+        item.certification_entity_id = null;
+        item.certification_grade_id = null;
+      }
+      renderBatch();
+    } else if (t.classList.contains("cl-f-tcg")) {
+      item.tcg_id = t.value || null;
+    } else if (t.classList.contains("cl-f-file")) {
+      uploadShot(item, t.files[0]);
+    }
+  });
+
+  $("cl-batch").addEventListener("click", (e) => {
+    const item = itemOf(e.target);
+    if (!item) return;
+    if (e.target.classList.contains("cl-del")) {
+      batch = batch.filter((b) => b.key !== item.key);
+      renderBatch();
+    } else if (e.target.closest(".cl-more")) {
+      item.open = !item.open;
+      renderBatch();
+    }
+  });
+
+  // ------------------------------------------------- subida a Cloudinary
+  // Mismo camino que el form clásico: se firma, se sube directo a Cloudinary y
+  // se registra la ProductImage contra el draft_token de esta fila. Al guardar,
+  // el backend la engancha al producto recién creado.
+  async function uploadShot(item, file) {
+    if (!file) return;
+    if (item.shots.length >= 3) { flash("Máximo 3 fotos por producto.", "err"); return; }
+
+    item.uploading = true;
+    renderBatch();
+
+    try {
+      const slot = item.shots.length;
+      const sigRes = await fetch(CLOUDINARY_SIGN_URL, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "X-CSRFToken": csrf() },
+        body: JSON.stringify({ draft_token: item.draft_token, slot }),
+      });
+      if (!sigRes.ok) throw new Error((await sigRes.json()).detail || "no se pudo firmar la subida");
+      const sig = await sigRes.json();
+
+      const form = new FormData();
+      form.append("file", file);
+      Object.entries(sig.params || {}).forEach(([k, v]) => form.append(k, v));
+      form.append("api_key", sig.api_key);
+      form.append("signature", sig.signature);
+
+      const upRes = await fetch(sig.upload_url, { method: "POST", body: form });
+      if (!upRes.ok) throw new Error("Cloudinary rechazó la foto");
+      const up = await upRes.json();
+
+      const regRes = await fetch(CLOUDINARY_REGISTER_URL, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "X-CSRFToken": csrf() },
+        body: JSON.stringify({
+          draft_token: item.draft_token,
+          secure_url: up.secure_url,
+          public_id: up.public_id,
+          order_index: slot,
+          source: "cloudinary",
+        }),
+      });
+      if (!regRes.ok) throw new Error((await regRes.json()).detail || "no se pudo registrar la foto");
+
+      item.shots.push(up.secure_url);
+    } catch (err) {
+      flash("Foto no subida: " + err.message, "err");
+    } finally {
+      item.uploading = false;
+      renderBatch();
+    }
+  }
+
+  function updateTotals() {
+    const usd = batch.reduce((sum, it) => sum + it.price_usd * it.quantity, 0);
+    $("cl-total-usd").textContent = "USD " + usd.toFixed(2);
+    $("cl-total-ars").textContent = "$" + money(usd * RATE) + " ARS";
+  }
+
+  // ---------------------------------------------------------------- guardar
+  $("cl-save").addEventListener("click", async () => {
+    // Se avisa acá para no hacer el viaje al servidor, pero el que manda es el
+    // backend: estas mismas reglas están validadas del otro lado. Cada fila se
+    // juzga por SU categoría, porque el lote puede venir mezclado.
+    const faltan = (test, mensaje) => {
+      const malas = batch.filter(test);
+      if (!malas.length) return false;
+      malas.forEach((it) => { it.open = true; });
+      renderBatch();
+      flash(`${mensaje} (${malas.length} fila/s). Abrí el ✎ de las marcadas.`, "err");
+      return true;
+    };
+    const unique = (it) => ["single", "slab"].includes(kindOf(it.category_id));
+
+    if (faltan((it) => unique(it) && !it.condition_id, "Falta la condición")) return;
+    if (faltan((it) => kindOf(it.category_id) === "slab" &&
+                       (!it.certification_entity_id || !it.certification_grade_id),
+               "Falta certificadora o nota")) return;
+    if (faltan((it) => !it.card_id && !it.name.trim(), "Falta el nombre")) return;
+    if (faltan((it) => !it.card_id && !it.tcg_id, "Falta el TCG")) return;
+
+    const btn = $("cl-save");
+    btn.disabled = true;
+    btn.textContent = "Guardando...";
+
+    try {
+      const res = await fetch(SAVE_URL, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "X-CSRFToken": csrf() },
+        body: JSON.stringify({
+          category_id: $("cl-category").value,   // solo el default de respaldo
+          items: batch.map((it) => ({
+            card_id: it.card_id,
+            category_id: parseInt(it.category_id, 10),
+            price_usd: it.price_usd,
+            quantity: it.quantity,
+            discount_percent: it.discount_percent,
+            condition_id: it.condition_id,
+            name: it.name,
+            tcg_id: it.tcg_id,
+            certification_entity_id: it.certification_entity_id,
+            certification_grade_id: it.certification_grade_id,
+            image_url: it.image_url,
+            pricecharting_url: it.pricecharting_url,
+            description: it.description,
+            draft_token: it.shots.length ? it.draft_token : "",
+          })),
+        }),
+      });
+
+      const data = await res.json();
+      if (!res.ok) { flash(data.error || "No se pudo guardar el lote.", "err"); return; }
+
+      let msg = "Listo: " + data.created + " producto(s) creados.";
+      if (data.errors && data.errors.length) msg += " Con avisos: " + data.errors.join(" ");
+      flash(msg, "ok");
+
+      batch = [];
+      renderBatch();
+      runSearch();          // refresca el "ya tenés N" de la lista
+      searchInput.focus();
+    } catch (err) {
+      flash("Error de red al guardar. Nada se guardó a medias.", "err");
+    } finally {
+      btn.disabled = batch.length === 0;
+      btn.textContent = "Guardar todo";
+    }
+  });
+
+  renderBatch();
+})();
+</script>
+{% endblock %}

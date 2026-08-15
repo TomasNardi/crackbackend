@@ -2,7 +2,10 @@ import json
 
 from django.contrib import admin
 from django.contrib import messages
+from django.core.exceptions import PermissionDenied
+from django.urls import path
 from unfold.admin import ModelAdmin
+from . import bulk_load
 from .forms import ProductAdminForm
 from .models import (
     TCG,
@@ -98,6 +101,34 @@ class ProductAdmin(ModelAdmin):
             "fields": ("pricecharting_url",),
         }),
     )
+
+    # Le agrega el botón "Carga de stock" arriba del listado de productos.
+    change_list_template = "admin/products/product/change_list.html"
+
+    def get_urls(self):
+        custom_urls = [
+            path(
+                "carga-stock/",
+                self.admin_site.admin_view(self.bulk_load_view),
+                name="products_product_bulk_load",
+            ),
+            path(
+                "carga-stock/buscar/",
+                self.admin_site.admin_view(bulk_load.search_view),
+                name="products_product_bulk_search",
+            ),
+            path(
+                "carga-stock/guardar/",
+                self.admin_site.admin_view(bulk_load.save_view),
+                name="products_product_bulk_save",
+            ),
+        ]
+        return custom_urls + super().get_urls()
+
+    def bulk_load_view(self, request):
+        if not self.has_add_permission(request):
+            raise PermissionDenied
+        return bulk_load.page_view(self, request)
 
     def has_delete_permission(self, request, obj=None):
         return request.user.has_perm("products.delete_product")

@@ -41,6 +41,32 @@ class ProductImageSerializer(serializers.ModelSerializer):
         return optimize_cloudinary_url(obj.secure_url, DELIVERY_TRANSFORM_THUMB)
 
 
+class CatalogCardSerializer(serializers.ModelSerializer):
+    """
+    Datos de la carta del catálogo (TCGplayer) que están detrás del producto.
+
+    Se expone anidado en vez de copiarse a `Product`: el catálogo se reimporta
+    solo, así el número, la rareza o el set nunca quedan desactualizados. Sirve
+    para filtrar y mostrar en el front sin pegarle a otro endpoint.
+    """
+
+    set_name = serializers.CharField(source="card_set.name", read_only=True)
+    set_abbreviation = serializers.CharField(source="card_set.abbreviation", read_only=True)
+    set_slug = serializers.CharField(source="card_set.slug", read_only=True)
+    language = serializers.CharField(source="card_set.language", read_only=True)
+    released_at = serializers.DateField(source="card_set.released_at", read_only=True)
+
+    class Meta:
+        from apps.catalog.models import CatalogCard
+
+        model = CatalogCard
+        fields = (
+            "id", "external_id", "name", "number", "rarity",
+            "set_name", "set_abbreviation", "set_slug", "language", "released_at",
+            "image_url", "image_url_medium", "image_url_thumb",
+        )
+
+
 class TCGSerializer(serializers.ModelSerializer):
     class Meta:
         model = TCG
@@ -101,6 +127,7 @@ class ProductListSerializer(serializers.ModelSerializer):
     price_ars = serializers.DecimalField(max_digits=12, decimal_places=2, read_only=True)
     final_price = serializers.DecimalField(max_digits=12, decimal_places=2, read_only=True)
     images = ProductImageSerializer(many=True, read_only=True)
+    catalog = CatalogCardSerializer(source="catalog_card", read_only=True)
 
     def get_image_url(self, obj):
         return optimize_cloudinary_url(obj.image_url, DELIVERY_TRANSFORM_LIST)
@@ -112,6 +139,7 @@ class ProductListSerializer(serializers.ModelSerializer):
             "condition", "certification_entity", "certification_grade",
             "price_usd", "price_ars", "discount_percent", "final_price",
             "stock_quantity", "in_stock", "image_url", "images", "rating", "rating_count", "created_at",
+            "catalog",
         )
 
 
@@ -147,6 +175,7 @@ class ProductDetailSerializer(serializers.ModelSerializer):
     image_url_3 = serializers.SerializerMethodField()
     suggested_products = serializers.SerializerMethodField()
     images = ProductImageSerializer(many=True, read_only=True)
+    catalog = CatalogCardSerializer(source="catalog_card", read_only=True)
 
     def get_image_url(self, obj):
         return optimize_cloudinary_url(obj.image_url, DELIVERY_TRANSFORM_DETAIL)
@@ -180,6 +209,7 @@ class ProductDetailSerializer(serializers.ModelSerializer):
             "suggested_products",
             "rating", "rating_count",
             "pricecharting_url", "created_at", "updated_at",
+            "catalog",
         )
 
 
