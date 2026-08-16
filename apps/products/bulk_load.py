@@ -46,8 +46,20 @@ logger = logging.getLogger(__name__)
 # eternamente, y mantiene la respuesta liviana.
 SEARCH_LIMIT = 40
 
-# Tope de items por lote. Evita que un POST accidental cree miles de productos.
-MAX_BATCH_SIZE = 300
+# Tope de items por lote.
+#
+# El límite real no es la memoria sino el reloj: `_create_batch` crea los
+# productos de a uno (no se puede usar bulk_create porque `save()` arma el slug y
+# resuelve la imagen del catálogo), y cada INSERT es un viaje a la base en
+# Oregon. Medido: ~390 ms por producto, o sea ~4 s para 10 y ~2 min para 300 —
+# muy por encima del timeout de request de Render, así que un lote grande se caía
+# entero sin guardar nada.
+MAX_BATCH_SIZE = 10
+
+# Condición con la que entran las filas nuevas. Se resuelve por `abbreviation`
+# porque el nombre visible puede cambiar; si alguien borra esa condición, la
+# pantalla simplemente arranca sin default y hay que elegirla a mano.
+DEFAULT_CONDITION_ABBR = "MT"
 
 SINGLE_CATEGORIES = {"single", "singles"}
 SLAB_CATEGORIES = {"slab", "slabs"}
@@ -527,6 +539,11 @@ def page_view(model_admin, request):
         **model_admin.admin_site.each_context(request),
         "title": "Carga de stock",
         "conditions": CardCondition.objects.all(),
+        "default_condition_id": (
+            CardCondition.objects.filter(abbreviation=DEFAULT_CONDITION_ABBR)
+            .values_list("id", flat=True)
+            .first() or ""
+        ),
         "cert_entities": CertificationEntity.objects.all(),
         "cert_grades": CertificationGrade.objects.all(),
         "tcgs": TCG.objects.all(),

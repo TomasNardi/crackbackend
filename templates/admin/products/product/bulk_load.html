@@ -422,6 +422,15 @@
     .map((o) => ({ id: o.value, label: o.text }));
 
   const CONDITIONS = optionsOf("cl-src-conditions");
+
+  // Con qué condición entran las filas nuevas. Sale del backend resuelta por
+  // abreviatura ("MT"), no por el texto del desplegable. Cadena vacía si esa
+  // condición no existe: ahí la fila arranca sin elegir, como antes.
+  const DEFAULT_CONDITION_ID = "{{ default_condition_id }}" || null;
+  const labelOfCondition = (id) => {
+    const found = CONDITIONS.find((c) => String(c.id) === String(id));
+    return found ? found.label : "—";
+  };
   const ENTITIES   = optionsOf("cl-src-entities");
   const GRADES     = optionsOf("cl-src-grades");
   const TCGS       = optionsOf("cl-src-tcgs");
@@ -818,8 +827,8 @@
       price_usd: 1,
       quantity: 1,
       discount_percent: 0,
-      condition_id: null,
-      condition_label: "—",
+      condition_id: DEFAULT_CONDITION_ID,
+      condition_label: labelOfCondition(DEFAULT_CONDITION_ID),
       // Opcionales por fila, todos vacíos por defecto.
       certification_entity_id: null,
       certification_grade_id: null,
@@ -1067,11 +1076,10 @@
   /**
    * Duplica una fila: la misma carta otra vez, para cargarla en otra condición.
    *
-   * Se copia el precio y la cantidad porque casi siempre querés partir de ahí y
-   * ajustar. Lo que NO se copia son las fotos propias ni el draft_token: esas
-   * fotos son de esa unidad física, y dos productos no pueden compartir la misma
-   * ProductImage. La condición se limpia a propósito — duplicar sirve justamente
-   * para poner otra, y dejarla igual crearía un duplicado exacto sin querer.
+   * Se copia todo lo que ya cargaste —precio, cantidad, condición, descripción—
+   * porque casi siempre querés partir de ahí y cambiar una sola cosa. Lo único
+   * que NO se copia son las fotos propias y el draft_token: esas fotos son de
+   * esa unidad física, y dos productos no pueden compartir la misma ProductImage.
    */
   function duplicateItem(item) {
     if (batch.length >= MAX_BATCH) {
@@ -1081,8 +1089,6 @@
     const copy = {
       ...item,
       key: ++seq,
-      condition_id: null,
-      condition_label: "—",
       shots: [],
       draft_token: newToken(),
       uploading: false,
