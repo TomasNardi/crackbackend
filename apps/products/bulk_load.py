@@ -22,7 +22,7 @@ from django.contrib import messages
 from django.core.exceptions import ValidationError as DjangoValidationError
 from django.core.validators import URLValidator
 from django.db import transaction
-from django.db.models import Case, Count, F, IntegerField, Value, When
+from django.db.models import Case, Count, F, IntegerField, Q, Value, When
 from django.http import JsonResponse
 from django.shortcuts import render
 from django.urls import reverse
@@ -59,13 +59,12 @@ def category_kind(name):
     Qué clase de producto es una categoría. De acá sale todo el comportamiento
     de la pantalla:
 
-      single → carta suelta: pide condición, stock de a 1, busca cartas con número
+      single → carta suelta: pide condición, stock de a 1, busca solo cartas
       slab   → igual que single, pero además pide certificadora y nota
-      sealed → tins, boxes y collections: sin condición, busca cartas sin número
+      sealed → tins, boxes y collections: sin condición, busca solo sellados
       other  → accesorios y mystery packs: no filtra el catálogo
 
-    En el catálogo la diferencia entre carta y sellado está en el número: una
-    carta suelta trae "022/217", un tin o un case vienen sin número.
+    Cómo se separan cartas de sellados en el catálogo: ver `IS_PLAYABLE_CARD`.
     """
     slug = (name or "").strip().lower()
     if slug in SINGLE_CATEGORIES:
@@ -79,6 +78,20 @@ def category_kind(name):
 
 # El modelo fuerza stock = 1 en estas: cada copia es un producto aparte.
 UNIQUE_KINDS = {"single", "slab"}
+
+
+# Cómo se distingue una carta jugable de un producto sellado.
+#
+# El criterio obvio —"una carta tiene número, un tin no"— no sirve: hay ~700
+# cartas japonesas sueltas sin número ni rareza, y quedaban mezcladas con los
+# tins al cargar sellados.
+#
+# Lo que sí las separa es `extended_data`, que TCGplayer llena distinto según el
+# producto: una carta trae HP, Stage, Attack 1, CardType; un sellado trae a lo
+# sumo Description o CardText. Alcanza con mirar CardType, que está en todas las
+# cartas (Pokémon, Trainer y Energy) y en ningún sellado. Viene en dos grafías
+# según la categoría, así que hay que chequear las dos.
+IS_PLAYABLE_CARD = Q(extended_data__has_key="CardType") | Q(extended_data__has_key="Card Type")
 
 
 def requires_add_permission(view):
@@ -114,21 +127,23 @@ def _card_payload(card, product_count=0):
 @requires_add_permission
 def search_view(request):
     """
-    GET carga-stock/buscar/?q=charizard&lang=en&set=12&rarity=Rare&with_image=1
+    GET carga-stock/buscar/?q=charizard&lang=en&set=12&rarity=Rare
 
-    Todos los filtros son opcionales y se combinan. Con un filtro de set o
-    rareza puesto, `q` deja de ser obligatorio: sirve para recorrer una
-    expansión entera de arriba a abajo.
+    Todos los filtros son opcionales y se combinan. Con un filtro de idioma, set
+    o rareza puesto, `q` deja de ser obligatorio: sirve para recorrer una
+    expansión —o el catálogo japonés entero— de arriba a abajo.
+
+    No hay filtro de "solo con imagen" ni de "ocultar promos": si cargás stock de
+    algo, tenés que poder encontrarlo aunque no tenga foto o sea una promo. Lo
+    que resuelve el ruido es el orden, no esconder filas.
     """
     query = (request.GET.get("q") or "").strip()
     language = (request.GET.get("lang") or "").strip()
     set_id = (request.GET.get("set") or "").strip()
     rarity = (request.GET.get("rarity") or "").strip()
-    with_image = request.GET.get("with_image") == "1"
-    hide_extras = request.GET.get("hide_extras") == "1"
     kind = (request.GET.get("kind") or "").strip()
 
-    has_filter = bool(language or set_id or rarity or with_image)
+    has_filter = bool(language or set_id or rarity)
 
     # Sin texto y sin ningún filtro no hay nada que mostrar: devolver el
     # catálogo entero no le sirve a nadie.
@@ -148,19 +163,12 @@ def search_view(request):
         cards = cards.filter(card_set_id=int(set_id))
     if rarity:
         cards = cards.filter(rarity=rarity)
-    if with_image:
-        cards = cards.filter(image_status=CatalogCard.IMAGE_READY).exclude(image_url_thumb="")
-    if hide_extras:
-        # Saca promos, decks y la morralla de "Code Card" que ensucia todo.
-        cards = cards.filter(card_set__is_supplemental=False).exclude(rarity="Code Card")
 
     # Cargando singles no querés ver tins ni collections, y al revés tampoco.
     if kind in UNIQUE_KINDS:
-        cards = cards.exclude(number="")
+        cards = cards.filter(IS_PLAYABLE_CARD)
     elif kind == "sealed":
-        # Sin número y sin rareza. Lo segundo saca las cartas sueltas japonesas,
-        # que a veces vienen sin número pero sí traen rareza ("Common", "Rare").
-        cards = cards.filter(number="", rarity__in=["", "None"])
+        cards = cards.exclude(IS_PLAYABLE_CARD)
 
     # Ranking: lo que buscás casi siempre es la carta real, no un "Code Card" de
     # un set promocional. Sin esto, buscar "charizard" devuelve primero la
@@ -177,7 +185,16 @@ def search_view(request):
             default=Value(1),
             output_field=IntegerField(),
         ),
+        # Las "Code Card" son códigos de canje, nunca las vas a vender. Antes se
+        # escondían con un checkbox; ahora se mandan al fondo, que es mejor:
+        # siguen estando si alguna vez las necesitás, pero no estorban.
+        is_junk=Case(
+            When(rarity="Code Card", then=Value(1)),
+            default=Value(0),
+            output_field=IntegerField(),
+        ),
     ).order_by(
+        "is_junk",
         "name_hit",
         "card_set__is_supplemental",
         "no_image",
@@ -476,10 +493,16 @@ def page_view(model_admin, request):
 
     from apps.catalog.models import CardSet
 
-    categories = [
-        {"id": c.id, "name": c.name, "kind": category_kind(c.name)}
-        for c in ProductCategory.objects.all()
-    ]
+    # La botonera respeta este orden, así que va de lo que más se carga a lo que
+    # menos: Singles es el 90% del trabajo y tiene que ser el primer botón.
+    kind_order = {"single": 0, "slab": 1, "sealed": 2, "other": 3}
+    categories = sorted(
+        (
+            {"id": c.id, "name": c.name, "kind": category_kind(c.name)}
+            for c in ProductCategory.objects.all()
+        ),
+        key=lambda c: (kind_order[c["kind"]], c["name"]),
+    )
     default_category = next(
         (c for c in categories if c["kind"] == "single"),
         categories[0] if categories else None,
@@ -512,6 +535,9 @@ def page_view(model_admin, request):
         "usd_to_ars": ExchangeRate.get().usd_to_ars,
         "search_url": reverse("admin:products_product_bulk_search"),
         "save_url": reverse("admin:products_product_bulk_save"),
+        # La pantalla no es un form del admin, así que no hereda el "volver" de
+        # siempre: hay que dárselo a mano o quedás encerrado acá.
+        "changelist_url": reverse("admin:products_product_changelist"),
         "max_batch_size": MAX_BATCH_SIZE,
         # Subida directa a Cloudinary, el mismo camino que usa el form clásico.
         "cloudinary_signature_url": reverse("cloudinary_upload_signature"),

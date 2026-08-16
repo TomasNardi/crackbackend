@@ -45,6 +45,44 @@
               padding:0 12px; height:38px; font-size:13px; color:var(--cl-dim); cursor:pointer; }
   .cl-reset:hover { border-color:var(--cl-accent); color:var(--cl-accent); }
 
+  .cl-back { display:inline-flex; align-items:center; gap:7px; margin-bottom:12px;
+             background:#fff; border:1px solid var(--cl-line); border-radius:8px;
+             padding:0 14px; height:36px; font-size:13px; font-weight:600;
+             color:var(--cl-dim); text-decoration:none; }
+  .cl-back:hover { border-color:var(--cl-accent); color:var(--cl-accent);
+                   background:var(--cl-accent-soft); }
+
+  /* Categorías que no salen del catálogo: se esconde todo lo de búsqueda. */
+  .cl-wrap.is-manual-only .cl-only-catalog { display:none; }
+  .cl-manual-note { display:flex; align-items:center; justify-content:space-between;
+                    gap:18px; background:#faf7ff; border:1px solid #ddd0fb;
+                    border-radius:12px; padding:15px 17px; font-size:13.5px;
+                    line-height:1.6; color:#4c1d95; margin-bottom:14px; }
+  .cl-manual-note[hidden] { display:none; }
+  .cl-manual-note .cl-manual { height:36px; font-size:13px; flex-shrink:0; }
+
+  /* Al alternar entre buscar y cargar a mano cambia media pantalla. Sin una
+     señal, quedás mirando el formulario de abajo sin notar que arriba volvió el
+     buscador. Este destello dice "mirá acá" sin tapar nada. */
+  @keyframes cl-flash {
+    from { box-shadow:0 0 0 3px var(--cl-accent); }
+    to   { box-shadow:0 0 0 3px rgba(184,134,11,0); }
+  }
+  .cl-flash { animation:cl-flash .9s ease-out; border-radius:12px; }
+  @media (prefers-reduced-motion: reduce) { .cl-flash { animation:none; } }
+
+  /* Botonera de una sola opción activa (categoría e idioma). Un click en vez de
+     abrir un desplegable, y se ve sin buscar cuál está puesto. */
+  .cl-seg { display:inline-flex; height:38px; background:#fff; overflow:hidden;
+            border:1px solid var(--cl-line); border-radius:8px; }
+  .cl-seg button { border:none; background:none; cursor:pointer; padding:0 15px;
+                   font-size:13px; font-weight:600; color:var(--cl-dim);
+                   border-right:1px solid var(--cl-line); white-space:nowrap; }
+  .cl-seg button:last-child { border-right:none; }
+  .cl-seg button:hover { background:var(--cl-soft); color:var(--cl-text); }
+  .cl-seg button.is-on { background:var(--cl-accent); color:#fff; }
+  .cl-seg button:focus-visible { outline:2px solid var(--cl-text); outline-offset:-2px; }
+
   /* Agregar Manual: es la salida cuando la carta no está en el catálogo, así
      que tiene que verse sin buscarla. */
   .cl-manual { background:#7c3aed; color:#fff; border:none; border-radius:20px;
@@ -77,8 +115,31 @@
   #cl-search { width:100%; font-size:18px; padding:0 18px; height:52px; border-radius:12px;
                margin-bottom:12px; }
 
-  .cl-grid { display:grid; grid-template-columns:1fr 420px; gap:16px; align-items:start; }
-  @media (max-width:1250px){ .cl-grid { grid-template-columns:1fr; } }
+  /* Las columnas del lote se definen una sola vez y las usan el encabezado y
+     cada fila, así quedan alineadas como una tabla de verdad. */
+  .cl-cols { display:grid; align-items:center; gap:9px;
+             grid-template-columns:
+               38px                    /* miniatura            */
+               minmax(190px, 2.2fr)    /* nombre + expansión   */
+               40px                    /* idioma               */
+               148px                   /* condición            */
+               minmax(130px, 1.4fr)    /* descripción          */
+               104px                   /* precio               */
+               64px                    /* cantidad             */
+               34px 34px 26px;         /* ✎  ⧉  ×              */
+  }
+  @media (max-width:1100px){
+    .cl-cols { grid-template-columns:38px minmax(150px,2fr) 36px 130px 1fr 92px 56px 30px 30px 24px;
+               gap:6px; }
+  }
+
+  /* `display:grid` le gana a la regla del navegador para [hidden], así que hay
+     que apagarlo a mano o el encabezado se ve con el lote vacío. */
+  .cl-cols[hidden] { display:none; }
+  .cl-thead { padding:7px 14px; background:var(--cl-soft);
+              border-bottom:1px solid var(--cl-line); font-size:10px; font-weight:700;
+              text-transform:uppercase; letter-spacing:.07em; color:var(--cl-dim); }
+  .cl-thead .is-num { text-align:right; }
 
   .cl-panel { background:var(--cl-bg); border:1px solid var(--cl-line);
               border-radius:12px; overflow:hidden; }
@@ -125,16 +186,37 @@
   #cl-batch { max-height:52vh; overflow-y:auto; }
   .cl-batch-item { border-bottom:1px solid var(--cl-line); }
   .cl-batch-item:last-child { border-bottom:none; }
-  .cl-batch-row { display:flex; align-items:center; gap:8px; padding:8px 12px; font-size:13px; }
+  .cl-batch-row { padding:7px 14px; font-size:13px; }
+  .cl-batch-item:hover { background:var(--cl-soft); }
   .cl-batch-row .cl-name { font-size:13px; }
-  .cl-batch-row input { width:74px; padding:5px 7px; font-size:13px; height:32px; }
-  .cl-batch-row input.cl-qty { width:52px; }
+  .cl-batch-row input, .cl-batch-row select { width:100%; min-width:0; padding:5px 7px;
+                                              font-size:13px; height:32px; }
+  .cl-batch-row .cl-price, .cl-batch-row .cl-qty { text-align:right; }
   .cl-del { background:none; border:none; color:var(--cl-warn); cursor:pointer;
             font-size:19px; line-height:1; padding:0 4px; }
-  .cl-more { background:none; border:1px solid var(--cl-line); border-radius:6px;
-             color:var(--cl-dim); cursor:pointer; font-size:11px; padding:4px 7px;
-             white-space:nowrap; }
-  .cl-more:hover { border-color:var(--cl-accent); color:var(--cl-accent); }
+
+  /* Campos que se editan sin abrir el detalle: son los que tocás en cada carta. */
+  .cl-batch-row select.cl-cond { font-size:12px; padding:0 26px 0 6px; cursor:pointer;
+                                 background-position:right 6px center; }
+  .cl-batch-row select.cl-cond.is-empty { border-color:var(--cl-warn); color:var(--cl-warn); }
+  .cl-lang { font-size:10px; font-weight:700; padding:3px 0; border-radius:4px;
+             background:var(--cl-soft); border:1px solid var(--cl-line);
+             color:var(--cl-dim); letter-spacing:.4px; text-align:center; }
+  .cl-dup, .cl-more { background:none; border:1px solid var(--cl-line); border-radius:6px;
+            color:var(--cl-dim); cursor:pointer; font-size:12px; line-height:1;
+            height:32px; padding:0; width:100%; }
+  .cl-dup:hover, .cl-more:hover { border-color:var(--cl-accent); color:var(--cl-accent);
+                                  background:var(--cl-accent-soft); }
+
+  /* Vista grande al pasar el mouse por la miniatura. Con `pointer-events:none`
+     no se puede tapar a sí misma ni robarle el hover a la fila. */
+  .cl-thumb { position:relative; }
+  .cl-peek { position:fixed; z-index:9999; width:270px; border-radius:10px;
+             border:1px solid var(--cl-line); background:#fff; padding:5px;
+             box-shadow:0 12px 34px rgba(0,0,0,.28); pointer-events:none;
+             display:none; }
+  .cl-peek img { width:100%; display:block; border-radius:6px; }
+  .cl-peek.is-on { display:block; }
   .cl-more.has-data { border-color:var(--cl-accent); color:var(--cl-accent);
                       background:var(--cl-accent-soft); font-weight:700; }
 
@@ -173,117 +255,137 @@
 </style>
 {% endblock %}
 
+{% block breadcrumbs %}
+<div class="px-4">
+  <a href="{% url 'admin:index' %}">Inicio</a> /
+  <a href="{{ changelist_url }}">Productos</a> /
+  Carga de stock
+</div>
+{% endblock %}
+
 {% block content %}
 <div class="cl-wrap">
 
+  <a href="{{ changelist_url }}" class="cl-back">&larr; Volver a Productos</a>
+
   <div id="cl-msg" class="cl-msg"></div>
 
-  <!-- Fila 1: qué se va a crear ------------------------------------------- -->
+  <!-- Todo lo que acota la búsqueda, en una sola barra. Condición, cantidad y
+       descuento NO están acá a propósito: se editan en la fila de cada carta,
+       que es donde realmente cambian. -->
   <div class="cl-bar">
+    {% comment %}
+      Categoría e idioma son los dos que más se cambian mientras cargás, así que
+      van como botonera: se ve de un vistazo cuál está activo y se cambia con un
+      solo click. El desplegable queda escondido y sigue siendo la fuente de
+      verdad, para no tocar el resto del JS.
+    {% endcomment %}
     <div class="cl-field">
-      <label for="cl-category" title="Es el valor con el que entran las filas nuevas, y define qué busca el catálogo. Cada fila la podés cambiar después desde su ✎.">Categoría <span style="text-transform:none;letter-spacing:0;">(por defecto)</span></label>
-      <select id="cl-category" tabindex="1">
+      <label title="Define qué busca el catálogo: con Singles ves solo cartas, con Sellados solo tins y boxes.">Cargando</label>
+      <div class="cl-seg" id="cl-seg-category" role="group" aria-label="Qué estás cargando">
+        {% for c in categories %}
+          <button type="button" data-value="{{ c.id }}" tabindex="1"
+            {% if default_category and c.id == default_category.id %}class="is-on"{% endif %}>{{ c.name }}</button>
+        {% endfor %}
+      </div>
+      <select id="cl-category" hidden>
         {% for c in categories %}
           <option value="{{ c.id }}" data-kind="{{ c.kind }}"
             {% if default_category and c.id == default_category.id %}selected{% endif %}>{{ c.name }}</option>
         {% endfor %}
       </select>
     </div>
-    <div class="cl-field">
-      <label for="cl-condition">Condición</label>
-      <select id="cl-condition" tabindex="2">
-        <option value="">— sin condición —</option>
-        {% for c in conditions %}<option value="{{ c.id }}">{{ c }}</option>{% endfor %}
-      </select>
-    </div>
-    <div class="cl-field">
-      <label for="cl-price">Precio USD</label>
-      <input type="number" id="cl-price" step="0.01" min="0.01" value="1.00" style="width:105px" tabindex="3">
-    </div>
-    <div class="cl-field">
-      <label for="cl-qty" title="En Singles y Slabs cada copia es un producto aparte (el modelo fuerza stock 1), así que cantidad 3 crea 3 productos. En Sellados y Accesorios va a stock_quantity.">Cantidad</label>
-      <input type="number" id="cl-qty" min="1" max="99" value="1" style="width:72px" tabindex="4">
-    </div>
-    <div class="cl-field">
-      <label for="cl-discount">% Desc.</label>
-      <input type="number" id="cl-discount" min="0" max="100" value="0" style="width:72px" tabindex="5">
-    </div>
-    <div class="cl-hint">
-      <kbd>Tab</kbd> recorre todo &nbsp;·&nbsp; <kbd>Enter</kbd> agrega &nbsp;·&nbsp;
-      <kbd>↑</kbd><kbd>↓</kbd> se mueve &nbsp;·&nbsp; <kbd>Esc</kbd> limpia<br>
-      Dólar hoy: <b>${{ usd_to_ars }}</b> &nbsp;·&nbsp; máx. {{ max_batch_size }} por lote
-    </div>
-  </div>
-
-  <!-- Fila 2: en qué se busca --------------------------------------------- -->
-  <div class="cl-bar">
-    <div class="cl-field">
-      <label for="cl-lang">Idioma</label>
-      <select id="cl-lang" class="cl-filter" tabindex="6">
+    <div class="cl-field cl-only-catalog">
+      <label>Idioma</label>
+      <div class="cl-seg" id="cl-seg-lang" role="group" aria-label="Idioma de las cartas">
+        <button type="button" data-value="" class="is-on" tabindex="2">Todos</button>
+        <button type="button" data-value="en" tabindex="2">EN</button>
+        <button type="button" data-value="ja" tabindex="2">JP</button>
+      </div>
+      <select id="cl-lang" class="cl-filter" hidden>
         <option value="">Todos</option>
         <option value="en">EN — Inglés</option>
         <option value="ja">JP — Japonés</option>
       </select>
     </div>
-    <div class="cl-field">
-      <label for="cl-set-input">Expansión <span style="text-transform:none;letter-spacing:0;">(escribí para filtrar)</span></label>
+    <div class="cl-field cl-only-catalog">
+      <label for="cl-set-input">Expansión</label>
       <div class="cl-combo" id="cl-set-combo">
         <input type="text" id="cl-set-input" placeholder="Todas las expansiones"
-               autocomplete="off" role="combobox" aria-expanded="false" tabindex="7">
+               autocomplete="off" role="combobox" aria-expanded="false" tabindex="3">
         <button type="button" class="cl-combo-clear" id="cl-set-clear" title="Quitar expansión" tabindex="-1">&times;</button>
         <input type="hidden" id="cl-set" class="cl-filter">
         <div class="cl-combo-list" id="cl-set-list"></div>
       </div>
     </div>
-    <div class="cl-field">
+    <div class="cl-field cl-only-catalog">
       <label for="cl-rarity">Rareza</label>
-      <select id="cl-rarity" class="cl-filter" style="max-width:190px" tabindex="8">
+      <select id="cl-rarity" class="cl-filter" style="max-width:165px" tabindex="4">
         <option value="">Todas</option>
         {% for r in rarities %}<option value="{{ r }}">{{ r }}</option>{% endfor %}
       </select>
     </div>
-    <label class="cl-check" title="Oculta las cartas cuya imagen todavía no se bajó.">
-      <input type="checkbox" id="cl-with-image" class="cl-filter" tabindex="9"> Solo con imagen
-    </label>
-    <label class="cl-check" title="Oculta promos, decks, tins y Code Cards.">
-      <input type="checkbox" id="cl-hide-extras" class="cl-filter" checked tabindex="10"> Ocultar promos y packs
-    </label>
-    <button type="button" class="cl-reset" id="cl-reset" tabindex="11">Limpiar filtros</button>
+    <button type="button" class="cl-reset" id="cl-reset" tabindex="5">Limpiar</button>
+    <div class="cl-hint">
+      <kbd>Enter</kbd> agrega &nbsp;·&nbsp; <kbd>↑</kbd><kbd>↓</kbd> se mueve &nbsp;·&nbsp; <kbd>Esc</kbd> limpia<br>
+      Dólar hoy: <b>${{ usd_to_ars }}</b> &nbsp;·&nbsp; máx. {{ max_batch_size }} por lote
+    </div>
   </div>
 
-  <input type="text" id="cl-search" tabindex="12" autofocus autocomplete="off"
+  <input type="text" id="cl-search" class="cl-only-catalog" tabindex="12" autofocus autocomplete="off"
          placeholder="Buscá por nombre, número o set — ej: charizard 4/102 (o elegí una expansión y dejalo vacío)">
 
-  <div class="cl-grid">
-    <div class="cl-panel">
-      <h2>
-        <span>Resultados del catálogo</span>
-        <span class="cl-badge" id="cl-count">—</span>
-      </h2>
-      <div id="cl-results">
-        <div class="cl-empty">Escribí algo, o elegí una expansión para recorrerla entera.</div>
-      </div>
+  <div class="cl-panel cl-only-catalog">
+    <h2>
+      <span>Resultados del catálogo</span>
+      <span class="cl-badge" id="cl-count">—</span>
+    </h2>
+    <div id="cl-results">
+      <div class="cl-empty">Escribí algo, o elegí una expansión para recorrerla entera.</div>
+    </div>
+  </div>
+
+  {% comment %}
+    Slabs, accesorios y mystery packs no salen del catálogo de TCGplayer: son
+    piezas propias (un slab es una unidad certificada concreta, con su foto). En
+    esas categorías la búsqueda no aplica y se carga todo a mano.
+  {% endcomment %}
+  <div class="cl-manual-note" id="cl-manual-note" hidden>
+    <div>
+      <b id="cl-manual-note-kind">Estos productos</b> se cargan a mano: no están en el
+      catálogo de TCGplayer. Completá nombre y TCG en cada fila.
+    </div>
+    <button type="button" class="cl-manual" id="cl-add-manual-here">✚ Agregar producto manual</button>
+  </div>
+
+  <!-- El lote va a lo ancho de la pantalla: cada fila es una tabla y necesita
+       lugar para condición, descripción, precio y cantidad sin apretarse. -->
+  <div class="cl-panel" style="margin-top:14px">
+    <h2>
+      <span>Lote a cargar</span>
+      <span style="display:flex;gap:8px;align-items:center;">
+        <button type="button" class="cl-manual" id="cl-add-manual"
+                title="Para lo que no está en el catálogo de TCGplayer: sellados sueltos, accesorios, slabs certificados.">
+          ✚ Agregar producto manual
+        </button>
+        <span class="cl-badge" id="cl-batch-count">0</span>
+      </span>
+    </h2>
+
+    <div class="cl-thead cl-cols" id="cl-thead" hidden>
+      <span></span><span>Producto</span><span>Idi.</span><span>Condición</span>
+      <span>Descripción</span><span class="is-num">Precio USD</span><span class="is-num">Cant.</span>
+      <span></span><span></span><span></span>
     </div>
 
-    <div class="cl-panel">
-      <h2>
-        <span>Lote a cargar</span>
-        <span style="display:flex;gap:8px;align-items:center;">
-          <button type="button" class="cl-manual" id="cl-add-manual"
-                  title="Para lo que no está en el catálogo de TCGplayer: sellados sueltos, accesorios, slabs certificados.">
-            ✚ Agregar Manual
-          </button>
-          <span class="cl-badge" id="cl-batch-count">0</span>
-        </span>
-      </h2>
-      <div id="cl-batch"><div class="cl-empty">Todavía no agregaste nada.</div></div>
-      <div class="cl-foot">
-        <div class="cl-total">
-          <span>Total del lote</span>
-          <b><span id="cl-total-usd">USD 0.00</span> · <span id="cl-total-ars">$0 ARS</span></b>
-        </div>
-        <button class="cl-save" id="cl-save" tabindex="13" disabled>Guardar todo</button>
+    <div id="cl-batch"><div class="cl-empty">Todavía no agregaste nada.</div></div>
+
+    <div class="cl-foot">
+      <div class="cl-total">
+        <span>Total del lote</span>
+        <b><span id="cl-total-usd">USD 0.00</span> · <span id="cl-total-ars">$0 ARS</span></b>
       </div>
+      <button class="cl-save" id="cl-save" tabindex="13" disabled>Guardar todo</button>
     </div>
   </div>
 </div>
@@ -291,6 +393,9 @@
 {{ card_sets|json_script:"cl-sets-data" }}
 
 {# Listas para los desplegables que se dibujan desde JS en cada fila del lote. #}
+<select id="cl-src-conditions" hidden>
+  {% for c in conditions %}<option value="{{ c.id }}">{{ c }}</option>{% endfor %}
+</select>
 <select id="cl-src-entities" hidden>
   {% for e in cert_entities %}<option value="{{ e.id }}">{{ e }}</option>{% endfor %}
 </select>
@@ -316,7 +421,7 @@
     .filter((o) => o.value)
     .map((o) => ({ id: o.value, label: o.text }));
 
-  const CONDITIONS = optionsOf("cl-condition");
+  const CONDITIONS = optionsOf("cl-src-conditions");
   const ENTITIES   = optionsOf("cl-src-entities");
   const GRADES     = optionsOf("cl-src-grades");
   const TCGS       = optionsOf("cl-src-tcgs");
@@ -327,6 +432,29 @@
     .map((o) => ({ id: o.value, label: o.text, kind: o.dataset.kind || "other" }));
   const kindOf = (categoryId) =>
     (CATEGORIES.find((c) => String(c.id) === String(categoryId)) || {}).kind || "other";
+
+  // En singles y slabs la condición es obligatoria y se toca en cada carta, así
+  // que va en la fila. En sellados y accesorios no aplica: queda en el detalle.
+  const needsCondition = (kind) => kind === "single" || kind === "slab";
+
+  // Categorías que nunca salen del catálogo de TCGplayer y se cargan a mano.
+  // Un slab es una unidad certificada puntual, con su propia foto; accesorios y
+  // mystery packs directamente no están indexados.
+  const MANUAL_ONLY_KINDS = new Set(["slab", "other"]);
+
+  /**
+   * Cómo se titula una carta en el lote.
+   *
+   * La mayoría de las cartas ya traen el número en el nombre ("Mega Charizard Y
+   * ex - 022/217"), pero no todas. Pegarlo siempre lo duplicaba; no pegarlo
+   * nunca dejaba sin identificar a las que no lo traen. Mismo criterio que
+   * `_resolve_name` en el backend, para que el título de la fila coincida con
+   * el nombre con el que después se crea el producto.
+   */
+  const cardLabel = (card) =>
+    card.number && !card.name.includes(card.number)
+      ? card.name + " " + card.number
+      : card.name;
 
   // Token propio de cada fila: agrupa las fotos que se suben antes de que el
   // producto exista. Es el mismo mecanismo del formulario clásico.
@@ -350,10 +478,42 @@
     (m) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[m]));
 
   const thumbHtml = (url, mini) =>
-    `<div class="cl-thumb${mini ? " is-mini" : ""}">${
+    `<div class="cl-thumb${mini ? " is-mini" : ""}"${url ? ` data-peek="${esc(url)}"` : ""}>${
       url ? `<img src="${esc(url)}" alt="" loading="lazy" decoding="async"
                   onload="this.classList.add('is-in')">`
           : `<span>sin<br>imagen</span>`}</div>`;
+
+  // ------------------------------------------------ vista grande al pasar el mouse
+  // La miniatura de 200px se ve mal ampliada, pero la versión de 600px ya está
+  // en R2 con el mismo nombre: solo cambia el sufijo. Así se muestra la carta
+  // legible sin agrandar el payload de la búsqueda, que trae hasta 40 filas.
+  const bigVersion = (url) => url.replace(/_thumb\.webp$/, "_medium.webp");
+
+  const peek = document.createElement("div");
+  peek.className = "cl-peek";
+  peek.innerHTML = '<img alt="">';
+  document.body.appendChild(peek);
+
+  document.addEventListener("mouseover", (e) => {
+    const thumb = e.target.closest(".cl-thumb[data-peek]");
+    if (!thumb) return;
+    peek.firstChild.src = bigVersion(thumb.dataset.peek);
+    peek.classList.add("is-on");
+
+    // Se ubica al lado de la miniatura, y si no entra abajo o a la derecha se
+    // acomoda para adentro: la carta se ve completa esté donde esté la fila.
+    const box = thumb.getBoundingClientRect();
+    const width = 270, height = 380, gap = 12;
+    let left = box.right + gap;
+    if (left + width > window.innerWidth - 8) left = box.left - width - gap;
+    peek.style.left = Math.max(8, left) + "px";
+    peek.style.top = Math.max(8, Math.min(
+      box.top + box.height / 2 - height / 2, window.innerHeight - height - 8)) + "px";
+  });
+
+  document.addEventListener("mouseout", (e) => {
+    if (e.target.closest(".cl-thumb[data-peek]")) peek.classList.remove("is-on");
+  });
 
   function flash(text, kind) {
     const box = $("cl-msg");
@@ -462,7 +622,46 @@
     el.addEventListener("change", () => { clearTimeout(timer); runSearch(); });
   });
   // Cambiar de categoría cambia qué se busca, así que rehace la búsqueda.
-  $("cl-category").addEventListener("change", () => { clearTimeout(timer); runSearch(); });
+  $("cl-category").addEventListener("change", () => {
+    clearTimeout(timer);
+    applyCategoryMode({ announce: true });
+    runSearch();
+  });
+
+  /**
+   * Prende o apaga el modo "solo manual".
+   *
+   * Slabs, accesorios y mystery packs no existen en el catálogo de TCGplayer, así
+   * que buscar ahí no tiene sentido: se esconde toda la búsqueda y queda el
+   * botón de carga manual como único camino. Que el buscador siga visible
+   * devolviendo cero resultados es peor que no mostrarlo.
+   */
+  function applyCategoryMode({ announce = false } = {}) {
+    const manualOnly = MANUAL_ONLY_KINDS.has(currentKind());
+    document.querySelector(".cl-wrap").classList.toggle("is-manual-only", manualOnly);
+    $("cl-manual-note").hidden = !manualOnly;
+
+    if (manualOnly) {
+      const label = CATEGORIES.find((c) => String(c.id) === $("cl-category").value);
+      $("cl-manual-note-kind").textContent = label ? label.label : "Estos productos";
+      // Una búsqueda vieja en pantalla no se puede usar y confunde: se descarta.
+      results = [];
+      searchInput.value = "";
+      $("cl-count").textContent = "—";
+    }
+
+    if (!announce) return;
+
+    // Llevar la vista y el foco a lo que quedó activo. Si no, después de tocar
+    // una fila del lote seguís abajo y no ves que arriba cambió el modo.
+    const target = manualOnly ? $("cl-manual-note") : searchInput;
+    target.scrollIntoView({ block: "center", behavior: "smooth" });
+    if (!manualOnly) searchInput.focus({ preventScroll: true });
+
+    target.classList.remove("cl-flash");
+    void target.offsetWidth;          // reinicia la animación si se repite
+    target.classList.add("cl-flash");
+  }
   // Cambiar de idioma acota las expansiones: si la elegida ya no aplica, se cae.
   $("cl-lang").addEventListener("change", () => {
     const current = SETS.find((s) => String(s.id) === setHidden.value);
@@ -470,11 +669,39 @@
     if (current && lang && current.language !== lang) clearSet(false);
   });
 
+  /**
+   * Conecta una botonera con su <select> escondido.
+   *
+   * El select sigue siendo el que manda —lo leen `buildParams`, `currentKind` y
+   * `newBatchItem`—; los botones solo lo escriben y disparan el `change` de
+   * siempre. Así la botonera es puro adorno de entrada y no hay dos fuentes de
+   * verdad que se puedan desincronizar.
+   */
+  function wireSegmented(groupId, selectId) {
+    const group = $(groupId);
+    group.addEventListener("click", (e) => {
+      const btn = e.target.closest("button");
+      if (!btn || btn.classList.contains("is-on")) return;
+      group.querySelectorAll("button").forEach((b) => b.classList.remove("is-on"));
+      btn.classList.add("is-on");
+      $(selectId).value = btn.dataset.value;
+      $(selectId).dispatchEvent(new Event("change", { bubbles: true }));
+    });
+  }
+  wireSegmented("cl-seg-category", "cl-category");
+  wireSegmented("cl-seg-lang", "cl-lang");
+
+  // Deja la botonera mostrando lo que dice el select (lo usa "Limpiar").
+  function syncSegmented(groupId, selectId) {
+    const value = $(selectId).value;
+    $(groupId).querySelectorAll("button").forEach((b) =>
+      b.classList.toggle("is-on", b.dataset.value === value));
+  }
+
   $("cl-reset").addEventListener("click", () => {
     $("cl-lang").value = "";
     $("cl-rarity").value = "";
-    $("cl-with-image").checked = false;
-    $("cl-hide-extras").checked = true;
+    syncSegmented("cl-seg-lang", "cl-lang");
     clearSet(false);
     searchInput.focus();
   });
@@ -494,15 +721,16 @@
     if ($("cl-lang").value)   p.set("lang", $("cl-lang").value);
     if (setHidden.value)      p.set("set", setHidden.value);
     if ($("cl-rarity").value) p.set("rarity", $("cl-rarity").value);
-    if ($("cl-with-image").checked)  p.set("with_image", "1");
-    if ($("cl-hide-extras").checked) p.set("hide_extras", "1");
     return p;
   }
 
   async function runSearch() {
+    // En slabs y accesorios no hay catálogo que consultar.
+    if (MANUAL_ONLY_KINDS.has(currentKind())) return;
+
     const params = buildParams();
-    const hasFilter = params.has("lang") || params.has("set") ||
-                      params.has("rarity") || params.has("with_image");
+    // Con idioma elegido y sin texto, se recorre ese catálogo entero.
+    const hasFilter = params.has("lang") || params.has("set") || params.has("rarity");
 
     if (params.get("q").length < 2 && !hasFilter) {
       results = [];
@@ -573,23 +801,25 @@
 
   // ------------------------------------------------------------------- lote
   function newBatchItem(card) {
-    const conditionSel = $("cl-condition");
     return {
       key: ++seq,
       // Sin carta es un producto manual: nombre y TCG los ponés a mano.
       card_id: card ? card.id : null,
       // Arranca con la categoría de arriba, pero después es de la fila.
       category_id: $("cl-category").value,
-      label: card ? card.name + " " + card.number : "(sin nombre)",
+      label: card ? cardLabel(card) : "(sin nombre)",
       set_name: card ? card.set_name : "Sin carta del catálogo",
       thumb: card ? card.thumb : "",
+      language: card ? card.language : "",
       name: "",
       tcg_id: TCGS.length === 1 ? TCGS[0].id : null,
-      price_usd: parseFloat($("cl-price").value) || 0,
-      quantity: parseInt($("cl-qty").value, 10) || 1,
-      discount_percent: parseInt($("cl-discount").value, 10) || 0,
-      condition_id: conditionSel.value || null,
-      condition_label: conditionSel.value ? conditionSel.options[conditionSel.selectedIndex].text : "—",
+      // Todo lo que cambia carta por carta entra con el mismo valor y se ajusta
+      // en la fila. Un "por defecto" arriba solo agrega un campo más que mirar.
+      price_usd: 1,
+      quantity: 1,
+      discount_percent: 0,
+      condition_id: null,
+      condition_label: "—",
       // Opcionales por fila, todos vacíos por defecto.
       certification_entity_id: null,
       certification_grade_id: null,
@@ -603,7 +833,7 @@
     };
   }
 
-  $("cl-add-manual").addEventListener("click", () => {
+  function addManualRow() {
     if (batch.length >= MAX_BATCH) {
       flash("Llegaste al máximo de " + MAX_BATCH + " por lote. Guardá y seguí.", "err");
       return;
@@ -614,7 +844,12 @@
     renderBatch();
     const input = $("cl-batch").querySelector(".cl-batch-item:last-child .cl-f-name");
     if (input) input.focus();
-  });
+  }
+
+  // Dos botones, el mismo alta: el del encabezado del lote está siempre, y el
+  // del cartel aparece en las categorías manuales, que es donde estás mirando.
+  $("cl-add-manual").addEventListener("click", addManualRow);
+  $("cl-add-manual-here").addEventListener("click", addManualRow);
 
   function addToBatch(index) {
     const card = results[index];
@@ -645,6 +880,8 @@
     const box = $("cl-batch");
     $("cl-batch-count").textContent = batch.length;
     $("cl-save").disabled = batch.length === 0;
+    // El encabezado sin filas abajo es ruido.
+    $("cl-thead").hidden = batch.length === 0;
 
     if (!batch.length) {
       box.innerHTML = '<div class="cl-empty">Todavía no agregaste nada.</div>';
@@ -659,22 +896,32 @@
     box.innerHTML = batch.map((it) => {
       // Cada fila tiene su propia categoría, y de ella sale qué campos pide.
       const rowKind = kindOf(it.category_id);
+      // Solo cuenta lo que quedó escondido en el detalle: condición y
+      // descripción ahora se editan en la fila, así que no van acá.
       const extras = (it.image_url ? 1 : 0) + (it.pricecharting_url ? 1 : 0) +
-                     (it.description ? 1 : 0) + it.shots.length +
+                     it.shots.length + (it.discount_percent ? 1 : 0) +
                      (it.certification_grade_id ? 1 : 0);
       return `
       <div class="cl-batch-item${it.card_id ? "" : " is-manual"}" data-key="${it.key}">
-        <div class="cl-batch-row">
+        <div class="cl-batch-row cl-cols">
           ${thumbHtml(it.shots[0] || it.thumb, true)}
           <div class="cl-id">
             <div class="cl-name">${esc(it.label)}</div>
-            <div class="cl-sub">${esc(it.set_name)} · ${esc(it.condition_label)}</div>
+            <div class="cl-sub">${esc(it.set_name)}</div>
           </div>
-          <button class="cl-more${extras ? " has-data" : ""}" title="Foto propia, URLs y condición">
-            ${extras ? "✎ " + extras : "✎"}
-          </button>
+          <span class="cl-lang">${it.language ? (it.language === "ja" ? "JP" : "EN") : "—"}</span>
+          ${needsCondition(rowKind) ? `
+            <select class="cl-cond${it.condition_id ? "" : " is-empty"}" title="Condición">
+              <option value="">— condición —</option>
+              ${opts(CONDITIONS, it.condition_id)}
+            </select>` : "<span></span>"}
+          <input type="text" class="cl-desc" placeholder="Descripción" value="${esc(it.description)}" title="Descripción">
           <input type="number" class="cl-price" step="0.01" min="0.01" value="${it.price_usd}" title="Precio USD">
           <input type="number" class="cl-qty" min="1" max="99" value="${it.quantity}" title="Cantidad">
+          <button class="cl-more${extras ? " has-data" : ""}" title="Foto propia, URLs, descuento y certificación">
+            ${extras ? "✎" + extras : "✎"}
+          </button>
+          <button class="cl-dup" title="Duplicar (misma carta, otra condición)">⧉</button>
           <button class="cl-del" title="Quitar">&times;</button>
         </div>
 
@@ -703,11 +950,12 @@
               ${opts(GRADES, it.certification_grade_id)}
             </select>` : ""}
 
-          <label>Condición ${rowKind === "single" || rowKind === "slab" ? '<span style="color:var(--cl-warn)">*</span>' : ""}</label>
-          <select class="cl-f-condition">
-            <option value="">— sin condición —</option>
-            ${opts(CONDITIONS, it.condition_id)}
-          </select>
+          ${needsCondition(rowKind) ? "" : `
+            <label>Condición</label>
+            <select class="cl-f-condition">
+              <option value="">— sin condición —</option>
+              ${opts(CONDITIONS, it.condition_id)}
+            </select>`}
 
           <label>% Descuento</label>
           <input type="number" class="cl-f-discount" min="0" max="100" value="${it.discount_percent}">
@@ -728,9 +976,6 @@
 
           <label>URL de referencia <span style="text-transform:none;letter-spacing:0;">(PriceCharting)</span></label>
           <input type="text" class="cl-f-ref" placeholder="https://www.pricecharting.com/..." value="${esc(it.pricecharting_url)}">
-
-          <label>Descripción <span style="text-transform:none;letter-spacing:0;">(opcional)</span></label>
-          <textarea class="cl-f-desc" placeholder="Detalles de esta unidad...">${esc(it.description)}</textarea>
 
           <div class="cl-note">
             Si no cargás foto ni URL, se usa la imagen del catálogo.
@@ -759,7 +1004,7 @@
     else if (t.classList.contains("cl-f-discount")) item.discount_percent = parseInt(t.value, 10) || 0;
     else if (t.classList.contains("cl-f-image"))    item.image_url = t.value.trim();
     else if (t.classList.contains("cl-f-ref"))      item.pricecharting_url = t.value.trim();
-    else if (t.classList.contains("cl-f-desc"))     item.description = t.value;
+    else if (t.classList.contains("cl-desc"))       item.description = t.value;
     else if (t.classList.contains("cl-f-name")) {
       item.name = t.value;
       // El título de la fila sigue al nombre, pero sin re-render: perdería el foco.
@@ -777,6 +1022,12 @@
       item.condition_id = t.value || null;
       item.condition_label = t.value ? t.options[t.selectedIndex].text : "—";
       renderBatch();
+    } else if (t.classList.contains("cl-cond")) {
+      // La de la fila: se actualiza sin re-render para no perder el foco
+      // mientras recorrés el lote con el teclado.
+      item.condition_id = t.value || null;
+      item.condition_label = t.value ? t.options[t.selectedIndex].text : "—";
+      t.classList.toggle("is-empty", !t.value);
     } else if (t.classList.contains("cl-f-entity")) {
       item.certification_entity_id = t.value || null;
       renderBatch();
@@ -805,11 +1056,45 @@
     if (e.target.classList.contains("cl-del")) {
       batch = batch.filter((b) => b.key !== item.key);
       renderBatch();
+    } else if (e.target.closest(".cl-dup")) {
+      duplicateItem(item);
     } else if (e.target.closest(".cl-more")) {
       item.open = !item.open;
       renderBatch();
     }
   });
+
+  /**
+   * Duplica una fila: la misma carta otra vez, para cargarla en otra condición.
+   *
+   * Se copia el precio y la cantidad porque casi siempre querés partir de ahí y
+   * ajustar. Lo que NO se copia son las fotos propias ni el draft_token: esas
+   * fotos son de esa unidad física, y dos productos no pueden compartir la misma
+   * ProductImage. La condición se limpia a propósito — duplicar sirve justamente
+   * para poner otra, y dejarla igual crearía un duplicado exacto sin querer.
+   */
+  function duplicateItem(item) {
+    if (batch.length >= MAX_BATCH) {
+      flash("Llegaste al máximo de " + MAX_BATCH + " por lote. Guardá y seguí.", "err");
+      return;
+    }
+    const copy = {
+      ...item,
+      key: ++seq,
+      condition_id: null,
+      condition_label: "—",
+      shots: [],
+      draft_token: newToken(),
+      uploading: false,
+      open: false,
+    };
+    batch.splice(batch.indexOf(item) + 1, 0, copy);
+    renderBatch();
+
+    // El foco va a la condición de la copia, que es lo único que falta completar.
+    const row = $("cl-batch").querySelector(`.cl-batch-item[data-key="${copy.key}"] .cl-cond`);
+    if (row) row.focus();
+  }
 
   // ------------------------------------------------- subida a Cloudinary
   // Mismo camino que el form clásico: se firma, se sube directo a Cloudinary y
@@ -941,6 +1226,7 @@
   });
 
   renderBatch();
+  applyCategoryMode();
 })();
 </script>
 {% endblock %}
