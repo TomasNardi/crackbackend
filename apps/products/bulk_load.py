@@ -14,11 +14,13 @@ Tres endpoints, todos colgados de ProductAdmin.get_urls():
     carga-stock/guardar/    → JSON, crea el lote entero en una transacción
 """
 
+import hashlib
 import json
 import logging
 from functools import wraps
 
 from django.contrib import messages
+from django.core.cache import cache
 from django.core.exceptions import ValidationError as DjangoValidationError
 from django.core.validators import URLValidator
 from django.db import transaction
@@ -45,6 +47,20 @@ logger = logging.getLogger(__name__)
 # Tope de resultados por búsqueda. Con 40 alcanza para elegir sin scrollear
 # eternamente, y mantiene la respuesta liviana.
 SEARCH_LIMIT = 40
+
+# Cuánto se guarda una búsqueda ya resuelta. El catálogo solo cambia al
+# reimportarlo, así que podría ser mucho más largo; cinco minutos alcanza para
+# toda una sesión de carga y no obliga a acordarse de vaciar la caché después de
+# un import.
+SEARCH_CACHE_TTL = 300
+
+# Columnas que necesita la búsqueda: las que van al front (`_card_payload`) más
+# las que usa el ordenamiento. Todo lo demás se queda en la base.
+SEARCH_FIELDS = (
+    "id", "name", "number", "rarity", "image_url_thumb", "image_status",
+    "card_set__id", "card_set__name", "card_set__abbreviation",
+    "card_set__language", "card_set__is_supplemental", "card_set__released_at",
+)
 
 # Tope de items por lote.
 #
@@ -118,7 +134,14 @@ def requires_add_permission(view):
     return wrapper
 
 
-def _card_payload(card, product_count=0):
+def _card_payload(card):
+    """
+    Los datos de la carta que van al front. Todo esto es fijo: solo cambia
+    cuando se reimporta el catálogo, así que se puede cachear.
+
+    El contador de "ya tenés N" NO va acá a propósito: cambia cada vez que
+    guardás un lote y se agrega después, en `_attach_loaded_counts`.
+    """
     return {
         "id": card.id,
         "name": card.name,
@@ -130,10 +153,38 @@ def _card_payload(card, product_count=0):
         # Solo la miniatura: caer al `image_url` grande hacía que una búsqueda
         # de 40 filas bajara 40 imágenes de tamaño completo.
         "thumb": card.image_url_thumb,
-        # Cuántos productos ya cargaste de esta carta. Sirve para no repetir sin
-        # querer, que es el error más caro cuando cargás rápido.
-        "loaded": product_count,
     }
+
+
+def _attach_loaded_counts(payloads):
+    """
+    Agrega a cada fila cuántos productos ya cargaste de esa carta.
+
+    Va en una consulta aparte, sobre los 40 ids que sobrevivieron al límite, en
+    vez de anotarse con Count() en la búsqueda. Anotado obligaba a la base a
+    joinear productos y agrupar sobre TODOS los matches —cientos o miles de
+    filas— para después tirar casi todo al cortar en 40.
+    """
+    if not payloads:
+        return payloads
+
+    counts = dict(
+        Product.objects.filter(catalog_card_id__in=[p["id"] for p in payloads])
+        .values_list("catalog_card_id")
+        .annotate(total=Count("id"))
+    )
+
+    for payload in payloads:
+        # Sirve para no repetir sin querer, que es el error más caro cuando
+        # cargás rápido.
+        payload["loaded"] = counts.get(payload["id"], 0)
+
+    return payloads
+
+
+def _search_cache_key(*parts):
+    raw = "|".join(str(p).lower() for p in parts)
+    return "bulk_load:search:" + hashlib.md5(raw.encode("utf-8")).hexdigest()
 
 
 @requires_add_permission
@@ -162,7 +213,22 @@ def search_view(request):
     if len(query) < 2 and not has_filter:
         return JsonResponse({"results": []})
 
-    cards = CatalogCard.objects.select_related("card_set")
+    # Escribiendo se repiten muchísimo las mismas consultas: borrás una letra y
+    # volvés a escribirla, o cargás diez cartas del mismo set una atrás de otra.
+    # El catálogo solo cambia cuando se reimporta, así que guardar el resultado
+    # unos minutos es gratis y saltea la base entera.
+    cache_key = _search_cache_key(query, language, set_id, rarity, kind)
+    cached = cache.get(cache_key)
+    if cached is not None:
+        return JsonResponse({"results": _attach_loaded_counts(cached)})
+
+    # Solo las columnas que se muestran o que se usan para ordenar.
+    #
+    # Sin esto la consulta arrastra `extended_data` —un JSONB con los ataques y
+    # el texto de la carta— de cada fila que matchea, para ordenarlas y tirar
+    # todas menos 40. Medido contra la base de producción con "charizard":
+    # 42 ms trayendo todo, 5.7 ms trayendo lo que hace falta.
+    cards = CatalogCard.objects.select_related("card_set").only(*SEARCH_FIELDS)
 
     # Cada palabra tiene que aparecer: "charizard base" no trae todos los
     # Charizard. search_text ya trae nombre + número + set + abreviatura.
@@ -186,7 +252,6 @@ def search_view(request):
     # un set promocional. Sin esto, buscar "charizard" devuelve primero la
     # morralla de Miscellaneous porque no tiene fecha de salida.
     cards = cards.annotate(
-        product_count=Count("products"),
         name_hit=Case(
             When(name__icontains=query, then=Value(0)),
             default=Value(1),
@@ -214,9 +279,10 @@ def search_view(request):
         "number",
     )[:SEARCH_LIMIT]
 
-    return JsonResponse({
-        "results": [_card_payload(c, c.product_count) for c in cards],
-    })
+    payloads = [_card_payload(c) for c in cards]
+    cache.set(cache_key, payloads, SEARCH_CACHE_TTL)
+
+    return JsonResponse({"results": _attach_loaded_counts(payloads)})
 
 
 def _resolve_name(card):

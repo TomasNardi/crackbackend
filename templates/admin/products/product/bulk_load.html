@@ -733,6 +733,30 @@
     return p;
   }
 
+  /* Búsquedas ya resueltas, por combinación de filtros.
+   *
+   * Escribiendo se vuelve todo el tiempo a lo mismo: te pasás de largo y borrás
+   * una letra, o corregís el número. Sin esto, cada tecla es un viaje a Oregon
+   * aunque la respuesta sea idéntica a la de hace dos segundos. Con esto, volver
+   * atrás es instantáneo y ni siquiera se ve el "buscando...".
+   *
+   * Se vacía al guardar un lote, porque ahí cambia el "ya tenés N". */
+  const searchCache = new Map();
+  const SEARCH_CACHE_MAX = 60;
+
+  function cacheSearch(key, rows) {
+    // Map conserva el orden de inserción: el primero es el más viejo.
+    if (searchCache.size >= SEARCH_CACHE_MAX) {
+      searchCache.delete(searchCache.keys().next().value);
+    }
+    searchCache.set(key, rows);
+  }
+
+  // Pedido en vuelo. Cuando llega una búsqueda nueva se aborta el anterior: no
+  // solo se ignora la respuesta tarde, además se le saca el trabajo de encima al
+  // servidor, que es lo que hacía que la tecla siguiente esperara.
+  let inflight = null;
+
   async function runSearch() {
     // En slabs y accesorios no hay catálogo que consultar.
     if (MANUAL_ONLY_KINDS.has(currentKind())) return;
@@ -749,18 +773,40 @@
       return;
     }
 
+    const key = params.toString();
     const mine = ++reqId;
+
+    const hit = searchCache.get(key);
+    if (hit) {
+      results = hit;
+      active = 0;
+      renderResults();
+      return;
+    }
+
+    if (inflight) inflight.abort();
+    const controller = new AbortController();
+    inflight = controller;
+
     $("cl-count").textContent = "buscando...";
 
     let data;
     try {
-      const res = await fetch(SEARCH_URL + "?" + params.toString());
+      const res = await fetch(SEARCH_URL + "?" + key, { signal: controller.signal });
       if (!res.ok) { flash("La búsqueda falló.", "err"); return; }
       data = await res.json();
-    } catch (e) { flash("Error de red en la búsqueda.", "err"); return; }
+    } catch (e) {
+      // Abortada a propósito porque el usuario siguió tecleando: no es un error.
+      if (e.name === "AbortError") return;
+      flash("Error de red en la búsqueda.", "err");
+      return;
+    } finally {
+      if (inflight === controller) inflight = null;
+    }
 
     if (mine !== reqId) return;   // llegó tarde, ya hay una búsqueda más nueva
     results = data.results;
+    cacheSearch(key, results);
     active = 0;
     renderResults();
   }
@@ -1221,6 +1267,7 @@
 
       batch = [];
       renderBatch();
+      searchCache.clear();  // los "ya tenés N" guardados quedaron viejos
       runSearch();          // refresca el "ya tenés N" de la lista
       searchInput.focus();
     } catch (err) {
