@@ -4,8 +4,10 @@ from types import SimpleNamespace
 from unittest.mock import patch
 
 from django.contrib.admin.sites import AdminSite
+from django.contrib.auth import get_user_model
 from django.core.management import call_command
 from django.test import RequestFactory, TestCase
+from django.urls import reverse
 
 from apps.orders.models import Order, OrderItem
 from apps.products.admin import ProductAdmin
@@ -179,3 +181,52 @@ class MergeDuplicateProductsCommandTests(TestCase):
 
         self.assertEqual(Product.objects.count(), 2)
         self.assertIn("fotos propias", output)
+
+
+class MergeDuplicatesViewTests(TestCase):
+    """La ruta temporal: sin el token no toca nada, con el token consolida."""
+
+    def setUp(self):
+        User = get_user_model()
+        self.staff = User.objects.create_user(
+            username="staff",
+            email="staff@test.com",
+            password="x",
+            is_staff=True,
+            is_superuser=True,
+        )
+        self.client.force_login(self.staff)
+
+        category = ProductCategory.objects.create(name="Single")
+        condition = CardCondition.objects.create(name="Near Mint", abbreviation="NM")
+        for _ in range(3):
+            Product.objects.create(
+                category=category,
+                name="Ampharos 090/086",
+                price_usd="10.00",
+                condition=condition,
+                in_stock=True,
+            )
+
+        self.url = reverse("admin:products_product_merge_duplicates")
+
+    def test_without_token_is_a_dry_run(self):
+        response = self.client.get(self.url)
+
+        self.assertEqual(response.status_code, 200)
+        self.assertIn("SIMULACRO", response.content.decode())
+        self.assertEqual(Product.objects.count(), 3)
+
+    def test_with_token_merges(self):
+        response = self.client.get(self.url, {"aplicar": "SI-JUNTAR-DUPLICADOS"})
+
+        self.assertEqual(response.status_code, 200)
+        product = Product.objects.get()
+        self.assertEqual(product.stock_quantity, 3)
+
+    def test_requires_staff(self):
+        self.client.logout()
+        response = self.client.get(self.url)
+
+        self.assertIn(response.status_code, (302, 403))
+        self.assertEqual(Product.objects.count(), 3)

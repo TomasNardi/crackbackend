@@ -6,6 +6,7 @@ from django.core.exceptions import PermissionDenied
 from django.urls import path
 from unfold.admin import ModelAdmin
 from . import bulk_load
+from . import merge_duplicates_views  # TEMPORAL: se va con las rutas de duplicados
 from .forms import ProductAdminForm
 from .models import (
     TCG,
@@ -123,6 +124,13 @@ class ProductAdmin(ModelAdmin):
                 "carga-stock/guardar/",
                 self.admin_site.admin_view(bulk_load.save_view),
                 name="products_product_bulk_save",
+            ),
+            # TEMPORAL: junta los duplicados que dejó el criterio viejo (una
+            # publicación por copia). Borrar esta ruta y el módulo cuando esté.
+            path(
+                "duplicados/",
+                self.admin_site.admin_view(merge_duplicates_views.merge_view),
+                name="products_product_merge_duplicates",
             ),
         ]
         return custom_urls + super().get_urls()

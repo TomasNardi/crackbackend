@@ -17,6 +17,7 @@ Lo usa el comando `merge_duplicate_products`.
 from collections import defaultdict
 
 from django.db import transaction
+from django.utils import timezone
 
 
 def identity(product):
@@ -75,19 +76,29 @@ def _merge_group(items):
 
         keeper.__class__.objects.filter(pk__in=loser_ids).delete()
 
+        # `update()` y no `save()`: save() recalcula el slug y la imagen del
+        # catálogo, que son consultas de más por cada grupo. Acá solo cambia el
+        # stock.
+        keeper.__class__.objects.filter(pk=keeper.pk).update(
+            stock_quantity=total,
+            in_stock=total > 0,
+            updated_at=timezone.now(),
+        )
         keeper.stock_quantity = total
         keeper.in_stock = total > 0
-        keeper.save(update_fields=["stock_quantity", "in_stock", "updated_at"])
 
     return keeper, total
 
 
-def merge_duplicate_products(queryset=None, apply=False):
+def merge_duplicate_products(queryset=None, apply=False, on_progress=None):
     """
     Busca duplicados y (si `apply`) los consolida.
 
     Con `queryset` acotás a un subconjunto; sin él barre todo el catálogo
     publicado. Devuelve un reporte para mostrar.
+
+    `on_progress` recibe cada línea apenas se resuelve el grupo: consolidar
+    contra una base remota tarda, y una consola muda parece colgada.
     """
     from apps.products.models import Product
 
@@ -131,11 +142,15 @@ def merge_duplicate_products(queryset=None, apply=False):
 
         category = keeper.category.name if keeper.category else "—"
         removed = len(items) - 1
-        report["lines"].append(
+        line = (
             f"{keeper.name} · {category} → 1 publicación con stock {total} "
             f"(se eliminan {removed})"
         )
+        report["lines"].append(line)
         report["merged"] += 1
         report["removed"] += removed
+
+        if on_progress:
+            on_progress(line)
 
     return report

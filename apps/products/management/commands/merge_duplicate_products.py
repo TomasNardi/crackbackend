@@ -23,14 +23,16 @@ class Command(BaseCommand):
 
     def handle(self, *args, **options):
         apply_changes = options["apply"]
-        report = merge_duplicate_products(apply=apply_changes)
+
+        def progress(line):
+            self.stdout.write(line)
+            self.stdout.flush()
+
+        report = merge_duplicate_products(apply=apply_changes, on_progress=progress)
 
         if not report["lines"] and not report["skipped"]:
             self.stdout.write(self.style.SUCCESS("No hay publicaciones duplicadas."))
             return
-
-        for line in report["lines"]:
-            self.stdout.write(line)
 
         verbo = "Consolidadas" if apply_changes else "Se consolidarían"
         self.stdout.write(
