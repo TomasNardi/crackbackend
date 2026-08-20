@@ -163,6 +163,26 @@ class MergeDuplicateProductsCommandTests(TestCase):
         item.refresh_from_db()
         self.assertEqual(item.product_id, keeper.pk)
 
+    def test_admin_action_merges_only_the_selected_products(self):
+        first = self._create(self.condition_nm)
+        second = self._create(self.condition_nm)
+        untouched = self._create(self.condition_nm)
+
+        request = RequestFactory().post("/admin/products/product/")
+        request.user = SimpleNamespace(has_perm=lambda perm: True)
+        admin_instance = ProductAdmin(Product, AdminSite())
+        admin_instance.message_user = lambda *args, **kwargs: None
+
+        admin_instance.merge_duplicates(
+            request, Product.objects.filter(pk__in=[first.pk, second.pk])
+        )
+
+        first.refresh_from_db()
+        untouched.refresh_from_db()
+        self.assertEqual(first.stock_quantity, 2)
+        self.assertEqual(untouched.stock_quantity, 1)
+        self.assertFalse(Product.objects.filter(pk=second.pk).exists())
+
     def test_skips_group_when_two_copies_have_their_own_photos(self):
         first = self._create(self.condition_nm)
         second = self._create(self.condition_nm)
