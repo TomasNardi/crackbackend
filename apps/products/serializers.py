@@ -113,7 +113,7 @@ class ProductSearchSerializer(serializers.ModelSerializer):
         fields = (
             "id", "name", "slug", "tcg", "category",
             "image_url", "price_ars", "final_price", "discount_percent",
-            "stock_quantity", "in_stock",
+            "stock_quantity", "available_quantity", "in_stock",
         )
 
 
@@ -138,7 +138,7 @@ class ProductListSerializer(serializers.ModelSerializer):
             "id", "name", "slug", "tcg", "category",
             "condition", "certification_entity", "certification_grade",
             "price_usd", "price_ars", "discount_percent", "final_price",
-            "stock_quantity", "in_stock", "image_url", "images", "rating", "rating_count", "created_at",
+            "stock_quantity", "available_quantity", "in_stock", "image_url", "images", "rating", "rating_count", "created_at",
             "catalog",
         )
 
@@ -158,7 +158,7 @@ class ProductSuggestedSerializer(serializers.ModelSerializer):
         fields = (
             "id", "name", "slug", "category",
             "image_url", "images", "price_ars", "final_price", "discount_percent",
-            "stock_quantity", "in_stock",
+            "stock_quantity", "available_quantity", "in_stock",
         )
 
 
@@ -203,7 +203,7 @@ class ProductDetailSerializer(serializers.ModelSerializer):
             "tcg", "category",
             "condition", "certification_entity", "certification_grade",
             "price_usd", "price_ars", "discount_percent", "final_price",
-            "stock_quantity", "in_stock",
+            "stock_quantity", "available_quantity", "in_stock",
             "image_url", "image_url_2", "image_url_3",
             "images",
             "suggested_products",
@@ -220,7 +220,7 @@ class ProductWriteSerializer(serializers.ModelSerializer):
             "name", "description", "tcg", "category",
             "condition", "certification_entity", "certification_grade",
             "price_usd", "discount_percent",
-            "stock_quantity", "in_stock",
+            "stock_quantity", "available_quantity", "in_stock",
             "image_url", "image_url_2", "image_url_3",
             "rating", "rating_count",
             "pricecharting_url",

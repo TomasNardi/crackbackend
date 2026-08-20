@@ -354,6 +354,15 @@ try:
     MERCADOPAGO_EXPIRATION_GRACE_MINUTES = int(os.environ.get("MP_EXPIRATION_GRACE_MINUTES", "5"))
 except ValueError:
     MERCADOPAGO_EXPIRATION_GRACE_MINUTES = 5
+# Plazo para pagar una orden manual (efectivo, transferencia, crypto) antes de
+# que venza y la mercadería reservada vuelva a la venta. El email de compra le
+# avisa este mismo número al cliente.
+try:
+    CASH_ORDER_EXPIRATION_HOURS = int(os.environ.get("CASH_ORDER_EXPIRATION_HOURS", "24"))
+except ValueError:
+    CASH_ORDER_EXPIRATION_HOURS = 24
+CASH_ORDER_EXPIRATION_HOURS = max(1, min(CASH_ORDER_EXPIRATION_HOURS, 30 * 24))
+
 # Opcional: forzar URL pública de retorno para Checkout Pro en desarrollo local.
 # Se puede sobreescribir con MP_FRONTEND_RETURN_URL en entorno.
 MERCADOPAGO_FRONTEND_RETURN_URL = os.environ.get(

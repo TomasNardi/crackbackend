@@ -248,6 +248,9 @@ def _build_order_email_context(order) -> dict:
         "payment_method_display": payment_method_display,
         "payment_status_display": payment_status_display,
         "is_cash_payment": is_cash,
+        # Plazo para pagar antes de que la reserva se libere. Va al email para
+        # que el cliente sepa que la carta está apartada, pero no para siempre.
+        "cash_expiration_hours": getattr(settings, "CASH_ORDER_EXPIRATION_HOURS", 24),
         "is_mercadopago_payment": is_mp,
         "mp_preference_id": getattr(order, "mp_preference_id", "") or None,
         "mp_payment_id": getattr(mp_payment, "payment_id", "") or None,

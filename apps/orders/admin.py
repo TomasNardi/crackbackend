@@ -23,6 +23,7 @@ from .models import (
     ShippingOrder,
 )
 from .pdf_generator import generate_order_pdf
+from .services.stock_reservation_service import consume_order_stock, release_order_stock
 
 
 class SuggestedProductAdminForm(forms.ModelForm):
@@ -154,6 +155,7 @@ class OrderAdmin(ModelAdmin):
     inlines = [OrderItemInline, MercadoPagoPaymentInline]
     actions = [
         "action_mark_cash_paid",
+        "action_return_stock",
         "action_download_pdf",
     ]
 
@@ -221,9 +223,37 @@ class OrderAdmin(ModelAdmin):
             '<div style="line-height:1.6;">'
             '<div style="font-size:11px;color:#6b7280;margin-bottom:4px;">{}</div>'
             '<div>{}</div>'
+            '<div style="margin-top:4px;">{}</div>'
             '</div>',
             method,
             badge,
+            self.return_stock_button(obj),
+        )
+
+    def return_stock_button(self, obj):
+        """
+        Deshace la orden y devuelve la mercadería a la venta.
+
+        Aparece mientras la orden tenga mercadería tomada —apartada por una
+        reserva o ya descontada por una venta—, así sirve tanto para el que
+        nunca transfirió como para la venta que se cae después de cobrada.
+        """
+        if obj.stock_status not in {Order.STOCK_RESERVED, Order.STOCK_CONSUMED}:
+            return format_html('<span style="font-size:10px;color:#9ca3af;">Sin stock tomado</span>')
+
+        label = (
+            "↩ Regresar al stock"
+            if obj.stock_status == Order.STOCK_RESERVED
+            else "↩ Regresar al stock (revierte la venta)"
+        )
+        url = reverse("admin:orders_order_return_stock", args=[obj.pk])
+        return format_html(
+            '<a href="{}" onclick="return confirm(&#39;¿Devolver la mercadería de esta '
+            'orden al stock? La orden queda cancelada.&#39;);" '
+            'style="background:#d73a49;color:#fff;padding:3px 9px;'
+            'border-radius:6px;font-size:11px;font-weight:600;text-decoration:none;'
+            'display:inline-block;" title="Libera la mercadería y cancela la orden">{}</a>',
+            url, label,
         )
 
     @admin.display(description="Envío", ordering="shipping_type")
@@ -389,6 +419,11 @@ class OrderAdmin(ModelAdmin):
                 name="orders_order_mark_cash_paid",
             ),
             path(
+                "<int:order_id>/return-stock/",
+                self.admin_site.admin_view(self.return_stock_view),
+                name="orders_order_return_stock",
+            ),
+            path(
                 "<int:order_id>/pdf/",
                 self.admin_site.admin_view(self.pdf_download_view),
                 name="orders_order_pdf_download",
@@ -521,6 +556,8 @@ class OrderAdmin(ModelAdmin):
         else:
             order.status = Order.STATUS_PAID
             order.save(update_fields=["status", "updated_at"])
+            # Recién acá la reserva se convierte en venta y baja el stock.
+            consume_order_stock(order)
             self.message_user(request, f"Orden #{order.order_code} marcada como pagada.", level=messages.SUCCESS)
             try:
                 from .emails import send_payment_confirmed_email
@@ -529,6 +566,37 @@ class OrderAdmin(ModelAdmin):
                 logger.exception("Error enviando email de pago confirmado para orden %s: %s", order.order_code, exc)
 
         return HttpResponseRedirect(request.META.get("HTTP_REFERER") or reverse("admin:orders_order_changelist"))
+
+    def return_stock_view(self, request, order_id):
+        """Devuelve la mercadería de una orden al stock y la deja cancelada."""
+        try:
+            order = Order.objects.get(pk=order_id)
+        except Order.DoesNotExist:
+            self.message_user(request, "Orden no encontrada.", level=messages.ERROR)
+            return HttpResponseRedirect(reverse("admin:orders_order_changelist"))
+
+        released = release_order_stock(order)
+
+        if not released:
+            self.message_user(
+                request,
+                f"La orden #{order.order_code} no tiene mercadería tomada del stock.",
+                level=messages.WARNING,
+            )
+        else:
+            if order.status != Order.STATUS_CANCELLED:
+                order.status = Order.STATUS_CANCELLED
+                order.save(update_fields=["status", "updated_at"])
+            self.message_user(
+                request,
+                f"Mercadería de la orden #{order.order_code} devuelta al stock. "
+                "La orden quedó cancelada.",
+                level=messages.SUCCESS,
+            )
+
+        return HttpResponseRedirect(
+            request.META.get("HTTP_REFERER") or reverse("admin:orders_order_changelist")
+        )
 
     def pdf_download_view(self, request, order_id):
         """Genera y descarga el PDF de la orden."""
@@ -576,8 +644,16 @@ class OrderAdmin(ModelAdmin):
             payment_method=Order.PAYMENT_CASH,
             status=Order.STATUS_PENDING,
         )
-        order_ids = list(pending_cash.values_list("id", flat=True))
-        updated = pending_cash.update(status=Order.STATUS_PAID, updated_at=timezone.now())
+        # Una por una y no con `update()`: cada orden tiene que convertir su
+        # reserva en venta, y eso mira los ítems de esa orden.
+        order_ids = []
+        for order in pending_cash:
+            order.status = Order.STATUS_PAID
+            order.save(update_fields=["status", "updated_at"])
+            consume_order_stock(order)
+            order_ids.append(order.id)
+
+        updated = len(order_ids)
         skipped = queryset.count() - updated
 
         if updated:
@@ -595,6 +671,33 @@ class OrderAdmin(ModelAdmin):
                 level=messages.WARNING,
             )
             
+
+    @admin.action(description="↩ Regresar al stock y cancelar")
+    def action_return_stock(self, request, queryset):
+        returned = 0
+        for order in queryset:
+            if not release_order_stock(order):
+                continue
+            if order.status != Order.STATUS_CANCELLED:
+                order.status = Order.STATUS_CANCELLED
+                order.save(update_fields=["status", "updated_at"])
+            returned += 1
+
+        skipped = queryset.count() - returned
+
+        if returned:
+            self.message_user(
+                request,
+                f"{returned} orden(es) devueltas al stock y canceladas.",
+                level=messages.SUCCESS,
+            )
+        if skipped:
+            self.message_user(
+                request,
+                f"{skipped} orden(es) omitidas: no tenían mercadería tomada del stock.",
+                level=messages.WARNING,
+            )
+
 
 @admin.register(DiscountCode)
 class DiscountCodeAdmin(ModelAdmin):

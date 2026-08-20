@@ -1,12 +1,21 @@
+from datetime import timedelta
 from decimal import Decimal
 from unittest.mock import Mock, patch
 
+from django.contrib.auth import get_user_model
 from django.test import TestCase, override_settings
+from django.urls import reverse
+from django.utils import timezone
 
 from apps.orders.mercadopago_service import create_checkout_preference
 from apps.orders.models import Order, OrderItem
 from apps.orders.serializers import OrderCreateSerializer
 from apps.orders.services import reconcile_payment
+from apps.orders.tasks import expire_stale_cash_orders
+from apps.orders.services.stock_reservation_service import (
+    consume_order_stock,
+    release_order_stock,
+)
 from apps.products.models import Product, ProductCategory, ProductImage
 
 
@@ -250,15 +259,19 @@ class SingleStockTests(TestCase):
             }
         )
 
-    def test_can_buy_more_than_one_unit_of_a_single(self):
+    def test_cash_checkout_reserves_without_discounting(self):
+        # El pago manual no se cobra en el momento: aparta, no vende.
         serializer = self._checkout(2)
 
         self.assertTrue(serializer.is_valid(), serializer.errors)
-        serializer.save()
+        order = serializer.save()
 
         self.product.refresh_from_db()
-        self.assertEqual(self.product.stock_quantity, 1)
+        self.assertEqual(self.product.stock_quantity, 3)
+        self.assertEqual(self.product.reserved_quantity, 2)
+        self.assertEqual(self.product.available_quantity, 1)
         self.assertTrue(self.product.in_stock)
+        self.assertEqual(order.stock_status, Order.STOCK_RESERVED)
 
     def test_cannot_buy_more_than_stock(self):
         serializer = self._checkout(4)
@@ -266,15 +279,85 @@ class SingleStockTests(TestCase):
         self.assertFalse(serializer.is_valid())
         self.assertIn("3 unidades", str(serializer.errors))
 
-    def test_last_unit_unpublishes_the_product(self):
+    def test_reserving_everything_takes_it_out_of_the_shop(self):
         serializer = self._checkout(3)
 
         self.assertTrue(serializer.is_valid(), serializer.errors)
         serializer.save()
 
         self.product.refresh_from_db()
-        self.assertEqual(self.product.stock_quantity, 0)
+        self.assertEqual(self.product.stock_quantity, 3)
+        self.assertEqual(self.product.available_quantity, 0)
         self.assertFalse(self.product.in_stock)
+
+    def test_reserved_units_are_not_available_for_a_second_buyer(self):
+        first = self._checkout(2)
+        self.assertTrue(first.is_valid(), first.errors)
+        first.save()
+
+        second = self._checkout(2)
+
+        self.assertFalse(second.is_valid())
+        self.assertIn("1 unidad", str(second.errors))
+
+    def test_marking_paid_turns_the_reservation_into_a_sale(self):
+        serializer = self._checkout(2)
+        self.assertTrue(serializer.is_valid(), serializer.errors)
+        order = serializer.save()
+
+        consume_order_stock(order)
+
+        self.product.refresh_from_db()
+        self.assertEqual(self.product.stock_quantity, 1)
+        self.assertEqual(self.product.reserved_quantity, 0)
+        self.assertTrue(self.product.in_stock)
+
+    def test_marking_paid_twice_discounts_once(self):
+        serializer = self._checkout(2)
+        self.assertTrue(serializer.is_valid(), serializer.errors)
+        order = serializer.save()
+
+        consume_order_stock(order)
+        consume_order_stock(order)
+
+        self.product.refresh_from_db()
+        self.assertEqual(self.product.stock_quantity, 1)
+
+    def test_releasing_a_reservation_puts_it_back_on_sale(self):
+        serializer = self._checkout(3)
+        self.assertTrue(serializer.is_valid(), serializer.errors)
+        order = serializer.save()
+
+        release_order_stock(order)
+
+        self.product.refresh_from_db()
+        self.assertEqual(self.product.stock_quantity, 3)
+        self.assertEqual(self.product.reserved_quantity, 0)
+        self.assertTrue(self.product.in_stock)
+
+    def test_releasing_a_paid_order_gives_the_units_back(self):
+        serializer = self._checkout(2)
+        self.assertTrue(serializer.is_valid(), serializer.errors)
+        order = serializer.save()
+        consume_order_stock(order)
+
+        release_order_stock(order)
+
+        self.product.refresh_from_db()
+        self.assertEqual(self.product.stock_quantity, 3)
+        self.assertEqual(self.product.reserved_quantity, 0)
+
+    def test_releasing_twice_does_not_inflate_stock(self):
+        serializer = self._checkout(2)
+        self.assertTrue(serializer.is_valid(), serializer.errors)
+        order = serializer.save()
+
+        release_order_stock(order)
+        release_order_stock(order)
+
+        self.product.refresh_from_db()
+        self.assertEqual(self.product.stock_quantity, 3)
+        self.assertEqual(self.product.reserved_quantity, 0)
 
 
 class MercadoPagoMultiUnitStockTests(TestCase):
@@ -329,3 +412,158 @@ class MercadoPagoMultiUnitStockTests(TestCase):
         product.refresh_from_db()
         self.assertEqual(product.stock_quantity, 1)
         self.assertTrue(product.in_stock)
+
+
+class CashOrderExpirationTests(TestCase):
+    """
+    La reserva no es eterna: pasado el plazo del email, la mercadería vuelve a
+    la tienda y la orden queda vencida.
+    """
+
+    def setUp(self):
+        self.category = ProductCategory.objects.create(name="Single")
+        self.product = Product.objects.create(
+            category=self.category,
+            name="Ampharos NM",
+            price_usd=Decimal("10.00"),
+            in_stock=True,
+            stock_quantity=2,
+        )
+
+    def _cash_order(self, quantity=2, age_hours=0):
+        serializer = OrderCreateSerializer(
+            data={
+                "customer_name": "Cliente Test",
+                "customer_email": "cliente@test.com",
+                "payment_method": Order.PAYMENT_CASH,
+                "shipping_type": Order.SHIPPING_PICKUP,
+                "shipping_method": Order.SHIPPING_METHOD_STORE_PICKUP,
+                "items": [{"product_id": self.product.id, "quantity": quantity}],
+            }
+        )
+        self.assertTrue(serializer.is_valid(), serializer.errors)
+        order = serializer.save()
+
+        if age_hours:
+            created = timezone.now() - timedelta(hours=age_hours)
+            Order.objects.filter(pk=order.pk).update(created_at=created)
+            order.refresh_from_db()
+
+        return order
+
+    @override_settings(CASH_ORDER_EXPIRATION_HOURS=24)
+    def test_order_within_the_deadline_keeps_its_reservation(self):
+        order = self._cash_order(age_hours=5)
+
+        result = expire_stale_cash_orders()
+
+        order.refresh_from_db()
+        self.product.refresh_from_db()
+        self.assertEqual(result["expired"], 0)
+        self.assertEqual(order.status, Order.STATUS_PENDING)
+        self.assertEqual(self.product.reserved_quantity, 2)
+
+    @override_settings(CASH_ORDER_EXPIRATION_HOURS=24)
+    def test_expired_order_returns_the_stock_to_the_shop(self):
+        order = self._cash_order(age_hours=30)
+
+        result = expire_stale_cash_orders()
+
+        order.refresh_from_db()
+        self.product.refresh_from_db()
+        self.assertEqual(result["expired"], 1)
+        self.assertEqual(order.status, Order.STATUS_EXPIRED)
+        self.assertEqual(order.stock_status, Order.STOCK_RELEASED)
+        self.assertEqual(self.product.reserved_quantity, 0)
+        self.assertEqual(self.product.stock_quantity, 2)
+        self.assertTrue(self.product.in_stock)
+
+    @override_settings(CASH_ORDER_EXPIRATION_HOURS=24)
+    def test_paid_order_is_never_expired(self):
+        order = self._cash_order(age_hours=30)
+        consume_order_stock(order)
+        Order.objects.filter(pk=order.pk).update(status=Order.STATUS_PAID)
+
+        result = expire_stale_cash_orders()
+
+        order.refresh_from_db()
+        self.product.refresh_from_db()
+        self.assertEqual(result["expired"], 0)
+        self.assertEqual(order.status, Order.STATUS_PAID)
+        self.assertEqual(self.product.stock_quantity, 0)
+
+
+class ReturnStockAdminTests(TestCase):
+    """El botón "Regresar al stock" del admin: devuelve y cancela la orden."""
+
+    def setUp(self):
+        User = get_user_model()
+        self.staff = User.objects.create_user(
+            username="staff-orders",
+            email="staff-orders@test.com",
+            password="x",
+            is_staff=True,
+            is_superuser=True,
+        )
+        self.client.force_login(self.staff)
+
+        category = ProductCategory.objects.create(name="Single")
+        self.product = Product.objects.create(
+            category=category,
+            name="Ampharos NM",
+            price_usd=Decimal("10.00"),
+            in_stock=True,
+            stock_quantity=3,
+        )
+
+    def _cash_order(self, quantity=3):
+        serializer = OrderCreateSerializer(
+            data={
+                "customer_name": "Cliente Test",
+                "customer_email": "cliente@test.com",
+                "payment_method": Order.PAYMENT_CASH,
+                "shipping_type": Order.SHIPPING_PICKUP,
+                "shipping_method": Order.SHIPPING_METHOD_STORE_PICKUP,
+                "items": [{"product_id": self.product.id, "quantity": quantity}],
+            }
+        )
+        self.assertTrue(serializer.is_valid(), serializer.errors)
+        return serializer.save()
+
+    def test_returns_a_reservation_and_cancels_the_order(self):
+        order = self._cash_order()
+        url = reverse("admin:orders_order_return_stock", args=[order.pk])
+
+        response = self.client.get(url)
+
+        self.assertEqual(response.status_code, 302)
+        order.refresh_from_db()
+        self.product.refresh_from_db()
+        self.assertEqual(order.status, Order.STATUS_CANCELLED)
+        self.assertEqual(self.product.reserved_quantity, 0)
+        self.assertEqual(self.product.stock_quantity, 3)
+        self.assertTrue(self.product.in_stock)
+
+    def test_returns_a_sale_that_was_already_paid(self):
+        order = self._cash_order(quantity=2)
+        consume_order_stock(order)
+        self.product.refresh_from_db()
+        self.assertEqual(self.product.stock_quantity, 1)
+
+        self.client.get(reverse("admin:orders_order_return_stock", args=[order.pk]))
+
+        self.product.refresh_from_db()
+        self.assertEqual(self.product.stock_quantity, 3)
+        self.assertEqual(self.product.reserved_quantity, 0)
+
+    def test_marking_cash_paid_from_the_admin_discounts_the_reservation(self):
+        order = self._cash_order(quantity=2)
+        url = reverse("admin:orders_order_mark_cash_paid", args=[order.pk])
+
+        self.client.get(url)
+
+        order.refresh_from_db()
+        self.product.refresh_from_db()
+        self.assertEqual(order.status, Order.STATUS_PAID)
+        self.assertEqual(self.product.stock_quantity, 1)
+        self.assertEqual(self.product.reserved_quantity, 0)

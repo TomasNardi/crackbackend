@@ -10,7 +10,7 @@ from rest_framework import serializers
 from apps.products.models import Product
 from apps.core.models import SiteConfig, EmailSubscription
 from .models import Order, OrderItem, MercadoPagoPayment, DiscountCode, Shipment
-from .services.order_confirmation_service import apply_product_purchase_stock
+from .services.stock_reservation_service import reserve_order_stock
 from .services.shipping_service import normalize_shipping_zone, resolve_shipping_price
 
 
@@ -94,12 +94,13 @@ class OrderCreateSerializer(serializers.Serializer):
                 errors.append(f"'{product.name}' fue comprado recientemente y ya no está disponible.")
                 continue
 
-            # El tope es el stock, en todas las categorías. Un single repetido
-            # es una publicación con stock N: si hay 3, se pueden llevar 3.
-            if product.stock_quantity is not None and quantity > product.stock_quantity:
-                unidad = "unidad" if product.stock_quantity == 1 else "unidades"
+            # El tope es lo disponible, en todas las categorías: el stock menos
+            # lo que ya está apartado por órdenes de pago manual sin cobrar.
+            available = product.available_quantity
+            if available is not None and quantity > available:
+                unidad = "unidad" if available == 1 else "unidades"
                 errors.append(
-                    f"'{product.name}' solo tiene {product.stock_quantity} {unidad} disponibles."
+                    f"'{product.name}' solo tiene {available} {unidad} disponibles."
                 )
 
         return errors
@@ -285,10 +286,12 @@ class OrderCreateSerializer(serializers.Serializer):
                     defaults={"is_active": True}
                 )
 
-            # Para Mercado Pago, el stock y el código se aplican recién cuando el pago queda aprobado.
+            # Mercado Pago descuenta el stock recién cuando el pago queda
+            # aprobado. El pago manual (efectivo, transferencia, crypto) no se
+            # cobra en el momento: aparta la mercadería y la descuenta cuando
+            # marcás la orden como pagada desde el admin.
             if payment_method == Order.PAYMENT_CASH:
-                for item in items_to_create:
-                    apply_product_purchase_stock(item["product"], item["quantity"])
+                reserve_order_stock(order)
 
                 if discount_code:
                     discount_code.activate()

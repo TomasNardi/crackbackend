@@ -150,6 +150,21 @@ class Order(models.Model):
         (STATUS_CANCELLED, "Cancelada"),
     ]
 
+    # Qué se hizo con el stock de esta orden. Las órdenes de pago manual
+    # (efectivo, transferencia, crypto) apartan la mercadería sin descontarla:
+    # recién al cobrar se convierte en venta. Guardarlo evita el doble
+    # descuento y el doble regreso al stock.
+    STOCK_NONE = "none"
+    STOCK_RESERVED = "reserved"
+    STOCK_CONSUMED = "consumed"
+    STOCK_RELEASED = "released"
+    STOCK_STATUS_CHOICES = [
+        (STOCK_NONE, "Sin efecto"),
+        (STOCK_RESERVED, "Reservado"),
+        (STOCK_CONSUMED, "Descontado"),
+        (STOCK_RELEASED, "Devuelto al stock"),
+    ]
+
     PAYMENT_MERCADOPAGO = "mercadopago"
     PAYMENT_CASH = "cash"
     PAYMENT_METHOD_CHOICES = [
@@ -255,6 +270,9 @@ class Order(models.Model):
 
     # Estado
     status = models.CharField("Estado", max_length=20, choices=STATUS_CHOICES, default=STATUS_PENDING)
+    stock_status = models.CharField(
+        "Estado del stock", max_length=20, choices=STOCK_STATUS_CHOICES, default=STOCK_NONE,
+    )
     payment_method = models.CharField(
         "Método de pago",
         max_length=20,

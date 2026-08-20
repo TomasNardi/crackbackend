@@ -56,14 +56,23 @@ class ProductAdmin(ModelAdmin):
     list_display = (
         "name", "category", "tcg",
         "price_usd", "price_ars_display", "discount_percent",
-        "stock_quantity", "in_stock",
+        "stock_quantity", "reserved_display", "in_stock",
     )
     list_filter = ("category", "tcg", "in_stock", "certification_entity")
     search_fields = ("name", "description")
-    readonly_fields = ("slug", "price_ars_display")
+    # `reserved_quantity` lo maneja el flujo de órdenes: tocarlo a mano
+    # descuadraría las reservas vivas.
+    readonly_fields = ("slug", "price_ars_display", "reserved_quantity")
     # El stock se edita desde el listado: vendiste una en mano, bajás el número
     # y listo, sin abrir la ficha ni tocar la publicación.
     list_editable = ("stock_quantity", "in_stock", "discount_percent")
+
+    @admin.display(description="Reservado")
+    def reserved_display(self, obj):
+        """Unidades apartadas por órdenes de pago manual todavía sin cobrar."""
+        if not obj.reserved_quantity:
+            return "—"
+        return f"{obj.reserved_quantity} apartadas"
 
     def price_ars_display(self, obj):
         if not obj.pk or not obj.price_usd:
@@ -86,7 +95,7 @@ class ProductAdmin(ModelAdmin):
             "fields": ("name", "description", "tcg", "category"),
         }),
         ("Precio y stock", {
-            "fields": ("price_usd", "price_ars_display", "discount_percent", "stock_quantity", "in_stock"),
+            "fields": ("price_usd", "price_ars_display", "discount_percent", "stock_quantity", "reserved_quantity", "in_stock"),
         }),
         ("Imágenes", {
             "fields": ("cloudinary_draft_token", "images_payload", "image_url", "image_url_2", "image_url_3"),

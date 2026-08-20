@@ -7,6 +7,7 @@ from django.utils import timezone
 from django.utils.dateparse import parse_datetime
 
 from .models import Order, MercadoPagoPayment
+from .services.stock_reservation_service import release_order_stock
 from .emails import send_refund_notification, send_checkout_expired_notification
 
 logger = logging.getLogger(__name__)
@@ -142,3 +143,53 @@ def expire_stale_mercadopago_checkouts(batch_size=300):
             send_checkout_expired_notification_task(order_id)
 
     return {"processed": processed, "expired": expired}
+
+
+def expire_stale_cash_orders(batch_size=300):
+    """
+    Vence las órdenes de pago manual que nadie pagó y libera lo reservado.
+
+    El cliente tiene un plazo (24 h por defecto) para transferir o pasar por el
+    local. Pasado eso la carta no puede seguir apartada: vuelve a la vidriera y
+    la orden queda vencida. Es lo que promete el email de compra.
+    """
+    hours = getattr(settings, "CASH_ORDER_EXPIRATION_HOURS", 24)
+    try:
+        hours = int(hours)
+    except (TypeError, ValueError):
+        hours = 24
+    hours = max(1, min(hours, 30 * 24))
+
+    deadline = timezone.now() - timedelta(hours=hours)
+
+    candidates = list(
+        Order.objects.filter(
+            payment_method=Order.PAYMENT_CASH,
+            status=Order.STATUS_PENDING,
+            stock_status=Order.STOCK_RESERVED,
+            created_at__lte=deadline,
+        ).order_by("created_at")[: max(1, int(batch_size))]
+    )
+
+    expired = 0
+    for order in candidates:
+        with transaction.atomic():
+            locked = (
+                Order.objects.select_for_update()
+                .filter(
+                    pk=order.pk,
+                    status=Order.STATUS_PENDING,
+                    stock_status=Order.STOCK_RESERVED,
+                )
+                .first()
+            )
+            # Puede haberse pagado entre que se armó la lista y llegamos acá.
+            if not locked:
+                continue
+
+            release_order_stock(locked)
+            locked.status = Order.STATUS_EXPIRED
+            locked.save(update_fields=["status", "updated_at"])
+            expired += 1
+
+    return {"processed": len(candidates), "expired": expired}

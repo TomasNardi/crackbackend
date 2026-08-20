@@ -21,4 +21,7 @@ python manage.py collectstatic --no-input
 echo "==> Running migrations..."
 python manage.py migrate --verbosity 2
 
+echo "==> Registrando tareas programadas..."
+python manage.py setup_order_schedules
+
 echo "==> Build complete."

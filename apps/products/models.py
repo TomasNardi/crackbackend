@@ -186,6 +186,14 @@ class Product(models.Model):
         "Cantidad en stock", null=True, blank=True,
         help_text="Unidades disponibles de esta publicación. Si tenés la misma carta repetida en el mismo estado, subí la cantidad acá en vez de cargarla de nuevo. Vacío en Singles y Slabs se toma como 1.",
     )
+    reserved_quantity = models.PositiveIntegerField(
+        "Reservado", default=0,
+        help_text=(
+            "Unidades apartadas por órdenes de pago manual (efectivo, transferencia, "
+            "crypto) que todavía no se cobraron. No se venden, pero siguen siendo tuyas "
+            "hasta que marques la orden como pagada."
+        ),
+    )
     in_stock = models.BooleanField("En stock", default=True)
 
     # Imágenes (URLs externas — Cloudinary, S3, etc.)
@@ -250,6 +258,18 @@ class Product(models.Model):
         category_name = self.category.name if self.category_id and self.category else ""
         return category_name.strip().lower() in UNIQUE_PRODUCT_CATEGORIES
 
+    @property
+    def available_quantity(self):
+        """
+        Unidades que se pueden vender ahora: stock menos lo reservado.
+
+        `None` significa sin límite (sellados y accesorios a los que nunca les
+        cargaste cantidad).
+        """
+        if self.stock_quantity is None:
+            return None
+        return max(0, self.stock_quantity - (self.reserved_quantity or 0))
+
     def normalize_stock(self):
         """
         Mantiene `stock_quantity` e `in_stock` coherentes entre sí.
@@ -261,15 +281,18 @@ class Product(models.Model):
         ya sale solo porque son productos distintos.
 
         Para singles y slabs la cantidad vacía se completa en 1: son productos
-        que casi siempre entran de a uno y el front usa `stock_quantity` como
-        tope del selector, así que dejarlo en None equivale a stock infinito.
+        que casi siempre entran de a uno y el front usa la cantidad como tope
+        del selector, así que dejarlo en None equivale a stock infinito.
         """
         if self.stock_quantity is None:
             if self.is_unique_product():
                 self.stock_quantity = 1 if self.in_stock else 0
             return
 
-        self.in_stock = self.stock_quantity > 0
+        # Se publica según lo disponible, no según lo que tenés: una carta
+        # apartada por una orden en efectivo sin pagar sale de la vidriera pero
+        # no se descuenta del stock hasta que cobrás.
+        self.in_stock = self.available_quantity > 0
 
     def apply_catalog_image_fallback(self):
         """
