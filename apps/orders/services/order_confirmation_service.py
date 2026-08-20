@@ -16,25 +16,16 @@ from apps.orders.emails import send_order_confirmation, send_new_order_notificat
 
 logger = logging.getLogger(__name__)
 
-UNIQUE_ORDER_CATEGORIES = {"single", "singles", "slab", "slabs"}
-
-
 def apply_product_purchase_stock(product, quantity):
-    """Persist stock changes without triggering Product.save side effects."""
-    category_name = product.category.name if product.category else ""
-    is_unique = category_name.strip().lower() in UNIQUE_ORDER_CATEGORIES
-    updated_at = timezone.now()
+    """
+    Descuenta las unidades vendidas sin disparar los side effects de save().
 
-    if is_unique:
-        Product.objects.filter(pk=product.pk).update(
-            in_stock=False,
-            stock_quantity=0,
-            updated_at=updated_at,
-        )
-        product.in_stock = False
-        product.stock_quantity = 0
-        product.updated_at = updated_at
-        return
+    Vale igual para un single que para un sellado: la publicación baja el stock
+    y recién se despublica cuando llega a cero. Antes un single se despublicaba
+    con la primera venta porque cada copia era un producto aparte; ahora una
+    publicación con stock 3 sobrevive a las dos primeras ventas.
+    """
+    updated_at = timezone.now()
 
     if product.stock_quantity is None:
         return

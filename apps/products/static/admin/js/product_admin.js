@@ -1,4 +1,8 @@
 (function () {
+  // El stock de un single o un slab ya no está clavado en 1: tener la misma
+  // carta repetida en el mismo estado es UNA publicación con stock N. Lo único
+  // que se sincroniza acá es la coherencia entre "En stock" y la cantidad, para
+  // que no quedes con el checkbox tildado y 0 unidades.
   function normalizeText(value) {
     return (value || '').trim().toLowerCase();
   }
@@ -10,46 +14,51 @@
     return label === 'single' || label === 'singles' || label === 'slab' || label === 'slabs';
   }
 
-  function applyStockState() {
-    var categorySelect = document.getElementById('id_category');
-    var stockInput = document.getElementById('id_stock_quantity');
-    var inStockCheckbox = document.getElementById('id_in_stock');
+  function elements() {
+    return {
+      category: document.getElementById('id_category'),
+      stock: document.getElementById('id_stock_quantity'),
+      inStock: document.getElementById('id_in_stock'),
+    };
+  }
 
-    if (!categorySelect || !stockInput || !inStockCheckbox) return;
+  function onStockChange() {
+    var el = elements();
+    if (!el.stock || !el.inStock) return;
 
-    var unique = isUniqueCategory(categorySelect);
+    var raw = el.stock.value.trim();
+    if (raw === '') return;
 
-    if (unique) {
-      stockInput.value = inStockCheckbox.checked ? '1' : '0';
-      stockInput.readOnly = true;
-      stockInput.setAttribute('aria-readonly', 'true');
-      stockInput.classList.add('vTextField--readonly');
-      stockInput.style.backgroundColor = '#f5f5f5';
-      stockInput.style.color = '#111111';
-      stockInput.style.webkitTextFillColor = '#111111';
-      stockInput.title = 'Para Singles/Slabs el stock se fija automáticamente.';
-    } else {
-      stockInput.readOnly = false;
-      stockInput.removeAttribute('aria-readonly');
-      stockInput.classList.remove('vTextField--readonly');
-      stockInput.style.backgroundColor = '';
-      stockInput.style.color = '';
-      stockInput.style.webkitTextFillColor = '';
-      stockInput.title = '';
+    el.inStock.checked = parseInt(raw, 10) > 0;
+  }
+
+  function onInStockChange() {
+    var el = elements();
+    if (!el.stock || !el.inStock) return;
+
+    // Destildar "En stock" es la forma rápida de pausar una publicación.
+    if (!el.inStock.checked) {
+      el.stock.value = '0';
+      return;
+    }
+
+    // Al volver a publicar, un single sin cantidad arranca en 1 (el caso normal).
+    var raw = el.stock.value.trim();
+    if (raw === '' || parseInt(raw, 10) === 0) {
+      el.stock.value = isUniqueCategory(el.category) ? '1' : '';
     }
   }
 
+  function applyHelp() {
+    var el = elements();
+    if (!el.stock) return;
+    el.stock.title = 'Unidades de esta publicación. Repetidas del mismo estado van acá, no en una publicación nueva.';
+  }
+
   document.addEventListener('DOMContentLoaded', function () {
-    var categorySelect = document.getElementById('id_category');
-    var inStockCheckbox = document.getElementById('id_in_stock');
-
-    if (categorySelect) {
-      categorySelect.addEventListener('change', applyStockState);
-    }
-    if (inStockCheckbox) {
-      inStockCheckbox.addEventListener('change', applyStockState);
-    }
-
-    applyStockState();
+    var el = elements();
+    if (el.stock) el.stock.addEventListener('change', onStockChange);
+    if (el.inStock) el.inStock.addEventListener('change', onInStockChange);
+    applyHelp();
   });
 })();

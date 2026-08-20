@@ -14,9 +14,6 @@ from .services.order_confirmation_service import apply_product_purchase_stock
 from .services.shipping_service import normalize_shipping_zone, resolve_shipping_price
 
 
-UNIQUE_ORDER_CATEGORIES = {"single", "singles", "slab", "slabs"}
-
-
 class OrderItemInputSerializer(serializers.Serializer):
     """Input para cada ítem al crear una orden."""
     product_id = serializers.IntegerField()
@@ -97,16 +94,12 @@ class OrderCreateSerializer(serializers.Serializer):
                 errors.append(f"'{product.name}' fue comprado recientemente y ya no está disponible.")
                 continue
 
-            category_name = product.category.name if product.category else ""
-            is_unique = category_name.strip().lower() in UNIQUE_ORDER_CATEGORIES
-
-            if is_unique and quantity > 1:
-                errors.append(f"'{product.name}' es único y solo permite 1 unidad.")
-                continue
-
-            if not is_unique and product.stock_quantity is not None and quantity > product.stock_quantity:
+            # El tope es el stock, en todas las categorías. Un single repetido
+            # es una publicación con stock N: si hay 3, se pueden llevar 3.
+            if product.stock_quantity is not None and quantity > product.stock_quantity:
+                unidad = "unidad" if product.stock_quantity == 1 else "unidades"
                 errors.append(
-                    f"'{product.name}' solo tiene {product.stock_quantity} unidades disponibles."
+                    f"'{product.name}' solo tiene {product.stock_quantity} {unidad} disponibles."
                 )
 
         return errors

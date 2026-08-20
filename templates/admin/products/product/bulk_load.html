@@ -1034,7 +1034,7 @@
 
           <div class="cl-note">
             Si no cargás foto ni URL, se usa la imagen del catálogo.
-            ${it.quantity > 1 ? "<br><b>Ojo:</b> con cantidad mayor a 1, las fotos propias van solo a la primera unidad." : ""}
+            ${it.quantity > 1 ? `<br><b>Ojo:</b> se publica <b>una</b> sola vez con stock ${it.quantity}. Si alguna copia está en otra condición, cargala en una fila aparte.` : ""}
           </div>
         </div>
       </div>`;
@@ -1261,7 +1261,10 @@
       const data = await res.json();
       if (!res.ok) { flash(data.error || "No se pudo guardar el lote.", "err"); return; }
 
-      let msg = "Listo: " + data.created + " producto(s) creados.";
+      // Publicaciones y unidades ya no son lo mismo: cargar 3 copias de la
+      // misma carta crea 1 publicación con stock 3.
+      let msg = "Listo: " + data.created + " publicacion(es) creadas";
+      msg += (data.units && data.units !== data.created) ? " (" + data.units + " unidades)." : ".";
       if (data.errors && data.errors.length) msg += " Con avisos: " + data.errors.join(" ");
       flash(msg, "ok");
 

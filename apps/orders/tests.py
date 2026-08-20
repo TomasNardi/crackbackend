@@ -206,3 +206,72 @@ class OrderShippingValidationTests(TestCase):
         )
 
         self.assertTrue(serializer.is_valid(), serializer.errors)
+
+class SingleStockTests(TestCase):
+    """
+    Un single repetido es UNA publicación con stock N.
+
+    Tres Ampharos NM no son tres avisos en la tienda: es un aviso con stock 3,
+    del que el cliente puede llevarse una, dos o las tres.
+    """
+
+    def setUp(self):
+        self.category = ProductCategory.objects.create(name="Single")
+        self.product = Product.objects.create(
+            category=self.category,
+            name="Ampharos NM",
+            price_usd=Decimal("10.00"),
+            in_stock=True,
+            stock_quantity=3,
+        )
+
+    def test_single_keeps_loaded_stock(self):
+        self.product.refresh_from_db()
+        self.assertEqual(self.product.stock_quantity, 3)
+
+    def test_single_without_quantity_defaults_to_one(self):
+        product = Product.objects.create(
+            category=self.category,
+            name="Pikachu NM",
+            price_usd=Decimal("5.00"),
+            in_stock=True,
+        )
+        self.assertEqual(product.stock_quantity, 1)
+
+    def _checkout(self, quantity):
+        return OrderCreateSerializer(
+            data={
+                "customer_name": "Cliente Test",
+                "customer_email": "cliente@test.com",
+                "payment_method": Order.PAYMENT_CASH,
+                "shipping_type": Order.SHIPPING_PICKUP,
+                "shipping_method": Order.SHIPPING_METHOD_STORE_PICKUP,
+                "items": [{"product_id": self.product.id, "quantity": quantity}],
+            }
+        )
+
+    def test_can_buy_more_than_one_unit_of_a_single(self):
+        serializer = self._checkout(2)
+
+        self.assertTrue(serializer.is_valid(), serializer.errors)
+        serializer.save()
+
+        self.product.refresh_from_db()
+        self.assertEqual(self.product.stock_quantity, 1)
+        self.assertTrue(self.product.in_stock)
+
+    def test_cannot_buy_more_than_stock(self):
+        serializer = self._checkout(4)
+
+        self.assertFalse(serializer.is_valid())
+        self.assertIn("3 unidades", str(serializer.errors))
+
+    def test_last_unit_unpublishes_the_product(self):
+        serializer = self._checkout(3)
+
+        self.assertTrue(serializer.is_valid(), serializer.errors)
+        serializer.save()
+
+        self.product.refresh_from_db()
+        self.assertEqual(self.product.stock_quantity, 0)
+        self.assertFalse(self.product.in_stock)

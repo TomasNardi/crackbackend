@@ -24,7 +24,8 @@ from django.core.cache import cache
 from django.core.exceptions import ValidationError as DjangoValidationError
 from django.core.validators import URLValidator
 from django.db import transaction
-from django.db.models import Case, Count, F, IntegerField, Q, Value, When
+from django.db.models import Case, F, IntegerField, Q, Sum, Value, When
+from django.db.models.functions import Coalesce
 from django.http import JsonResponse
 from django.shortcuts import render
 from django.urls import reverse
@@ -104,7 +105,8 @@ def category_kind(name):
     return "other"
 
 
-# El modelo fuerza stock = 1 en estas: cada copia es un producto aparte.
+# Cartas sueltas: la condición es parte de la identidad del producto y el
+# buscador tiene que traer cartas jugables, no sellados.
 UNIQUE_KINDS = {"single", "slab"}
 
 
@@ -158,10 +160,13 @@ def _card_payload(card):
 
 def _attach_loaded_counts(payloads):
     """
-    Agrega a cada fila cuántos productos ya cargaste de esa carta.
+    Agrega a cada fila cuántas unidades de esa carta ya tenés publicadas.
+
+    Suma stock, no publicaciones: desde que las copias van a `stock_quantity`,
+    contar filas diría "ya tenés 1" cuando en realidad tenés tres en la vitrina.
 
     Va en una consulta aparte, sobre los 40 ids que sobrevivieron al límite, en
-    vez de anotarse con Count() en la búsqueda. Anotado obligaba a la base a
+    vez de anotarse con Sum() en la búsqueda. Anotado obligaba a la base a
     joinear productos y agrupar sobre TODOS los matches —cientos o miles de
     filas— para después tirar casi todo al cortar en 40.
     """
@@ -169,9 +174,12 @@ def _attach_loaded_counts(payloads):
         return payloads
 
     counts = dict(
-        Product.objects.filter(catalog_card_id__in=[p["id"] for p in payloads])
+        Product.objects.filter(
+            catalog_card_id__in=[p["id"] for p in payloads], in_stock=True
+        )
         .values_list("catalog_card_id")
-        .annotate(total=Count("id"))
+        # Los productos viejos pueden tener el stock vacío: valen una unidad.
+        .annotate(total=Sum(Coalesce("stock_quantity", Value(1))))
     )
 
     for payload in payloads:
@@ -324,14 +332,15 @@ def _attach_uploads(product, draft_token):
 @transaction.atomic
 def _create_batch(items, condition_by_id):
     """
-    Crea los productos del lote. Devuelve (creados, errores).
+    Crea los productos del lote. Devuelve (publicaciones, unidades, errores).
 
     Cada item trae su propia categoría: en un mismo lote podés mezclar singles,
     un slab certificado y un sellado suelto sin volver a la pantalla.
 
-    Ojo con la cantidad: para Singles y Slabs el modelo fuerza stock = 1
-    (`Product.normalize_stock`), así que cargar 3 copias significa 3 productos
-    distintos. Para el resto de las categorías la cantidad va a stock_quantity.
+    La cantidad siempre va a `stock_quantity`, en todas las categorías: tres
+    copias de la misma carta en el mismo estado son una publicación con stock 3,
+    no tres publicaciones repetidas en la tienda. Si una de esas copias está en
+    otra condición, es otra fila del lote y ahí sí sale otra publicación.
     """
     card_ids = [item["card_id"] for item in items if item["card_id"]]
     cards = {
@@ -345,6 +354,7 @@ def _create_batch(items, condition_by_id):
     tcgs = {t.id: t for t in TCG.objects.all()}
 
     created = 0
+    units = 0
     errors = []
 
     for item in items:
@@ -356,7 +366,6 @@ def _create_batch(items, condition_by_id):
                 continue
 
         category = item["category"]
-        is_unique = category_kind(category.name) in UNIQUE_KINDS
         quantity = item["quantity"]
         base = {
             "catalog_card": card,
@@ -374,22 +383,17 @@ def _create_batch(items, condition_by_id):
             # Vacío deja que `apply_catalog_image_fallback` use la del catálogo.
             "image_url": item["image_url"],
             "in_stock": True,
+            "stock_quantity": quantity,
         }
 
         # `save()` arma el slug y baja la imagen del catálogo, así que no se
         # puede usar bulk_create acá.
-        copies = quantity if is_unique else 1
-        for copy_index in range(copies):
-            product = Product.objects.create(
-                **base, **({} if is_unique else {"stock_quantity": quantity})
-            )
-            # Las fotos propias van solo a la primera copia: son de esa unidad,
-            # no del modelo de carta, y una ProductImage es de un producto solo.
-            if copy_index == 0:
-                _attach_uploads(product, item["draft_token"])
-            created += 1
+        product = Product.objects.create(**base)
+        _attach_uploads(product, item["draft_token"])
+        created += 1
+        units += quantity
 
-    return created, errors
+    return created, units, errors
 
 
 def _queue_image_fetch(card_ids):
@@ -538,7 +542,7 @@ def save_view(request):
         })
 
     try:
-        created, errors = _create_batch(items, condition_by_id)
+        created, units, errors = _create_batch(items, condition_by_id)
     except (CloudinaryValidationError, DjangoValidationError) as exc:
         # `_create_batch` es atómica: si algo se cae, no queda medio lote cargado.
         return JsonResponse({"error": f"No se guardó nada. {exc}"}, status=400)
@@ -549,6 +553,7 @@ def save_view(request):
 
     return JsonResponse({
         "created": created,
+        "units": units,
         "errors": errors,
         "changelist_url": reverse("admin:products_product_changelist"),
     })

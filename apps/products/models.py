@@ -184,7 +184,7 @@ class Product(models.Model):
     # Stock
     stock_quantity = models.PositiveIntegerField(
         "Cantidad en stock", null=True, blank=True,
-        help_text="Dejar vacío si es un producto único (slab, single). Para Singles y Slabs, el sistema fuerza automáticamente stock = 1 si el producto está en stock.",
+        help_text="Unidades disponibles de esta publicación. Si tenés la misma carta repetida en el mismo estado, subí la cantidad acá en vez de cargarla de nuevo. Vacío en Singles y Slabs se toma como 1.",
     )
     in_stock = models.BooleanField("En stock", default=True)
 
@@ -251,12 +251,25 @@ class Product(models.Model):
         return category_name.strip().lower() in UNIQUE_PRODUCT_CATEGORIES
 
     def normalize_stock(self):
-        if self.is_unique_product():
-            self.stock_quantity = 1 if self.in_stock else 0
+        """
+        Mantiene `stock_quantity` e `in_stock` coherentes entre sí.
+
+        Un single o un slab repetido es UNA publicación con stock N, igual que
+        en cualquier e-commerce: tener tres Ampharos NM no son tres avisos, es
+        un aviso con stock 3. Lo que sí abre una publicación aparte es un dato
+        distinto de la carta —otra condición, otra nota de certificación— y eso
+        ya sale solo porque son productos distintos.
+
+        Para singles y slabs la cantidad vacía se completa en 1: son productos
+        que casi siempre entran de a uno y el front usa `stock_quantity` como
+        tope del selector, así que dejarlo en None equivale a stock infinito.
+        """
+        if self.stock_quantity is None:
+            if self.is_unique_product():
+                self.stock_quantity = 1 if self.in_stock else 0
             return
 
-        if self.stock_quantity is not None:
-            self.in_stock = self.stock_quantity > 0
+        self.in_stock = self.stock_quantity > 0
 
     def apply_catalog_image_fallback(self):
         """
