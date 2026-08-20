@@ -275,3 +275,57 @@ class SingleStockTests(TestCase):
         self.product.refresh_from_db()
         self.assertEqual(self.product.stock_quantity, 0)
         self.assertFalse(self.product.in_stock)
+
+
+class MercadoPagoMultiUnitStockTests(TestCase):
+    """
+    Con MP el stock se descuenta recién cuando el pago queda aprobado. Si la
+    orden lleva 2 unidades de un single con stock 3, tiene que quedar en 1 y
+    seguir publicado, no despublicarse con la primera venta.
+    """
+
+    def test_paid_order_discounts_every_unit(self):
+        category = ProductCategory.objects.create(name="Single")
+        product = Product.objects.create(
+            category=category,
+            name="Ampharos NM",
+            price_usd=Decimal("10.00"),
+            in_stock=True,
+            stock_quantity=3,
+        )
+        order = Order.objects.create(
+            customer_name="Cliente MP",
+            customer_email="cliente-mp@test.com",
+            shipping_type=Order.SHIPPING_PICKUP,
+            shipping_method=Order.SHIPPING_METHOD_STORE_PICKUP,
+            payment_method=Order.PAYMENT_MERCADOPAGO,
+            subtotal=Decimal("200.00"),
+            total=Decimal("200.00"),
+            status=Order.STATUS_PENDING,
+            mp_preference_id="pref-multi-1",
+        )
+        OrderItem.objects.create(
+            order=order,
+            product=product,
+            product_name=product.name,
+            unit_price=Decimal("100.00"),
+            quantity=2,
+        )
+
+        order, paid = reconcile_payment(
+            {
+                "id": "payment-multi-1",
+                "external_reference": order.order_code,
+                "status": "approved",
+                "payment_method_id": "visa",
+                "payment_type_id": "credit_card",
+                "transaction_amount": "200.00",
+                "metadata": {"preference_id": "pref-multi-1"},
+            },
+            source="test",
+        )
+
+        self.assertTrue(paid)
+        product.refresh_from_db()
+        self.assertEqual(product.stock_quantity, 1)
+        self.assertTrue(product.in_stock)
