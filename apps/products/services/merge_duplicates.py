@@ -11,7 +11,7 @@ certificación, mismo precio y mismo descuento. La condición y el precio quedan
 adentro de la clave a propósito: dos Ampharos, uno NM y uno LP, son dos
 publicaciones distintas y tienen que seguir separadas.
 
-Lo usan el comando `merge_duplicate_products` y la acción del admin.
+Lo usa el comando `merge_duplicate_products`.
 """
 
 from collections import defaultdict
@@ -86,8 +86,8 @@ def merge_duplicate_products(queryset=None, apply=False):
     """
     Busca duplicados y (si `apply`) los consolida.
 
-    Con `queryset` acotás a los productos tildados en el admin; sin él barre
-    todo el catálogo publicado. Devuelve un reporte para mostrar.
+    Con `queryset` acotás a un subconjunto; sin él barre todo el catálogo
+    publicado. Devuelve un reporte para mostrar.
     """
     from apps.products.models import Product
 

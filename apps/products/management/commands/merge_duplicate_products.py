@@ -4,9 +4,6 @@ Junta publicaciones duplicadas de la misma carta en una sola con stock sumado.
 Por defecto solo informa. Para escribir en la base:
 
     python manage.py merge_duplicate_products --apply
-
-Si no tenés acceso directo a la base, la misma operación está como acción en el
-listado de productos del admin ("Juntar duplicados...").
 """
 
 from django.core.management.base import BaseCommand

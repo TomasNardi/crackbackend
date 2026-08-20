@@ -18,7 +18,6 @@ from .models import (
     ProductImageWebhookEvent,
 )
 from .services.cloudinary_service import CloudinaryValidationError, attach_images_to_product
-from .services.merge_duplicates import merge_duplicate_products
 
 
 @admin.register(TCG)
@@ -64,46 +63,6 @@ class ProductAdmin(ModelAdmin):
     # El stock se edita desde el listado: vendiste una en mano, bajás el número
     # y listo, sin abrir la ficha ni tocar la publicación.
     list_editable = ("stock_quantity", "in_stock", "discount_percent")
-    actions = ("preview_merge_duplicates", "merge_duplicates")
-
-    def _report_merge(self, request, report, applied):
-        """Muestra el resultado de juntar duplicados como mensajes del admin."""
-        if not report["lines"] and not report["skipped"]:
-            self.message_user(
-                request, "No hay publicaciones duplicadas entre las seleccionadas.",
-                messages.INFO,
-            )
-            return
-
-        for line in report["lines"]:
-            self.message_user(request, line, messages.INFO)
-
-        for warning in report["skipped"]:
-            self.message_user(request, warning, messages.WARNING)
-
-        if report["merged"]:
-            verbo = "Consolidadas" if applied else "Se consolidarían"
-            nota = "" if applied else " Nada se guardó: usá la acción sin (simulacro) para aplicarlo."
-            self.message_user(
-                request,
-                f"{verbo} {report['merged']} publicaciones · "
-                f"{report['removed']} duplicados eliminados.{nota}",
-                messages.SUCCESS if applied else messages.INFO,
-            )
-
-    @admin.action(description="Juntar duplicados (simulacro, no toca nada)")
-    def preview_merge_duplicates(self, request, queryset):
-        self._report_merge(request, merge_duplicate_products(queryset), applied=False)
-
-    @admin.action(description="Juntar duplicados en una publicación con stock")
-    def merge_duplicates(self, request, queryset):
-        # Borra productos: se pide el mismo permiso que para borrarlos a mano.
-        if not request.user.has_perm("products.delete_product"):
-            raise PermissionDenied
-
-        self._report_merge(
-            request, merge_duplicate_products(queryset, apply=True), applied=True
-        )
 
     def price_ars_display(self, obj):
         if not obj.pk or not obj.price_usd:
