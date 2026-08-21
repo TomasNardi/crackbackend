@@ -87,7 +87,7 @@ class ProductViewSet(viewsets.ModelViewSet):
       ?category=slab
       ?condition=NM
       ?certification_entity=PSA
-      ?min_price=10&max_price=500
+      ?min_price=10000&max_price=500000  (en ARS, precio final con descuento)
       ?in_stock=true
       ?has_discount=true
 
