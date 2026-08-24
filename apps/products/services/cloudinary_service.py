@@ -3,11 +3,13 @@ import hmac
 import json
 import re
 import time
+import uuid
 from dataclasses import dataclass
 from datetime import timedelta
 
 import requests
 from django.conf import settings
+from django.db import transaction
 from django.utils import timezone
 from django.db.models import Q
 
@@ -229,19 +231,36 @@ def attach_images_to_product(*, product, draft_token: str, ordered_image_ids: li
     if len(selected_by_id) != len(ordered_image_ids):
         raise CloudinaryValidationError("Hay imágenes inválidas en el payload.")
 
-    attached = []
-    for index, image_id in enumerate(ordered_image_ids):
-        image = selected_by_id[image_id]
-        image.product = product
-        image.draft_token = ""
-        image.order_index = index
-        if image.status == ProductImage.STATUS_PENDING:
-            image.status = ProductImage.STATUS_UPLOADED
-        image.save(update_fields=["product", "draft_token", "order_index", "status"])
-        attached.append(image)
+    # El orden se reescribe entero, no fila por fila sobre el orden viejo. Hay
+    # un único (product, order_index): si a una imagen nueva le toca el slot 0
+    # mientras la vieja todavía lo ocupa, Postgres corta con IntegrityError.
+    parking_token = f"reorder-{uuid.uuid4().hex}"
 
-    ProductImage.objects.filter(product=product).exclude(id__in=ordered_image_ids).delete()
-    product.sync_legacy_images_from_gallery(save=True)
+    with transaction.atomic():
+        # Primero se van las que sacaste de la galería: si quedaran, seguirían
+        # ocupando su slot durante el reordenamiento.
+        ProductImage.objects.filter(product=product).exclude(id__in=ordered_image_ids).delete()
+
+        # Las que siguen se despegan del producto un momento. El único solo mira
+        # las filas con producto, así que con las tres estacionadas los tres
+        # slots quedan libres y cualquier orden nuevo entra sin chocar.
+        ProductImage.objects.filter(id__in=ordered_image_ids).update(
+            product=None, draft_token=parking_token
+        )
+
+        attached = []
+        for index, image_id in enumerate(ordered_image_ids):
+            image = selected_by_id[image_id]
+            image.product = product
+            image.draft_token = ""
+            image.order_index = index
+            if image.status == ProductImage.STATUS_PENDING:
+                image.status = ProductImage.STATUS_UPLOADED
+            image.save(update_fields=["product", "draft_token", "order_index", "status"])
+            attached.append(image)
+
+        product.sync_legacy_images_from_gallery(save=True)
+
     return attached
 
 

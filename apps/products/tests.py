@@ -1,3 +1,4 @@
+import json
 from decimal import Decimal
 from io import StringIO
 from types import SimpleNamespace
@@ -77,6 +78,63 @@ class ProductAdminImagePayloadTests(TestCase):
             draft_token="draft-123",
             ordered_image_ids=[self.image.id],
         )
+
+    def _draft(self, url, draft_token="draft-123"):
+        """Una imagen recién cargada por URL: todavía sin producto."""
+        return ProductImage.objects.create(
+            secure_url=url,
+            source=ProductImage.SOURCE_URL,
+            order_index=0,
+            status=ProductImage.STATUS_UPLOADED,
+            draft_token=draft_token,
+        )
+
+    def _save_with_payload(self, image_ids, draft_token="draft-123"):
+        form = SimpleNamespace(
+            cleaned_data={
+                "images_payload": json.dumps([{"id": image_id} for image_id in image_ids]),
+                "cloudinary_draft_token": draft_token,
+            }
+        )
+        self.admin.save_model(self.request, self.product, form, change=True)
+
+    def test_new_urls_replace_existing_gallery_without_slot_clash(self):
+        """
+        El caso que rompía: se agregan URLs nuevas y la vieja ya no está en la
+        galería. La vieja tiene que salir antes de que otra tome su slot 0.
+        """
+        first = self._draft("https://cdn.example.com/nueva-1.jpg")
+        second = self._draft("https://cdn.example.com/nueva-2.jpg")
+
+        self._save_with_payload([first.id, second.id])
+
+        self.assertFalse(ProductImage.objects.filter(pk=self.image.pk).exists())
+        self.assertEqual(
+            list(
+                ProductImage.objects.filter(product=self.product)
+                .order_by("order_index")
+                .values_list("id", "order_index")
+            ),
+            [(first.id, 0), (second.id, 1)],
+        )
+
+    def test_new_url_can_take_the_first_slot(self):
+        """Reordenar poniendo una imagen nueva adelante no choca con la vieja."""
+        nueva = self._draft("https://cdn.example.com/nueva-1.jpg")
+
+        self._save_with_payload([nueva.id, self.image.id])
+
+        self.assertEqual(
+            list(
+                ProductImage.objects.filter(product=self.product)
+                .order_by("order_index")
+                .values_list("id", "order_index")
+            ),
+            [(nueva.id, 0), (self.image.id, 1)],
+        )
+        self.product.refresh_from_db()
+        self.assertEqual(self.product.image_url, "https://cdn.example.com/nueva-1.jpg")
+        self.assertEqual(self.product.image_url_2, "https://cdn.example.com/gallery.jpg")
 
 
 class MergeDuplicateProductsCommandTests(TestCase):
