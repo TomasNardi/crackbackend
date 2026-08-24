@@ -337,6 +337,24 @@ class Product(models.Model):
     def get_ordered_images(self):
         return list(self.images.order_by("order_index", "id")[:3])
 
+    def legacy_image_urls(self):
+        """
+        Las imágenes que el producto muestra hoy vía `image_url*`.
+
+        Un producto cargado desde el catálogo no tiene ninguna `ProductImage`:
+        su imagen es la de la carta, que `apply_catalog_image_fallback` copió a
+        `image_url`. Lo mismo pasa con lo cargado a mano antes de que existiera
+        la galería. El formulario las usa para arrancar mostrando lo que ya hay,
+        en vez de una galería vacía que la primera foto nueva termina pisando.
+        """
+        seen = set()
+        urls = []
+        for url in (self.image_url, self.image_url_2, self.image_url_3):
+            if url and url not in seen:
+                seen.add(url)
+                urls.append(url)
+        return urls
+
     def sync_legacy_images_from_gallery(self, save=True):
         ordered = self.get_ordered_images()
         urls = [img.secure_url for img in ordered]

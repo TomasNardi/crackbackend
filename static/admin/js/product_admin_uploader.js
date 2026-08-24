@@ -197,7 +197,10 @@
     });
   }
 
-  function setUploadingCardAt(index, file) {
+  // La tarjeta nueva se INSERTA, no reemplaza a la que está en ese índice.
+  // Antes pisaba: "Reemplazar" borra primero la vieja, así que para cuando se
+  // subía la nueva ese índice ya lo ocupaba la imagen siguiente, que se perdía.
+  function insertUploadingCardAt(index, file) {
     const card = {
       id: null,
       secure_url: URL.createObjectURL(file),
@@ -207,27 +210,22 @@
       progress: 0,
       _localPreview: true
     };
-    if (index >= state.images.length) {
-      state.images.push(card);
-    } else {
-      const replaced = state.images[index];
-      if (replaced && replaced._localPreview) {
-        URL.revokeObjectURL(replaced.secure_url);
-      }
-      state.images[index] = card;
-    }
+    const at = Math.max(0, Math.min(index, state.images.length));
+    state.images.splice(at, 0, card);
     return card;
   }
 
-  async function uploadFile(file, replaceIndex) {
+  async function uploadFile(file, insertIndex) {
     validateFile(file);
 
-    if (replaceIndex == null && state.images.length >= MAX_IMAGES) {
+    if (state.images.length >= MAX_IMAGES) {
       throw new Error('Máximo 3 imágenes por producto.');
     }
 
-    const targetIndex = replaceIndex == null ? state.images.length : replaceIndex;
-    const localCard = setUploadingCardAt(targetIndex, file);
+    const targetIndex = insertIndex == null
+      ? state.images.length
+      : Math.min(insertIndex, state.images.length);
+    const localCard = insertUploadingCardAt(targetIndex, file);
     renderGallery();
 
     const cloudinaryData = await uploadToCloudinary(file, targetIndex, function (progress) {
@@ -251,7 +249,12 @@
       URL.revokeObjectURL(localCard.secure_url);
     }
 
-    state.images[targetIndex] = {
+    // Por identidad y no por índice: si mientras subía se agregó o se sacó otra
+    // imagen, el índice de arranque ya no es el suyo.
+    const finalIndex = state.images.indexOf(localCard);
+    if (finalIndex === -1) return;
+
+    state.images[finalIndex] = {
       id: registered.id,
       secure_url: registered.secure_url,
       public_id: registered.public_id,
@@ -324,6 +327,14 @@
     renderGallery();
   }
 
+  // Las que vienen sin id son la imagen que el producto ya mostraba (la del
+  // catálogo, o una URL vieja) y todavía no son una fila de la galería: se
+  // marcan distinto para que se entienda que están y que se pueden sacar.
+  function imageLabel(img) {
+    if (!img.id) return 'Imagen actual';
+    return img.source === 'url' ? 'URL' : 'Cloudinary';
+  }
+
   function renderGallery() {
     const grid = document.querySelector('.product-uploader-grid');
     const counter = document.querySelector('.product-uploader-counter');
@@ -342,7 +353,7 @@
         </div>
         <div class="product-image-meta">
           <strong>#${index + 1}</strong>
-          <small>${img.source === 'url' ? 'URL' : 'Cloudinary'}</small>
+          <small>${imageLabel(img)}</small>
         </div>
         <div class="product-image-actions">
           <button type="button" class="replace-image-btn" data-index="${index}">Reemplazar</button>

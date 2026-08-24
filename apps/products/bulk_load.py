@@ -41,7 +41,11 @@ from .models import (
     ProductCategory,
     ProductImage,
 )
-from .services.cloudinary_service import CloudinaryValidationError, attach_images_to_product
+from .services.cloudinary_service import (
+    MAX_PRODUCT_IMAGES,
+    CloudinaryValidationError,
+    sync_product_gallery,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -301,12 +305,16 @@ def _resolve_name(card):
     return f"{label} — {card.card_set.name}"[:255]
 
 
-def _attach_uploads(product, draft_token):
+def _attach_uploads(product, draft_token, manual_url=""):
     """
-    EnganCha al producto las fotos que se subieron a Cloudinary para esa fila.
+    Engancha al producto las fotos que se subieron a Cloudinary para esa fila.
 
     El uploader ya dejó las `ProductImage` colgadas del draft_token; acá solo se
     las pasa al producto recién creado, en el orden en que quedaron.
+
+    La URL manual de la fila entra a la galería detrás de las fotos. Si no,
+    quedaba afuera: el sync reescribe `image_url` con lo que hay en la galería,
+    así que cargar una URL y además sacar una foto se comía la URL.
     """
     if not draft_token:
         return
@@ -314,13 +322,16 @@ def _attach_uploads(product, draft_token):
     pending = ProductImage.objects.filter(
         draft_token=draft_token, product__isnull=True
     ).order_by("order_index", "id")
-    image_ids = list(pending.values_list("id", flat=True))
-    if not image_ids:
+    items = [{"id": image_id} for image_id in pending.values_list("id", flat=True)]
+    if not items:
         return
 
+    if manual_url and len(items) < MAX_PRODUCT_IMAGES:
+        items.append({"id": None, "secure_url": manual_url, "source": ProductImage.SOURCE_URL})
+
     try:
-        attach_images_to_product(
-            product=product, draft_token=draft_token, ordered_image_ids=image_ids
+        sync_product_gallery(
+            product=product, draft_token=draft_token, items=items, admin_context=True
         )
     except CloudinaryValidationError as exc:
         # El producto ya está guardado: perder la foto es malo, perder la carga
@@ -389,7 +400,7 @@ def _create_batch(items, condition_by_id):
         # `save()` arma el slug y baja la imagen del catálogo, así que no se
         # puede usar bulk_create acá.
         product = Product.objects.create(**base)
-        _attach_uploads(product, item["draft_token"])
+        _attach_uploads(product, item["draft_token"], item["image_url"])
         created += 1
         units += quantity
 

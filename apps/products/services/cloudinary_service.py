@@ -210,25 +210,48 @@ def create_pending_image(*, draft_token: str, secure_url: str, order_index: int,
     )
 
 
-def attach_images_to_product(*, product, draft_token: str, ordered_image_ids: list[int]) -> list[ProductImage]:
-    # Protección: Solo permitir ejecución desde el admin
-    import inspect
-    stack = inspect.stack()
-    allowed_callers = ["save_model", "ProductAdmin"]
-    if not any(caller.function in allowed_callers for caller in stack):
+def sync_product_gallery(
+    *, product, draft_token: str, items: list[dict], admin_context: bool = False
+) -> list[ProductImage]:
+    """
+    Deja la galería del producto exactamente como viene en `items`.
+
+    Cada item es `{"id": int|None, "secure_url": str, "public_id": str, "source": str}`:
+
+      - con `id` → una fila que ya existe, sea de este producto o recién subida
+        contra el `draft_token`. Se reordena, no se toca.
+      - sin `id` → una URL que el producto ya mostraba pero que vive fuera de la
+        galería: la imagen del catálogo que puso `apply_catalog_image_fallback`,
+        o un `image_url` cargado a mano antes de que existiera `ProductImage`.
+        Se materializa acá.
+
+    Esa segunda rama es la que faltaba. La galería se armaba solo con las filas
+    de `ProductImage`, así que un producto cargado desde el catálogo entraba al
+    formulario con la galería vacía: subir una foto no sumaba a la imagen que ya
+    tenía, la reemplazaba, porque al final `sync_legacy_images_from_gallery`
+    reescribe `image_url` con lo que haya en la galería y ahí solo estaba la
+    foto nueva.
+
+    `admin_context` reemplaza al guard que miraba el stack con `inspect`: pedía
+    que el llamador se llamara `save_model`, así que la carga de stock —que
+    engancha las fotos desde `save_view`— nunca pasaba y se caía el lote entero.
+    """
+    if not admin_context:
         raise CloudinaryValidationError("Las imágenes solo pueden modificarse desde el panel admin.")
 
-    if len(ordered_image_ids) > MAX_PRODUCT_IMAGES:
+    if len(items) > MAX_PRODUCT_IMAGES:
         raise CloudinaryValidationError("Máximo 3 imágenes por producto.")
 
-    selected_images = list(
-        ProductImage.objects.filter(id__in=ordered_image_ids).filter(
+    existing_ids = [int(item["id"]) for item in items if item.get("id")]
+
+    selected_by_id = {
+        img.id: img
+        for img in ProductImage.objects.filter(id__in=existing_ids).filter(
             Q(product=product) | Q(product__isnull=True, draft_token=draft_token)
         )
-    )
-    selected_by_id = {img.id: img for img in selected_images}
+    }
 
-    if len(selected_by_id) != len(ordered_image_ids):
+    if len(selected_by_id) != len(set(existing_ids)):
         raise CloudinaryValidationError("Hay imágenes inválidas en el payload.")
 
     # El orden se reescribe entero, no fila por fila sobre el orden viejo. Hay
@@ -237,20 +260,51 @@ def attach_images_to_product(*, product, draft_token: str, ordered_image_ids: li
     parking_token = f"reorder-{uuid.uuid4().hex}"
 
     with transaction.atomic():
+        # Las filas nuevas nacen estacionadas igual que las que ya existían: el
+        # único solo mira las filas con producto, así que mientras están sin
+        # producto pueden compartir el order_index sin chocar.
+        ordered = []
+        for item in items:
+            image_id = item.get("id")
+            if image_id:
+                ordered.append(selected_by_id[int(image_id)])
+                continue
+
+            url = (item.get("secure_url") or "").strip()
+            if not url:
+                raise CloudinaryValidationError("Hay imágenes sin URL en el payload.")
+
+            source = item.get("source") or ProductImage.SOURCE_URL
+            if source not in {ProductImage.SOURCE_CLOUDINARY, ProductImage.SOURCE_URL}:
+                source = ProductImage.SOURCE_URL
+
+            ordered.append(
+                ProductImage.objects.create(
+                    draft_token=parking_token,
+                    secure_url=url,
+                    public_id=(item.get("public_id") or "")[:255],
+                    source=source,
+                    status=ProductImage.STATUS_UPLOADED,
+                    order_index=0,
+                    # Marca de dónde salió: no se subió ahora, ya era la imagen
+                    # del producto y solo se está pasando en limpio a la galería.
+                    metadata={"adopted_from": "product_image_url"},
+                )
+            )
+
+        keep_ids = [image.id for image in ordered]
+
         # Primero se van las que sacaste de la galería: si quedaran, seguirían
         # ocupando su slot durante el reordenamiento.
-        ProductImage.objects.filter(product=product).exclude(id__in=ordered_image_ids).delete()
+        ProductImage.objects.filter(product=product).exclude(id__in=keep_ids).delete()
 
-        # Las que siguen se despegan del producto un momento. El único solo mira
-        # las filas con producto, así que con las tres estacionadas los tres
-        # slots quedan libres y cualquier orden nuevo entra sin chocar.
-        ProductImage.objects.filter(id__in=ordered_image_ids).update(
+        # Las que siguen se despegan del producto un momento, por lo mismo.
+        ProductImage.objects.filter(id__in=keep_ids).update(
             product=None, draft_token=parking_token
         )
 
         attached = []
-        for index, image_id in enumerate(ordered_image_ids):
-            image = selected_by_id[image_id]
+        for index, image in enumerate(ordered):
             image.product = product
             image.draft_token = ""
             image.order_index = index

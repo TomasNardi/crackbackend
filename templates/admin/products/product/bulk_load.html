@@ -1169,10 +1169,15 @@
       if (!sigRes.ok) throw new Error((await sigRes.json()).detail || "no se pudo firmar la subida");
       const sig = await sigRes.json();
 
+      // Los campos van planos, tal como los firma el backend: cualquier campo
+      // firmado que falte o sobre le da otra firma a Cloudinary y rechaza.
       const form = new FormData();
       form.append("file", file);
-      Object.entries(sig.params || {}).forEach(([k, v]) => form.append(k, v));
       form.append("api_key", sig.api_key);
+      form.append("timestamp", sig.timestamp);
+      form.append("upload_preset", sig.upload_preset);
+      form.append("context", sig.context);
+      form.append("notification_url", sig.notification_url);
       form.append("signature", sig.signature);
 
       const upRes = await fetch(sig.upload_url, { method: "POST", body: form });

@@ -39,8 +39,9 @@ class ProductAdminImagePayloadTests(TestCase):
             draft_token="seed",
         )
 
-    @patch("apps.products.admin.attach_images_to_product")
-    def test_save_model_skips_sync_when_payload_field_absent(self, mock_attach):
+    @patch("apps.products.admin.sync_product_gallery")
+    def test_save_model_skips_sync_when_payload_field_absent(self, mock_sync):
+        """Guardar el stock desde el listado no pasa por el uploader."""
         form = SimpleNamespace(cleaned_data={"in_stock": False})
 
         self.product.in_stock = False
@@ -49,21 +50,23 @@ class ProductAdminImagePayloadTests(TestCase):
         self.product.refresh_from_db()
         self.assertEqual(self.product.image_url, "https://cdn.example.com/main.jpg")
         self.assertTrue(ProductImage.objects.filter(pk=self.image.pk).exists())
-        mock_attach.assert_not_called()
+        mock_sync.assert_not_called()
 
-    @patch("apps.products.admin.attach_images_to_product")
-    def test_save_model_skips_sync_when_payload_empty(self, mock_attach):
+    def test_save_model_empty_payload_clears_the_gallery(self):
+        """
+        El formulario arranca con lo que el producto ya tenía, así que un
+        payload vacío es "las saqué a todas", no un descuido.
+        """
         form = SimpleNamespace(cleaned_data={"images_payload": "[]", "cloudinary_draft_token": ""})
 
         self.admin.save_model(self.request, self.product, form, change=True)
 
         self.product.refresh_from_db()
-        self.assertEqual(self.product.image_url, "https://cdn.example.com/main.jpg")
-        self.assertTrue(ProductImage.objects.filter(pk=self.image.pk).exists())
-        mock_attach.assert_not_called()
+        self.assertFalse(ProductImage.objects.filter(pk=self.image.pk).exists())
+        self.assertEqual(self.product.image_url, "")
 
-    @patch("apps.products.admin.attach_images_to_product")
-    def test_save_model_syncs_when_payload_has_ids(self, mock_attach):
+    @patch("apps.products.admin.sync_product_gallery")
+    def test_save_model_syncs_when_payload_has_ids(self, mock_sync):
         form = SimpleNamespace(
             cleaned_data={
                 "images_payload": f"[{{\"id\": {self.image.id}}}]",
@@ -73,10 +76,11 @@ class ProductAdminImagePayloadTests(TestCase):
 
         self.admin.save_model(self.request, self.product, form, change=True)
 
-        mock_attach.assert_called_once_with(
+        mock_sync.assert_called_once_with(
             product=self.product,
             draft_token="draft-123",
-            ordered_image_ids=[self.image.id],
+            items=[{"id": self.image.id}],
+            admin_context=True,
         )
 
     def _draft(self, url, draft_token="draft-123"):
@@ -90,9 +94,14 @@ class ProductAdminImagePayloadTests(TestCase):
         )
 
     def _save_with_payload(self, image_ids, draft_token="draft-123"):
+        return self._save_with_items(
+            [{"id": image_id} for image_id in image_ids], draft_token=draft_token
+        )
+
+    def _save_with_items(self, items, draft_token="draft-123"):
         form = SimpleNamespace(
             cleaned_data={
-                "images_payload": json.dumps([{"id": image_id} for image_id in image_ids]),
+                "images_payload": json.dumps(items),
                 "cloudinary_draft_token": draft_token,
             }
         )
@@ -135,6 +144,80 @@ class ProductAdminImagePayloadTests(TestCase):
         self.product.refresh_from_db()
         self.assertEqual(self.product.image_url, "https://cdn.example.com/nueva-1.jpg")
         self.assertEqual(self.product.image_url_2, "https://cdn.example.com/gallery.jpg")
+
+    def test_new_photo_is_added_next_to_the_image_the_product_already_had(self):
+        """
+        El caso del reclamo: la imagen que el producto ya mostraba no es una fila
+        de la galería (viene del catálogo), así que subir una foto la pisaba.
+        Ahora entra al payload sin id, se materializa, y quedan las dos.
+        """
+        catalog_only = Product.objects.create(
+            category=self.category,
+            name="Carta del catálogo",
+            price_usd="10.00",
+            in_stock=True,
+            stock_quantity=1,
+            image_url="https://r2.example.com/catalogo.webp",
+        )
+        nueva = self._draft("https://res.cloudinary.com/demo/foto-propia.jpg")
+
+        form = SimpleNamespace(
+            cleaned_data={
+                "images_payload": json.dumps([
+                    {"id": None, "secure_url": "https://r2.example.com/catalogo.webp", "source": "url"},
+                    {"id": nueva.id},
+                ]),
+                "cloudinary_draft_token": "draft-123",
+            }
+        )
+        self.admin.save_model(self.request, catalog_only, form, change=True)
+
+        catalog_only.refresh_from_db()
+        self.assertEqual(
+            [img.secure_url for img in catalog_only.get_ordered_images()],
+            ["https://r2.example.com/catalogo.webp", "https://res.cloudinary.com/demo/foto-propia.jpg"],
+        )
+        self.assertEqual(catalog_only.image_url, "https://r2.example.com/catalogo.webp")
+        self.assertEqual(catalog_only.image_url_2, "https://res.cloudinary.com/demo/foto-propia.jpg")
+
+    def test_form_seeds_the_gallery_with_the_urls_the_product_already_shows(self):
+        """El formulario tiene que mostrar la imagen actual, no arrancar vacío."""
+        from apps.products.forms import ProductAdminForm
+
+        payload = json.loads(ProductAdminForm(instance=self.product).initial_payload())
+
+        self.assertEqual(
+            [(item["id"], item["secure_url"]) for item in payload],
+            [
+                (self.image.id, "https://cdn.example.com/gallery.jpg"),
+                (None, "https://cdn.example.com/main.jpg"),
+                (None, "https://cdn.example.com/second.jpg"),
+            ],
+        )
+
+    def test_removing_the_only_image_leaves_the_product_without_photos(self):
+        self._save_with_items([])
+
+        self.product.refresh_from_db()
+        self.assertEqual(self.product.get_ordered_images(), [])
+        self.assertEqual(self.product.image_url, "")
+
+    def test_payload_without_id_and_without_url_is_rejected(self):
+        from apps.products.forms import ProductAdminForm
+
+        form = ProductAdminForm(
+            data={
+                "category": self.category.pk,
+                "name": "Producto Test",
+                "price_usd": "10.00",
+                "discount_percent": 0,
+                "images_payload": json.dumps([{"id": None, "secure_url": ""}]),
+            },
+            instance=self.product,
+        )
+
+        self.assertFalse(form.is_valid())
+        self.assertIn("images_payload", form.errors)
 
 
 class MergeDuplicateProductsCommandTests(TestCase):

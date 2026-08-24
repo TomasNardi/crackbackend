@@ -18,7 +18,7 @@ from .models import (
     ProductImage,
     ProductImageWebhookEvent,
 )
-from .services.cloudinary_service import CloudinaryValidationError, attach_images_to_product
+from .services.cloudinary_service import CloudinaryValidationError, sync_product_gallery
 
 
 @admin.register(TCG)
@@ -157,21 +157,26 @@ class ProductAdmin(ModelAdmin):
         super().save_model(request, obj, form, change)
 
         cleaned_data = getattr(form, "cleaned_data", {}) or {}
+        # Sin el campo no hubo uploader en juego: guardar el stock desde el
+        # listado no tiene por qué tocar la galería.
         if "images_payload" not in cleaned_data:
             return
 
         raw_payload = cleaned_data.get("images_payload")
-        if not raw_payload:
+        if raw_payload is None:
             return
 
         draft_token = cleaned_data.get("cloudinary_draft_token") or ""
 
         try:
-            payload = json.loads(raw_payload)
-            image_ids = [int(item["id"]) for item in payload if isinstance(item, dict) and item.get("id")]
-            if not image_ids:
-                return
-            attach_images_to_product(product=obj, draft_token=draft_token, ordered_image_ids=image_ids)
+            payload = json.loads(raw_payload or "[]")
+            items = [item for item in payload if isinstance(item, dict)]
+            # La lista vacía es una orden, no un descuido: el formulario arranca
+            # con las imágenes que el producto ya tenía —galería y image_url—,
+            # así que solo llega vacía si las sacaste todas a mano.
+            sync_product_gallery(
+                product=obj, draft_token=draft_token, items=items, admin_context=True
+            )
         except (ValueError, json.JSONDecodeError, CloudinaryValidationError) as exc:
             self.message_user(request, f"No se pudieron sincronizar las imágenes: {exc}", level=messages.ERROR)
 
