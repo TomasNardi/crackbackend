@@ -1,0 +1,162 @@
+{% load i18n %}<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Rechazar pedido {{ order.order_code }}</title>
+  <style>
+    :root {
+      --bg: #f5f1e8;
+      --card: #ffffff;
+      --text: #1f2937;
+      --muted: #6b7280;
+      --border: #e5e7eb;
+      --primary: #c8972e;
+      --danger: #d73a49;
+      --danger-strong: #b02a37;
+    }
+
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      min-height: 100vh;
+      font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+      color: var(--text);
+      background:
+        radial-gradient(circle at top right, rgba(200, 151, 46, 0.16), transparent 45%),
+        linear-gradient(180deg, #f9f7f2 0%, var(--bg) 100%);
+      padding: 22px;
+    }
+
+    .wrap {
+      max-width: 580px;
+      margin: 0 auto;
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      padding: 24px;
+      box-shadow: 0 12px 36px rgba(17, 24, 39, 0.09);
+    }
+
+    h1 {
+      margin: 0 0 4px;
+      font-size: 20px;
+      letter-spacing: -0.2px;
+    }
+
+    .code {
+      color: var(--primary);
+      font-weight: 700;
+    }
+
+    .lead {
+      margin: 0 0 18px;
+      color: var(--muted);
+      font-size: 13px;
+      line-height: 1.6;
+    }
+
+    .summary {
+      background: #faf8f3;
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 12px 14px;
+      margin-bottom: 18px;
+      font-size: 13px;
+      line-height: 1.7;
+    }
+
+    .summary strong { color: #111827; }
+
+    label {
+      display: block;
+      font-size: 13px;
+      font-weight: 600;
+      margin-bottom: 6px;
+    }
+
+    textarea {
+      width: 100%;
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 10px 12px;
+      font-family: inherit;
+      font-size: 13px;
+      line-height: 1.6;
+      resize: vertical;
+      min-height: 120px;
+    }
+
+    textarea:focus {
+      outline: none;
+      border-color: var(--primary);
+      box-shadow: 0 0 0 3px rgba(200, 151, 46, 0.18);
+    }
+
+    .help {
+      color: var(--muted);
+      font-size: 12px;
+      margin-top: 6px;
+    }
+
+    .actions {
+      display: flex;
+      gap: 10px;
+      margin-top: 20px;
+    }
+
+    button, .cancel {
+      border: none;
+      border-radius: 10px;
+      padding: 11px 18px;
+      font-size: 13px;
+      font-weight: 700;
+      cursor: pointer;
+      text-decoration: none;
+      display: inline-block;
+      font-family: inherit;
+    }
+
+    button {
+      background: var(--danger);
+      color: #fff;
+    }
+
+    button:hover { background: var(--danger-strong); }
+
+    .cancel {
+      background: #f3f4f6;
+      color: var(--text);
+      border: 1px solid var(--border);
+    }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <h1>Rechazar pedido <span class="code">{{ order.order_code }}</span></h1>
+    <p class="lead">
+      El cliente recibe un email avisando que el pedido no se pudo concretar.
+      Si escribís un mensaje, se incluye en ese email tal cual lo redactes.
+    </p>
+
+    <div class="summary">
+      <div><strong>Cliente:</strong> {{ order.customer_name }} &middot; {{ order.customer_email }}</div>
+      <div><strong>Total:</strong> US$ {{ order.total|floatformat:2 }}</div>
+      <div><strong>Publicaciones:</strong> {{ order.items.count }}</div>
+    </div>
+
+    <form method="post">
+      {% csrf_token %}
+      <label for="id_rejection_message">Mensaje para el cliente</label>
+      <textarea name="rejection_message" id="id_rejection_message"
+                placeholder="Ej: La publicación se agotó antes de que pudiéramos comprarla. Escribinos y te buscamos una alternativa."></textarea>
+      <div class="help">Opcional. Si lo dejás vacío, el email avisa el rechazo sin dar detalles.</div>
+
+      <div class="actions">
+        <button type="submit">Rechazar y enviar email</button>
+        <a class="cancel" href="{% url 'admin:ebay_ebayorder_changelist' %}">Cancelar</a>
+      </div>
+    </form>
+  </div>
+</body>
+</html>

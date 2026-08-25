@@ -70,6 +70,7 @@ LOCAL_APPS = [
     "apps.products",
     "apps.catalog",
     "apps.orders",
+    "apps.ebay",
     "apps.users",
 ]
 
@@ -373,6 +374,22 @@ MERCADOPAGO_FRONTEND_RETURN_URL = os.environ.get(
 BACKEND_PUBLIC_URL = os.environ.get("BACKEND_PUBLIC_URL", "http://localhost:8000")
 
 # ---------------------------------------------------------------------------
+# eBay Browse API — calculadora de importación
+# ---------------------------------------------------------------------------
+# Credenciales del keyset de developer.ebay.com (App ID / Cert ID). Los
+# parámetros de negocio —comisión, tax, envíos, ZIP del courier— NO van acá:
+# viven en el admin (Configuración → Importación eBay) para que el owner los
+# cambie sin deploy.
+EBAY_CLIENT_ID = os.environ.get("EBAY_CLIENT_ID", "")
+EBAY_CLIENT_SECRET = os.environ.get("EBAY_CLIENT_SECRET", "")
+EBAY_ENV = os.environ.get("EBAY_ENV", "production")  # production | sandbox
+
+# Con EBAY_MOCK=true la cotización responde con datos de ejemplo en vez de
+# llamar a eBay. Sin credenciales cargadas se activa solo, así que el flujo
+# completo se puede desarrollar y probar antes de tener el keyset.
+EBAY_MOCK = os.environ.get("EBAY_MOCK", "false").lower() == "true"
+
+# ---------------------------------------------------------------------------
 # Cloudinary
 # ---------------------------------------------------------------------------
 CLOUDINARY_CLOUD_NAME = os.environ.get("CLOUDINARY_CLOUD_NAME", "")
@@ -625,6 +642,25 @@ UNFOLD = {
                 ],
             },
             {
+                "title": "Importación eBay",
+                "separator": True,
+                "collapsible": False,
+                "items": [
+                    {
+                        "title": "Pedidos eBay",
+                        "icon": "local_mall",
+                        "link": "/admin/ebay/ebayorder/",
+                        "permission": admin_has_perm("ebay.view_ebayorder"),
+                    },
+                    {
+                        "title": "Configuración eBay",
+                        "icon": "tune",
+                        "link": "/admin/ebay/ebayconfig/",
+                        "permission": admin_has_perm("ebay.view_ebayconfig"),
+                    },
+                ],
+            },
+            {
                 "title": "Mail",
                 "separator": True,
                 "collapsible": False,
@@ -765,6 +801,11 @@ LOGGING = {
         "apps.orders": {
             "handlers": ["console"],
             "level": "INFO",
+            "propagate": False,
+        },
+        "apps.ebay": {
+            "handlers": ["console"],
+            "level": "INFO",      # Cotizaciones, pedidos frenados y errores de la Browse API
             "propagate": False,
         },
     },

@@ -1,0 +1,185 @@
+{% comment %}
+Base de los emails de importación eBay.
+
+Mismo diseño que los emails de la tienda (fondo #111, dorado #C8972E, logo,
+títulos en Georgia), pero con el cuerpo en bloques: los seis emails del flujo
+comparten header, resumen del pedido y footer, y solo cambian el hero, el
+recuadro de aviso y el CTA.
+
+Todo el layout va en tablas con estilos inline porque los clientes de correo
+no soportan flexbox ni hojas de estilo externas.
+{% endcomment %}<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml" lang="es" xml:lang="es">
+<head>
+  <meta http-equiv="Content-Type" content="text/html; charset=UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="x-apple-disable-message-reformatting" />
+  <title>{% block subject %}Pedido {{ order.order_code }}{% endblock %} — CRACK TCG</title>
+</head>
+<body style="margin:0;padding:0;background-color:#111111;-webkit-text-size-adjust:100%;-ms-text-size-adjust:100%;">
+
+  <!-- Preheader -->
+  <div style="display:none;max-height:0;overflow:hidden;mso-hide:all;">
+    {% block preheader %}Novedades sobre tu pedido de importación {{ order.order_code }}.{% endblock %}
+    &nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;
+  </div>
+
+  <table border="0" cellpadding="0" cellspacing="0" width="100%" style="background-color:#111111;">
+    <tr>
+      <td align="center" style="padding:40px 16px;">
+
+        <table border="0" cellpadding="0" cellspacing="0" width="600" style="max-width:600px;">
+
+          <!-- ══ HEADER ══ -->
+          <tr>
+            <td align="center" style="background-color:#0d0d0d;padding:32px 48px 28px;border-radius:12px 12px 0 0;border-bottom:1px solid #2a2a2a;">
+              <img src="{{ brand_image_url }}" alt="CRACK TCG" width="170" style="display:block;width:170px;max-width:170px;height:auto;border:0;outline:none;text-decoration:none;margin:0 auto;" />
+              <p style="margin:10px 0 0;font-family:Arial,sans-serif;font-size:10px;letter-spacing:2px;color:#6f6f6f;text-transform:uppercase;">{% block eyebrow %}Importación desde eBay{% endblock %}</p>
+            </td>
+          </tr>
+
+          <!-- ══ HERO ══ -->
+          <tr>
+            <td align="center" style="background-color:#161616;padding:48px 48px 40px;">
+              <table border="0" cellpadding="0" cellspacing="0">
+                <tr>
+                  <td align="center" style="width:72px;height:72px;background-color:{% block icon_bg %}#C8972E{% endblock %};border-radius:50%;">
+                    <span style="font-family:Arial,sans-serif;font-size:32px;line-height:72px;display:block;color:#ffffff;font-weight:900;">{% block icon %}&#9679;{% endblock %}</span>
+                  </td>
+                </tr>
+              </table>
+
+              <h1 style="margin:24px 0 8px;font-family:Georgia,'Times New Roman',serif;font-size:28px;font-weight:700;color:#ffffff;letter-spacing:-0.5px;line-height:1.2;">
+                {% block title %}Tu pedido{% endblock %}
+              </h1>
+              <p style="margin:0 0 4px;font-family:Arial,sans-serif;font-size:13px;color:#888888;letter-spacing:2px;text-transform:uppercase;">
+                N.° de pedido
+              </p>
+              <p style="margin:0;font-family:Georgia,'Times New Roman',serif;font-size:26px;font-weight:700;color:#C8972E;letter-spacing:1px;">
+                {{ order.order_code }}
+              </p>
+              <p style="margin:20px 0 0;font-family:Arial,sans-serif;font-size:15px;color:#aaaaaa;line-height:1.7;max-width:440px;">
+                {% block intro %}{% endblock %}
+              </p>
+            </td>
+          </tr>
+
+          {% block notice %}{% endblock %}
+
+          {% if show_items %}
+          <!-- ══ PUBLICACIONES ══ -->
+          <tr>
+            <td style="background-color:#121212;padding:24px 48px;border-top:1px solid #2a2a2a;border-bottom:1px solid #2a2a2a;">
+              <p style="margin:0 0 16px;font-family:Arial,sans-serif;font-size:10px;font-weight:700;color:#C8972E;text-transform:uppercase;letter-spacing:3px;">Publicaciones</p>
+
+              <table border="0" cellpadding="0" cellspacing="0" width="100%">
+                {% for item in items %}
+                <tr>
+                  <td style="padding:10px 0;border-bottom:1px solid #1e1e1e;">
+                    <table border="0" cellpadding="0" cellspacing="0" width="100%">
+                      <tr>
+                        {% if item.image_url %}
+                        <td width="56" style="padding-right:12px;vertical-align:top;">
+                          <img src="{{ item.image_url }}" alt="" width="56" style="display:block;width:56px;height:56px;border-radius:6px;border:1px solid #2a2a2a;object-fit:cover;" />
+                        </td>
+                        {% endif %}
+                        <td style="vertical-align:top;">
+                          <p style="margin:0;font-family:Arial,sans-serif;font-size:13px;color:#ffffff;line-height:1.4;">{{ item.title }}</p>
+                          <p style="margin:4px 0 0;font-family:Arial,sans-serif;font-size:11px;color:#777777;">x{{ item.quantity }}</p>
+                          {% if item.price_changed %}
+                          <p style="margin:4px 0 0;font-family:Arial,sans-serif;font-size:11px;color:#e0a94a;">Precio actualizado: {{ item.original_price }} &rarr; {{ item.price }}</p>
+                          {% endif %}
+                        </td>
+                        <td align="right" style="vertical-align:top;white-space:nowrap;">
+                          <p style="margin:0;font-family:Arial,sans-serif;font-size:13px;font-weight:600;color:#ffffff;">{{ item.line_total }}</p>
+                        </td>
+                      </tr>
+                    </table>
+                  </td>
+                </tr>
+                {% endfor %}
+              </table>
+            </td>
+          </tr>
+
+          <!-- ══ DESGLOSE ══ -->
+          <tr>
+            <td style="background-color:#0d0d0d;padding:24px 48px;border-bottom:1px solid #2a2a2a;">
+              <table border="0" cellpadding="0" cellspacing="0" width="100%">
+                <tr style="border-bottom:1px solid #1e1e1e;">
+                  <td style="padding:10px 0;font-family:Arial,sans-serif;font-size:12px;color:#dddddd;">Precio de las publicaciones</td>
+                  <td align="right" style="padding:10px 0;font-family:Arial,sans-serif;font-size:13px;color:#ffffff;white-space:nowrap;">{{ items_total }}</td>
+                </tr>
+                <tr style="border-bottom:1px solid #1e1e1e;">
+                  <td style="padding:10px 0;font-family:Arial,sans-serif;font-size:12px;color:#dddddd;">Comisión ({{ order.commission_percent|floatformat:"-2" }}%)</td>
+                  <td align="right" style="padding:10px 0;font-family:Arial,sans-serif;font-size:13px;color:#ffffff;white-space:nowrap;">{{ commission_total }}</td>
+                </tr>
+                <tr style="border-bottom:1px solid #1e1e1e;">
+                  <td style="padding:10px 0;font-family:Arial,sans-serif;font-size:12px;color:#dddddd;">Tax ({{ order.tax_percent|floatformat:"-2" }}%)</td>
+                  <td align="right" style="padding:10px 0;font-family:Arial,sans-serif;font-size:13px;color:#ffffff;white-space:nowrap;">{{ tax_total }}</td>
+                </tr>
+                <tr style="border-bottom:1px solid #1e1e1e;">
+                  <td style="padding:10px 0;font-family:Arial,sans-serif;font-size:12px;color:#dddddd;">Envío eBay</td>
+                  <td align="right" style="padding:10px 0;font-family:Arial,sans-serif;font-size:13px;color:#ffffff;white-space:nowrap;">{{ ebay_shipping_total }}</td>
+                </tr>
+                <tr style="border-bottom:1px solid #1e1e1e;">
+                  <td style="padding:10px 0;font-family:Arial,sans-serif;font-size:12px;color:#dddddd;">Envío a Argentina</td>
+                  <td align="right" style="padding:10px 0;font-family:Arial,sans-serif;font-size:13px;color:#ffffff;white-space:nowrap;">{{ arg_shipping_total }}</td>
+                </tr>
+                <tr>
+                  <td style="padding:20px 0 0;font-family:Arial,sans-serif;font-size:12px;font-weight:700;color:#555555;text-transform:uppercase;letter-spacing:2px;">Total</td>
+                  <td align="right" style="padding:20px 0 0;font-family:Georgia,'Times New Roman',serif;font-size:22px;font-weight:700;color:#C8972E;white-space:nowrap;">{{ total }}</td>
+                </tr>
+              </table>
+
+              <p style="margin:18px 0 0;font-family:Arial,sans-serif;font-size:11px;color:#666666;line-height:1.6;">
+                Todos los importes están expresados en dólares estadounidenses.
+                El costo del envío dentro de Argentina no está incluido: lo coordinamos con vos cuando el pedido llegue a la tienda.
+              </p>
+            </td>
+          </tr>
+
+          <!-- ══ ENTREGA ══ -->
+          <tr>
+            <td style="background-color:#121212;padding:20px 48px;border-bottom:1px solid #2a2a2a;">
+              <p style="margin:0 0 6px;font-family:Arial,sans-serif;font-size:10px;font-weight:700;color:#C8972E;text-transform:uppercase;letter-spacing:3px;">Entrega</p>
+              <p style="margin:0;font-family:Arial,sans-serif;font-size:13px;color:#dddddd;line-height:1.6;">{{ order.delivery_summary }}</p>
+            </td>
+          </tr>
+          {% endif %}
+
+          {% block cta %}
+          <tr>
+            <td align="center" style="background-color:#161616;padding:32px 48px;border-bottom:1px solid #2a2a2a;">
+              <p style="margin:0 0 20px;font-family:Arial,sans-serif;font-size:14px;color:#888888;line-height:1.7;">
+                Podés ver el estado de tu pedido en cualquier momento con tu código.
+              </p>
+              <table border="0" cellpadding="0" cellspacing="0">
+                <tr>
+                  <td align="center" style="background-color:#C8972E;border-radius:6px;">
+                    <a href="{{ tracking_url }}" target="_blank" rel="noopener noreferrer" style="display:inline-block;padding:13px 32px;font-family:Arial,sans-serif;font-size:13px;font-weight:700;color:#0d0d0d;text-decoration:none;letter-spacing:0.5px;white-space:nowrap;">Ver mi pedido</a>
+                  </td>
+                </tr>
+              </table>
+            </td>
+          </tr>
+          {% endblock %}
+
+          <!-- ══ FOOTER ══ -->
+          <tr>
+            <td align="center" style="background-color:#0d0d0d;padding:28px 48px;border-radius:0 0 12px 12px;">
+              <p style="margin:12px 0 0;font-family:Arial,sans-serif;font-size:10px;color:#333333;line-height:1.6;">
+                {% block footer_note %}Recibiste este email porque hiciste un pedido de importación en cracktcg.com{% endblock %}<br>
+                Gracias por elegir CRACK TCG.
+              </p>
+            </td>
+          </tr>
+
+        </table>
+
+      </td>
+    </tr>
+  </table>
+
+</body>
+</html>

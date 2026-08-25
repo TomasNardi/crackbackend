@@ -1,0 +1,41 @@
+{% extends "emails/ebay_base.html" %}
+
+{% block subject %}Novedades sobre tu pedido {{ order.order_code }}{% endblock %}
+{% block preheader %}No pudimos avanzar con tu pedido de importación {{ order.order_code }}.{% endblock %}
+{% block eyebrow %}Pedido no aprobado{% endblock %}
+{% block icon_bg %}#d73a49{% endblock %}
+{% block icon %}&#33;{% endblock %}
+{% block title %}No pudimos avanzar con tu pedido{% endblock %}
+
+{% block intro %}
+  Hola <strong style="color:#ffffff;">{{ order.customer_name }}</strong>, lamentablemente no pudimos aprobar tu pedido de importación.<br>
+  {% if not order.rejection_message %}Si querés, escribinos y lo revisamos juntos para buscar una alternativa.{% endif %}
+{% endblock %}
+
+{% block notice %}
+{% if order.rejection_message %}
+<tr>
+  <td style="background-color:#1a0d0e;padding:24px 48px;border-top:1px solid #3a1c1f;border-bottom:1px solid #3a1c1f;">
+    <p style="margin:0 0 10px;font-family:Arial,sans-serif;font-size:11px;font-weight:700;color:#ff8a94;text-transform:uppercase;letter-spacing:2px;">Motivo</p>
+    <p style="margin:0;font-family:Arial,sans-serif;font-size:14px;color:#eeeeee;line-height:1.7;white-space:pre-line;">{{ order.rejection_message }}</p>
+  </td>
+</tr>
+{% endif %}
+{% endblock %}
+
+{% block cta %}
+<tr>
+  <td align="center" style="background-color:#161616;padding:32px 48px;border-bottom:1px solid #2a2a2a;">
+    <p style="margin:0 0 20px;font-family:Arial,sans-serif;font-size:14px;color:#888888;line-height:1.7;">
+      ¿Tenés dudas o querés que busquemos otra publicación?<br>Respondé este email o escribinos por WhatsApp.
+    </p>
+    <table border="0" cellpadding="0" cellspacing="0">
+      <tr>
+        <td align="center" style="background-color:#C8972E;border-radius:6px;">
+          <a href="{{ whatsapp_url }}" target="_blank" rel="noopener noreferrer" style="display:inline-block;padding:13px 32px;font-family:Arial,sans-serif;font-size:13px;font-weight:700;color:#0d0d0d;text-decoration:none;letter-spacing:0.5px;white-space:nowrap;">Contactar a CRACK TCG</a>
+        </td>
+      </tr>
+    </table>
+  </td>
+</tr>
+{% endblock %}

@@ -27,6 +27,12 @@ from apps.orders.views import (
     PaymentConfigView,
     ValidateDiscountView,
 )
+from apps.ebay.views import (
+    EbayConfigView,
+    EbayOrderCreateView,
+    EbayOrderDetailView,
+    EbayQuoteView,
+)
 from apps.core.views import (
     SiteConfigView,
     EmailSubscribeView,
@@ -66,6 +72,12 @@ urlpatterns = [
     path("payments/verify/", MercadoPagoVerifyView.as_view(), name="mp_verify"),
     path("payments/config/", PaymentConfigView.as_view(), name="payments_config"),
     path("payments/validate-discount/", ValidateDiscountView.as_view(), name="validate_discount"),
+
+    # Importación eBay
+    path("ebay/config/", EbayConfigView.as_view(), name="ebay_config"),
+    path("ebay/quote/", EbayQuoteView.as_view(), name="ebay_quote"),
+    path("ebay/orders/", EbayOrderCreateView.as_view(), name="ebay_order_create"),
+    path("ebay/orders/<str:order_code>/", EbayOrderDetailView.as_view(), name="ebay_order_detail"),
 
     # Core
     path("site-config/", SiteConfigView.as_view(), name="site_config"),
