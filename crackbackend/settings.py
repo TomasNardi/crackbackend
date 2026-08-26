@@ -159,6 +159,8 @@ AUTH_PASSWORD_VALIDATORS = [
 # Django REST Framework
 # ---------------------------------------------------------------------------
 REST_FRAMEWORK = {
+    # Traduce las excepciones a mensajes que el cliente pueda leer.
+    "EXCEPTION_HANDLER": "apps.core.api_exceptions.api_exception_handler",
     "DEFAULT_AUTHENTICATION_CLASSES": (
         "rest_framework_simplejwt.authentication.JWTAuthentication",
     ),

@@ -31,15 +31,23 @@ class EbayConfigSerializer(serializers.ModelSerializer):
         return f"https://wa.me/{obj.whatsapp_number}"
 
 
+# Los links que copia la gente traen la publicación y atrás un arrastre enorme
+# de tracking (`_trkparms`, `itmprp`, `itmmeta`): los que salen de un carrusel
+# de recomendados pasan largo los 1000 caracteres y quedaban rechazados por el
+# validador antes de llegar a leerse. Solo se usa el id del link, así que el
+# tope es nada más un freno a un payload absurdo.
+MAX_URL_LENGTH = 4000
+
+
 class QuoteRequestSerializer(serializers.Serializer):
-    url = serializers.CharField(max_length=1000)
+    url = serializers.CharField(max_length=MAX_URL_LENGTH)
     quantity = serializers.IntegerField(min_value=1, max_value=99, default=1)
 
 
 class OrderItemInputSerializer(serializers.Serializer):
     """Una línea del carrito tal como la manda el front."""
 
-    url = serializers.CharField(max_length=1000)
+    url = serializers.CharField(max_length=MAX_URL_LENGTH)
     quantity = serializers.IntegerField(min_value=1, max_value=99, default=1)
     # Solo sirve para detectar si el precio se movió desde que lo cotizó.
     # Nunca se usa para calcular el total.

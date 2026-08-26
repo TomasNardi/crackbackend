@@ -24,6 +24,7 @@ from apps.ebay.services.ebay_client import (
     extract_item_ref,
     normalize_url,
 )
+from apps.ebay.serializers import QuoteRequestSerializer
 from apps.ebay.services.order_service import OrderBlocked, create_order
 from apps.ebay.services.pricing import build_breakdown, sum_breakdowns
 from apps.ebay.services.quote_service import QuoteRejected, quote_item
@@ -108,6 +109,22 @@ class UrlParsingTests(TestCase):
         for url in cases:
             with self.subTest(url=url):
                 self.assertEqual(extract_item_id(url), "188836541819")
+
+    def test_accepts_a_link_copied_from_a_recommendations_carousel(self):
+        """
+        Los links que salen de "publicaciones similares" arrastran más de mil
+        caracteres de tracking. El id sigue estando al principio.
+        """
+        url = (
+            "https://www.ebay.com/itm/168634024641?_trkparms="
+            + "itmf%3D1%26aid%3D1110006%26rkt%3D12%26" * 40
+            + "&itmmeta=01M0Z638RYGSQEATV2AZVB64R1"
+        )
+        self.assertGreater(len(url), 1000)
+        self.assertEqual(extract_item_id(url), "168634024641")
+
+        serializer = QuoteRequestSerializer(data={"url": url})
+        self.assertTrue(serializer.is_valid(), serializer.errors)
 
     def test_rejects_other_domains(self):
         with self.assertRaises(EbayInvalidUrl):
@@ -456,6 +473,24 @@ class WorkflowTests(TestCase):
 
         self.order.mark(EbayOrder.STATUS_APPROVED)
         self.assertEqual(EbayOrder.objects.get(pk=self.order.pk).approved_at, first)
+
+
+class ApiErrorMessageTests(TestCase):
+    def test_rate_limit_does_not_say_permission_denied(self):
+        """
+        Pasarse del límite no es un problema de permisos. El mensaje por
+        defecto de DRF dice justo eso, y encima trata de usted.
+        """
+        from django_ratelimit.exceptions import Ratelimited
+
+        from apps.core.api_exceptions import api_exception_handler
+
+        response = api_exception_handler(Ratelimited(), {})
+
+        self.assertEqual(response.status_code, 429)
+        self.assertEqual(response.data["code"], "rate_limited")
+        self.assertIn("consultas seguidas", response.data["detail"])
+        self.assertNotIn("permiso", response.data["detail"])
 
 
 class ApproveWithShippingTests(TestCase):
