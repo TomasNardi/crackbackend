@@ -8,6 +8,9 @@ Reglas de negocio que se aplican acá y no en la vista:
     cotizarla sería mentirle al cliente;
   * solo publicaciones en USD — todo el pedido se maneja en dólares;
   * publicación agotada o dada de baja frena el pedido, con el motivo guardado.
+
+Las publicaciones con variantes ("pick a card") se cotizan solo si el link
+trae la variante elegida; el `?var=` viaja hasta la Browse API.
 """
 
 import logging
@@ -17,7 +20,7 @@ from apps.ebay.models import EbayConfig, money
 from apps.ebay.services.ebay_client import (
     EbayError,
     EbayItemUnavailable,
-    extract_item_id,
+    extract_item_ref,
     get_item,
 )
 from apps.ebay.services.pricing import build_breakdown
@@ -76,7 +79,8 @@ def quote_item(
 
     quantity = max(1, min(int(quantity or 1), int(config.max_quantity_per_item)))
 
-    item = get_item(extract_item_id(raw_url), use_cache=use_cache)
+    legacy_id, variation_id = extract_item_ref(raw_url)
+    item = get_item(legacy_id, variation_id=variation_id, use_cache=use_cache)
     _validate_item(item)
 
     breakdown = build_breakdown(

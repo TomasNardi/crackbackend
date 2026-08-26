@@ -17,8 +17,10 @@ from apps.ebay.models import EbayConfig, EbayOrder
 from apps.ebay.services import ebay_client
 from apps.ebay.services.ebay_client import (
     EbayInvalidUrl,
+    EbayItemHasVariations,
     EbayItemUnavailable,
     extract_item_id,
+    extract_item_ref,
     normalize_url,
 )
 from apps.ebay.services.order_service import OrderBlocked, create_order
@@ -113,10 +115,56 @@ class UrlParsingTests(TestCase):
         with self.assertRaises(EbayInvalidUrl):
             extract_item_id("https://www.ebay.com/sch/i.html?_nkw=pokemon")
 
+    def test_reads_the_chosen_variation(self):
+        """Las 'pick a card' llegan con la variante elegida en `?var=`."""
+        legacy_id, variation_id = extract_item_ref(
+            "https://www.ebay.com/itm/188836541819?var=987654321012&_skw=pokemon"
+        )
+        self.assertEqual(legacy_id, "188836541819")
+        self.assertEqual(variation_id, "987654321012")
+
+    def test_link_without_variation_has_none(self):
+        self.assertEqual(
+            extract_item_ref("https://www.ebay.com/itm/188836541819"),
+            ("188836541819", None),
+        )
+
+    def test_tracking_blob_is_not_mistaken_for_a_variation(self):
+        """
+        `itmprp` es un blob largo donde un `var=` suelto aparece por casualidad.
+        Se lee la query parseada justamente para no morder ese anzuelo.
+        """
+        url = (
+            "https://www.ebay.com/itm/188836541819"
+            "?itmprp=enc%3AAQALAAAA0LB2var%3D999999999999xyz&LH_BIN=1"
+        )
+        self.assertEqual(extract_item_ref(url), ("188836541819", None))
+
 
 class QuoteServiceTests(TestCase):
     def setUp(self):
         self.config = EbayConfig.get()
+
+    @patch("apps.ebay.services.quote_service.get_item")
+    def test_listing_with_variations_asks_for_the_chosen_one(self, mocked):
+        """
+        Sin variante elegida eBay rechaza la publicación. El mensaje tiene que
+        decirle al cliente qué hacer: reintentar no lo arregla nunca.
+        """
+        mocked.side_effect = EbayItemHasVariations()
+
+        with self.assertRaises(EbayItemHasVariations) as ctx:
+            quote_item("https://www.ebay.com/itm/188836541819")
+
+        self.assertEqual(ctx.exception.code, "item_has_variations")
+        self.assertIn("elegí", ctx.exception.message)
+
+    @patch("apps.ebay.services.quote_service.get_item")
+    def test_variation_from_the_link_reaches_ebay(self, mocked):
+        mocked.return_value = fake_item()
+        quote_item("https://www.ebay.com/itm/188836541819?var=987654321012")
+
+        self.assertEqual(mocked.call_args.kwargs["variation_id"], "987654321012")
 
     @patch("apps.ebay.services.quote_service.get_item")
     def test_arg_shipping_comes_from_config(self, mocked):

@@ -23,7 +23,7 @@ import re
 from base64 import b64encode
 from decimal import Decimal, InvalidOperation
 from pathlib import Path
-from urllib.parse import urlparse
+from urllib.parse import parse_qs, urlparse
 
 import requests
 from django.conf import settings
@@ -41,6 +41,10 @@ SANDBOX_HOSTS = {
 }
 
 OAUTH_SCOPE = "https://api.ebay.com/oauth/api_scope"
+
+# eBay devuelve este errorId cuando el link apunta a una publicación con
+# variantes (item group) y le pedimos el item pelado por su legacy id.
+ITEM_GROUP_ERROR_ID = 11006
 TOKEN_CACHE_KEY = "ebay:oauth_token"
 ITEM_CACHE_PREFIX = "ebay:item:"
 
@@ -85,6 +89,22 @@ class EbayItemNotFound(EbayError):
 class EbayInvalidUrl(EbayError):
     def __init__(self, message: str = "El link no parece ser de una publicación de eBay."):
         super().__init__(message, code="invalid_url")
+
+
+class EbayItemHasVariations(EbayError):
+    """
+    El link apunta a una publicación con variantes sin elegir ninguna.
+
+    Son las típicas "pick a card": un solo aviso con muchas cartas adentro. La
+    Browse API no las devuelve por legacy id — hace falta la variante concreta,
+    y cuál quiere el cliente no se puede adivinar.
+    """
+
+    def __init__(self, message: str = (
+        "Esa publicación tiene varias opciones para elegir. Entrá a eBay, "
+        "elegí la que querés comprar y pegá el link de esa opción."
+    )):
+        super().__init__(message, code="item_has_variations")
 
 
 class EbayNotConfigured(EbayError):
@@ -148,8 +168,22 @@ def _follow_shortlink(url: str) -> str:
         raise EbayInvalidUrl("No pudimos abrir ese link. Probá con el link completo de la publicación.")
 
 
-def extract_item_id(raw_url: str) -> str:
-    """URL de eBay (larga, corta o id pelado) → legacy item id."""
+def _extract_variation_id(url: str) -> str | None:
+    """
+    Variante elegida, si el link la trae (`?var=123456789012`).
+
+    Se lee de la query parseada y no con una regex sobre la URL entera: los
+    links de eBay arrastran un blob `itmprp` largo donde un `var=` suelto
+    aparecería por casualidad.
+    """
+    for value in parse_qs(urlparse(url).query).get("var", []):
+        if value.isdigit() and 6 <= len(value) <= 20:
+            return value
+    return None
+
+
+def extract_item_ref(raw_url: str) -> tuple[str, str | None]:
+    """URL de eBay (larga, corta o id pelado) → (legacy item id, variante | None)."""
     url = normalize_url(raw_url)
 
     host = (urlparse(url).hostname or "").lower()
@@ -160,7 +194,12 @@ def extract_item_id(raw_url: str) -> str:
     if not match:
         raise EbayInvalidUrl("No pudimos identificar la publicación en ese link.")
 
-    return match.group(1)
+    return match.group(1), _extract_variation_id(url)
+
+
+def extract_item_id(raw_url: str) -> str:
+    """URL de eBay (larga, corta o id pelado) → legacy item id."""
+    return extract_item_ref(raw_url)[0]
 
 
 # ─── OAuth ────────────────────────────────────────────────────────────────────
@@ -207,7 +246,7 @@ def get_access_token() -> str:
 
 # ─── Modo demo ────────────────────────────────────────────────────────────────
 
-def _mock_item(item_id: str) -> dict:
+def _mock_item(item_id: str, variation_id: str | None = None) -> dict:
     """
     Respuesta de ejemplo para desarrollar sin credenciales.
 
@@ -219,11 +258,13 @@ def _mock_item(item_id: str) -> dict:
     if fixture_path.exists():
         base = json.loads(fixture_path.read_text(encoding="utf-8"))
 
-    seed = int(item_id[-4:]) if item_id[-4:].isdigit() else 1234
+    ref = variation_id or item_id
+    seed = int(ref[-4:]) if ref[-4:].isdigit() else 1234
     price = Decimal(seed % 900 + 20) + Decimal("0.99")
 
     return {
         "item_id": item_id,
+        "variation_id": variation_id,
         "title": base.get("title") or f"Publicación de demostración #{item_id}",
         "image_url": base.get("image_url") or "https://i.ebayimg.com/images/g/placeholder/s-l500.jpg",
         "price": price,
@@ -281,17 +322,67 @@ def _is_available(payload: dict) -> bool:
     return True
 
 
-def get_item(item_id: str, *, use_cache: bool = True) -> dict:
+def _error_ids(response: requests.Response) -> set[int]:
+    """errorIds que vienen en el cuerpo de un error de la Browse API."""
+    try:
+        payload = response.json()
+    except ValueError:
+        return set()
+
+    ids = set()
+    for error in payload.get("errors") or []:
+        try:
+            ids.add(int(error.get("errorId")))
+        except (TypeError, ValueError):
+            continue
+    return ids
+
+
+def _browse_get(url: str, params: dict, headers: dict, *, what: str) -> requests.Response:
+    """
+    GET a la Browse API con reintento único ante un 401.
+
+    El token puede ser revocado antes de vencer: en ese caso lo tiramos, pedimos
+    uno nuevo y repetimos la request una sola vez.
+    """
+    try:
+        response = requests.get(url, headers=headers, params=params, timeout=REQUEST_TIMEOUT)
+    except requests.RequestException as exc:
+        logger.exception("Error de red consultando %s: %s", what, exc)
+        raise EbayError("No pudimos conectarnos con eBay. Probá de nuevo en unos minutos.")
+
+    if response.status_code != 401:
+        return response
+
+    cache.delete(TOKEN_CACHE_KEY)
+    logger.warning("eBay devolvió 401 para %s; reintentando con token nuevo.", what)
+    retry_headers = {**headers, "Authorization": f"Bearer {_fetch_token()}"}
+    try:
+        return requests.get(url, headers=retry_headers, params=params, timeout=REQUEST_TIMEOUT)
+    except requests.RequestException as exc:
+        logger.exception("Error de red en el reintento de %s: %s", what, exc)
+        raise EbayError("No pudimos conectarnos con eBay. Probá de nuevo en unos minutos.")
+
+
+def get_item(item_id: str, *, variation_id: str | None = None, use_cache: bool = True) -> dict:
     """
     Trae una publicación por su legacy id y la normaliza.
 
-    Levanta EbayItemNotFound / EbayItemUnavailable / EbayError según el caso,
-    todos con mensajes que se le pueden mostrar al cliente tal cual.
+    `variation_id` es la variante elegida dentro de una publicación con opciones
+    (el `?var=` del link). Sin ella, eBay rechaza esas publicaciones con el
+    errorId 11006 y devolvemos EbayItemHasVariations, que le pide al cliente que
+    elija la opción en eBay — reintentar no lo arregla nunca.
+
+    Levanta EbayItemNotFound / EbayItemUnavailable / EbayItemHasVariations /
+    EbayError según el caso, todos con mensajes que se le pueden mostrar al
+    cliente tal cual.
     """
     if is_mock_mode():
-        return _mock_item(item_id)
+        return _mock_item(item_id, variation_id)
 
     cache_key = f"{ITEM_CACHE_PREFIX}{item_id}"
+    if variation_id:
+        cache_key = f"{cache_key}:{variation_id}"
     if use_cache:
         cached = cache.get(cache_key)
         if cached:
@@ -312,30 +403,19 @@ def get_item(item_id: str, *, use_cache: bool = True) -> dict:
         "Accept": "application/json",
     }
 
+    params = {"legacy_item_id": item_id}
+    if variation_id:
+        params["legacy_variation_id"] = variation_id
+
     url = f"{_hosts()['api']}/buy/browse/v1/item/get_item_by_legacy_id"
-    try:
-        response = requests.get(
-            url, headers=headers, params={"legacy_item_id": item_id}, timeout=REQUEST_TIMEOUT,
-        )
-    except requests.RequestException as exc:
-        logger.exception("Error de red consultando el item %s: %s", item_id, exc)
-        raise EbayError("No pudimos conectarnos con eBay. Probá de nuevo en unos minutos.")
+    response = _browse_get(url, params, headers, what=f"el item {item_id}")
 
     if response.status_code == 404:
         raise EbayItemNotFound()
 
-    if response.status_code == 401:
-        # El token pudo haber sido revocado antes de vencer: lo tiramos y reintentamos una vez.
-        cache.delete(TOKEN_CACHE_KEY)
-        logger.warning("eBay devolvió 401 para el item %s; reintentando con token nuevo.", item_id)
-        headers["Authorization"] = f"Bearer {_fetch_token()}"
-        try:
-            response = requests.get(
-                url, headers=headers, params={"legacy_item_id": item_id}, timeout=REQUEST_TIMEOUT,
-            )
-        except requests.RequestException as exc:
-            logger.exception("Error de red en el reintento del item %s: %s", item_id, exc)
-            raise EbayError("No pudimos conectarnos con eBay. Probá de nuevo en unos minutos.")
+    if response.status_code == 400 and ITEM_GROUP_ERROR_ID in _error_ids(response):
+        logger.info("El item %s es una publicación con variantes.", item_id)
+        raise EbayItemHasVariations()
 
     if response.status_code != 200:
         logger.error("eBay devolvió %s para el item %s: %s", response.status_code, item_id, response.text[:500])
@@ -357,6 +437,7 @@ def get_item(item_id: str, *, use_cache: bool = True) -> dict:
 
     item = {
         "item_id": item_id,
+        "variation_id": variation_id,
         "title": payload.get("title", "") or "Publicación sin título",
         "image_url": image_url,
         "price": price,
@@ -382,10 +463,14 @@ def get_item(item_id: str, *, use_cache: bool = True) -> dict:
 
 
 def get_item_by_url(raw_url: str, *, use_cache: bool = True) -> dict:
-    """Atajo: link → publicación normalizada."""
-    return get_item(extract_item_id(raw_url), use_cache=use_cache)
+    """Atajo: link → publicación normalizada, respetando la variante del link."""
+    legacy_id, variation_id = extract_item_ref(raw_url)
+    return get_item(legacy_id, variation_id=variation_id, use_cache=use_cache)
 
 
-def invalidate_item(item_id: str) -> None:
+def invalidate_item(item_id: str, variation_id: str | None = None) -> None:
     """Fuerza que la próxima consulta vaya a eBay. Se usa al confirmar un pedido."""
-    cache.delete(f"{ITEM_CACHE_PREFIX}{item_id}")
+    cache_key = f"{ITEM_CACHE_PREFIX}{item_id}"
+    if variation_id:
+        cache_key = f"{cache_key}:{variation_id}"
+    cache.delete(cache_key)
