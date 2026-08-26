@@ -41,7 +41,7 @@ class Migration(migrations.Migration):
         migrations.AddField(
             model_name='ebayconfig',
             name='arg_shipping',
-            field=models.DecimalField(decimal_places=2, default=Decimal('20'), help_text='Costo de traer una unidad desde el courier en EE.UU. Es único: aplica igual a cartas sueltas, calificadas y productos sellados.', max_digits=10, verbose_name='Envío a Argentina (USD)'),
+            field=models.DecimalField(decimal_places=2, default=Decimal('20'), help_text='Costo de traer una unidad desde EE.UU. Aplica igual a cartas sueltas, calificadas y productos sellados.', max_digits=10, verbose_name='Envío a Argentina (USD)'),
         ),
         # Va entre el AddField y los RemoveField: necesita las tres columnas vivas.
         migrations.RunPython(carry_over_shipping, restore_shipping),

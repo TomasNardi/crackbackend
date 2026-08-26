@@ -9,11 +9,12 @@ credenciales cargadas.
 from decimal import Decimal
 from unittest.mock import patch
 
-from django.test import TestCase
+from django.contrib.auth import get_user_model
+from django.test import Client, TestCase
 from django.urls import reverse
 from rest_framework.test import APIClient
 
-from apps.ebay.models import EbayConfig, EbayOrder
+from apps.ebay.models import EbayConfig, EbayOrder, EbayOrderItem
 from apps.ebay.services import ebay_client
 from apps.ebay.services.ebay_client import (
     EbayInvalidUrl,
@@ -41,6 +42,7 @@ def fake_item(**overrides):
         "buying_option": "FIXED_PRICE",
         "buying_options": ["FIXED_PRICE"],
         "available": True,
+        "available_quantity": None,
         "seller": "seller",
         "condition": "New",
         "is_mock": False,
@@ -144,6 +146,67 @@ class UrlParsingTests(TestCase):
 class QuoteServiceTests(TestCase):
     def setUp(self):
         self.config = EbayConfig.get()
+
+    @patch("apps.ebay.services.quote_service.get_item")
+    def test_unknown_ebay_shipping_stays_at_zero_and_flagged(self, mocked):
+        """
+        Sin dato de envío no inventamos un valor: queda en 0 con la marca, y el
+        owner lo carga a mano. Cobrarle al cliente un número nuestro como si
+        fuera de eBay es plata que después falta.
+        """
+        mocked.return_value = fake_item(shipping=Decimal("0"), has_shipping_info=False)
+
+        result = quote_item("https://www.ebay.com/itm/188836541819")
+
+        self.assertEqual(result["quote"]["ebay_shipping"], Decimal("0.00"))
+        self.assertFalse(result["item"]["has_shipping_info"])
+
+    @patch("apps.ebay.services.quote_service.get_item")
+    def test_free_shipping_is_not_confused_with_unknown(self, mocked):
+        mocked.return_value = fake_item(shipping=Decimal("0"), has_shipping_info=True)
+
+        result = quote_item("https://www.ebay.com/itm/188836541819")
+
+        self.assertEqual(result["quote"]["ebay_shipping"], Decimal("0.00"))
+        self.assertTrue(result["item"]["has_shipping_info"])
+
+    @patch("apps.ebay.services.quote_service.get_item")
+    def test_quantity_is_capped_by_ebay_stock(self, mocked):
+        """Una publicación de una sola unidad no se puede pedir por triplicado."""
+        mocked.return_value = fake_item(available_quantity=1)
+        self.config.max_quantity_per_item = 10
+        self.config.save()
+
+        result = quote_item("https://www.ebay.com/itm/188836541819", quantity=3)
+
+        self.assertEqual(result["quote"]["quantity"], 1)
+        self.assertEqual(result["item"]["max_quantity"], 1)
+
+    @patch("apps.ebay.services.quote_service.get_item")
+    def test_store_limit_still_wins_when_ebay_has_more(self, mocked):
+        mocked.return_value = fake_item(available_quantity=50)
+        self.config.max_quantity_per_item = 4
+        self.config.save()
+
+        result = quote_item("https://www.ebay.com/itm/188836541819", quantity=9)
+
+        self.assertEqual(result["quote"]["quantity"], 4)
+        self.assertEqual(result["item"]["max_quantity"], 4)
+
+    @patch("apps.ebay.services.quote_service.get_item")
+    def test_unknown_stock_does_not_cap(self, mocked):
+        """
+        eBay no siempre da el número ("hay más de 10"). Sin dato no inventamos
+        un tope: queda el de la tienda.
+        """
+        mocked.return_value = fake_item(available_quantity=None)
+        self.config.max_quantity_per_item = 10
+        self.config.save()
+
+        result = quote_item("https://www.ebay.com/itm/188836541819", quantity=6)
+
+        self.assertEqual(result["quote"]["quantity"], 6)
+        self.assertEqual(result["item"]["max_quantity"], 10)
 
     @patch("apps.ebay.services.quote_service.get_item")
     def test_listing_with_variations_asks_for_the_chosen_one(self, mocked):
@@ -393,6 +456,92 @@ class WorkflowTests(TestCase):
 
         self.order.mark(EbayOrder.STATUS_APPROVED)
         self.assertEqual(EbayOrder.objects.get(pk=self.order.pk).approved_at, first)
+
+
+class ApproveWithShippingTests(TestCase):
+    """
+    La aprobación pide los envíos que eBay no informó antes de avisarle al
+    cliente: el email lleva el total, y mandarlo con un envío en cero es
+    cobrar de menos y no poder reclamar después.
+    """
+
+    def setUp(self):
+        EbayConfig.get()
+        self.client = Client()
+        self.admin = get_user_model().objects.create_superuser(
+            "owner@example.com", password="x",
+        )
+        self.client.force_login(self.admin)
+
+        self.order = EbayOrder.objects.create(
+            customer_name="Tomás", customer_email="t@example.com",
+        )
+        self.item = EbayOrderItem.objects.create(
+            order=self.order,
+            ebay_item_id="188836541819",
+            ebay_url="https://www.ebay.com/itm/188836541819",
+            title="Pokemon TCG 151 ETB",
+            quantity=1,
+            price=Decimal("100.00"),
+            commission=Decimal("10.00"),
+            tax=Decimal("7.00"),
+            ebay_shipping=Decimal("0.00"),
+            arg_shipping=Decimal("20.00"),
+            shipping_to_confirm=True,
+        )
+        self.order.recalculate_totals()
+        self.url = reverse("admin:ebay_ebayorder_approve", args=[self.order.pk])
+
+    def test_approving_asks_for_the_missing_shipping_instead_of_approving(self):
+        response = self.client.get(self.url)
+
+        self.assertEqual(response.status_code, 200)
+        self.order.refresh_from_db()
+        self.assertEqual(self.order.status, EbayOrder.STATUS_PENDING)
+
+    @patch("apps.ebay.tasks.enqueue")
+    def test_saving_the_shipping_approves_and_updates_the_total(self, enqueue):
+        response = self.client.post(self.url, {f"shipping_{self.item.pk}": "8.50"})
+
+        self.assertEqual(response.status_code, 302)
+        self.item.refresh_from_db()
+        self.order.refresh_from_db()
+
+        self.assertEqual(self.item.ebay_shipping, Decimal("8.50"))
+        self.assertFalse(self.item.shipping_to_confirm)
+        self.assertEqual(self.order.total, Decimal("145.50"))
+        self.assertEqual(self.order.status, EbayOrder.STATUS_APPROVED)
+        enqueue.assert_called_once_with("send_order_approved_task", self.order.id)
+
+    @patch("apps.ebay.tasks.enqueue")
+    def test_zero_means_free_shipping_and_is_accepted(self, enqueue):
+        self.client.post(self.url, {f"shipping_{self.item.pk}": "0"})
+
+        self.item.refresh_from_db()
+        self.order.refresh_from_db()
+        self.assertEqual(self.item.ebay_shipping, Decimal("0.00"))
+        self.assertFalse(self.item.shipping_to_confirm)
+        self.assertEqual(self.order.status, EbayOrder.STATUS_APPROVED)
+
+    def test_a_negative_shipping_is_rejected(self):
+        response = self.client.post(self.url, {f"shipping_{self.item.pk}": "-5"})
+
+        self.assertEqual(response.status_code, 200)
+        self.item.refresh_from_db()
+        self.order.refresh_from_db()
+        self.assertTrue(self.item.shipping_to_confirm)
+        self.assertEqual(self.order.status, EbayOrder.STATUS_PENDING)
+
+    @patch("apps.ebay.tasks.enqueue")
+    def test_an_order_without_pending_shipping_approves_directly(self, enqueue):
+        self.item.shipping_to_confirm = False
+        self.item.save(update_fields=["shipping_to_confirm"])
+
+        response = self.client.get(self.url)
+
+        self.assertEqual(response.status_code, 302)
+        self.order.refresh_from_db()
+        self.assertEqual(self.order.status, EbayOrder.STATUS_APPROVED)
 
 
 class MockModeTests(TestCase):

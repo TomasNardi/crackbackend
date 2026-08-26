@@ -83,6 +83,15 @@ def quote_item(
     item = get_item(legacy_id, variation_id=variation_id, use_cache=use_cache)
     _validate_item(item)
 
+    # El tope de la tienda es un máximo, no un mínimo: si eBay tiene menos
+    # unidades que eso, manda eBay. Una publicación de una carta única no puede
+    # ofrecer "cantidad 3" aunque la config permita 10.
+    max_quantity = int(config.max_quantity_per_item)
+    available = item.get("available_quantity")
+    if isinstance(available, int) and available > 0:
+        max_quantity = min(max_quantity, available)
+    quantity = max(1, min(quantity, max_quantity))
+
     breakdown = build_breakdown(
         price=item["price"],
         ebay_shipping=item["shipping"],
@@ -102,6 +111,8 @@ def quote_item(
             "condition": item.get("condition", ""),
             "seller": item.get("seller", ""),
             "has_shipping_info": item.get("has_shipping_info", True),
+            "available_quantity": item.get("available_quantity"),
+            "max_quantity": max_quantity,
             "is_mock": item.get("is_mock", False),
         },
         "quote": breakdown,

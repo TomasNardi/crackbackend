@@ -7,6 +7,7 @@ botones que ya usa OrderAdmin (get_urls + format_html).
 """
 
 import logging
+from decimal import Decimal
 
 from django import forms
 from django.contrib import admin, messages
@@ -37,16 +38,16 @@ STATUS_COLORS = {
 # Qué botón ofrece cada estado: (url name, etiqueta, color, confirmación).
 NEXT_STEP = {
     EbayOrder.STATUS_APPROVED: (
-        "admin:ebay_ebayorder_payment_received", "2 · Registrar pago recibido", "#0969da",
-        "¿Confirmar que recibiste el pago de este pedido? Se le avisa al cliente por email.",
+        "admin:ebay_ebayorder_payment_received", "Registrar pago recibido", "#0969da",
+        "¿Estás seguro que deseas confirmar? Se enviará la notificación por correo electrónico al cliente.",
     ),
     EbayOrder.STATUS_PAYMENT_RECEIVED: (
-        "admin:ebay_ebayorder_in_argentina", "3 · Marcar llegada a Argentina", "#8250df",
-        "¿El pedido ya está en la tienda? Se le avisa al cliente para que coordine el retiro o el envío.",
+        "admin:ebay_ebayorder_in_argentina", "Marcar llegada a Argentina", "#8250df",
+        "¿Estás seguro que deseas confirmar? Se enviará la notificación por correo electrónico al cliente.",
     ),
     EbayOrder.STATUS_IN_ARGENTINA: (
-        "admin:ebay_ebayorder_delivered", "4 · Marcar entregada", "#57606a",
-        "¿Cerrar el pedido como entregado? No se envía ningún email.",
+        "admin:ebay_ebayorder_delivered", "Marcar entregada", "#57606a",
+        "¿Estás seguro que deseas confirmar?",
     ),
 }
 
@@ -62,13 +63,43 @@ class RejectionForm(forms.Form):
     )
 
 
+class ShippingConfirmationForm(forms.Form):
+    """
+    Costo de envío de eBay de las publicaciones que quedaron sin confirmar.
+
+    Se arma un campo por publicación en vez de uno solo para todo el pedido:
+    cada línea viene de un vendedor distinto y cobra su propio envío.
+    """
+
+    def __init__(self, items, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.items = list(items)
+        for item in self.items:
+            self.fields[f"shipping_{item.pk}"] = forms.DecimalField(
+                label=item.title,
+                min_value=Decimal("0"),
+                max_digits=12,
+                decimal_places=2,
+                initial=item.ebay_shipping,
+                widget=forms.NumberInput(attrs={"step": "0.01", "min": "0"}),
+            )
+
+    def rows(self):
+        """Publicación + su campo, para que el template dibuje la fila entera."""
+        for item in self.items:
+            yield item, self[f"shipping_{item.pk}"]
+
+    def confirmed_shipping(self):
+        return [(item, self.cleaned_data[f"shipping_{item.pk}"]) for item in self.items]
+
+
 class EbayOrderItemInline(TabularInline):
     model = EbayOrderItem
     extra = 0
     can_delete = False
     readonly_fields = (
         "preview", "listing", "quantity",
-        "price", "commission", "tax", "ebay_shipping", "arg_shipping",
+        "price", "commission", "tax", "ebay_shipping_display", "arg_shipping",
         "line_total_display", "price_change_display",
     )
     fields = readonly_fields
@@ -84,6 +115,22 @@ class EbayOrderItemInline(TabularInline):
             '<img src="{}" style="width:56px;height:56px;object-fit:cover;border-radius:8px;'
             'border:1px solid #E8E4DD;" alt="" />',
             obj.image_url,
+        )
+
+    @admin.display(description="Envío eBay")
+    def ebay_shipping_display(self, obj):
+        """
+        El costo de envío, o el aviso de que eBay no lo informó.
+
+        Sin esto un envío desconocido se ve como US$ 0.00 —idéntico a un envío
+        gratis— y el pedido se aprueba sin que nadie cargue el costo real.
+        """
+        if not obj.shipping_to_confirm:
+            return format_html("US$ {}", f"{obj.ebay_shipping:,.2f}")
+        return format_html(
+            '<span style="color:#d73a49;font-weight:600;white-space:nowrap;" '
+            'title="eBay no informó el costo de envío de esta publicación">'
+            '⚠ A confirmar</span>'
         )
 
     @admin.display(description="Publicación")
@@ -244,8 +291,11 @@ class EbayOrderAdmin(ModelAdmin):
                 '<div style="display:flex;flex-direction:column;gap:5px;">{}{}</div>',
                 self._button(
                     reverse("admin:ebay_ebayorder_approve", args=[obj.pk]),
-                    "1 · Aprobar pedido", "#2ea44f",
-                    "¿Aprobar este pedido? Se le envía al cliente el email de aprobación con el botón de WhatsApp.",
+                    "Aprobar pedido", "#2ea44f",
+                    # Con envíos por cargar el botón abre un formulario, así que
+                    # un confirm() antes solo agrega un click de más.
+                    "" if any(i.shipping_to_confirm for i in obj.items.all())
+                    else "¿Estás seguro que deseas confirmar? Se enviará la notificación por correo electrónico al cliente.",
                 ),
                 self._button(
                     reverse("admin:ebay_ebayorder_reject", args=[obj.pk]),
@@ -259,7 +309,7 @@ class EbayOrderAdmin(ModelAdmin):
             return self._button(reverse(url_name, args=[obj.pk]), label, color, confirm)
 
         if obj.status == EbayOrder.STATUS_DELIVERED:
-            return format_html('<span style="font-size:11px;color:#9ca3af;">Ciclo completo ✓</span>')
+            return format_html('<span style="font-size:11px;color:#9ca3af;">Finalizada</span>')
 
         if obj.status == EbayOrder.STATUS_REJECTED:
             return format_html('<span style="font-size:11px;color:#9ca3af;">Rechazada</span>')
@@ -363,14 +413,61 @@ class EbayOrderAdmin(ModelAdmin):
         return self._back(request)
 
     def approve_view(self, request, order_id):
-        return self._advance(
-            request, order_id,
-            expected=EbayOrder.STATUS_PENDING,
-            new_status=EbayOrder.STATUS_APPROVED,
-            task="send_order_approved_task",
-            success="Pedido {code} aprobado. Se le envió el email al cliente.",
-            wrong_state="El pedido {code} ya no está pendiente de aprobación.",
-        )
+        """
+        Aprobación. Si alguna publicación quedó con el envío de eBay sin
+        confirmar, primero pide esos valores: el email de aprobación lleva el
+        total, y mandarlo con un envío en cero es cobrar de menos.
+        """
+        order = self._get_order(request, order_id)
+        if not order:
+            return HttpResponseRedirect(reverse("admin:ebay_ebayorder_changelist"))
+
+        if order.status != EbayOrder.STATUS_PENDING:
+            self.message_user(
+                request, f"El pedido {order.order_code} ya no está pendiente de aprobación.",
+                level=messages.WARNING,
+            )
+            return self._back(request)
+
+        pending = list(order.items.filter(shipping_to_confirm=True))
+        if not pending:
+            return self._advance(
+                request, order_id,
+                expected=EbayOrder.STATUS_PENDING,
+                new_status=EbayOrder.STATUS_APPROVED,
+                task="send_order_approved_task",
+                success="Pedido {code} aprobado. Se le envió el email al cliente.",
+                wrong_state="El pedido {code} ya no está pendiente de aprobación.",
+            )
+
+        if request.method == "POST":
+            form = ShippingConfirmationForm(pending, request.POST)
+            if form.is_valid():
+                for item, shipping in form.confirmed_shipping():
+                    item.ebay_shipping = shipping
+                    item.shipping_to_confirm = False
+                    item.save(update_fields=["ebay_shipping", "shipping_to_confirm"])
+
+                order.recalculate_totals()
+                order.mark(EbayOrder.STATUS_APPROVED)
+                tasks.enqueue("send_order_approved_task", order.id)
+                self.message_user(
+                    request,
+                    f"Pedido {order.order_code} aprobado por US$ {order.total:,.2f}. "
+                    "Se le envió el email al cliente.",
+                    level=messages.SUCCESS,
+                )
+                return HttpResponseRedirect(reverse("admin:ebay_ebayorder_changelist"))
+        else:
+            form = ShippingConfirmationForm(pending)
+
+        return render(request, "admin/ebay/approve_shipping_popup.html", {
+            **self.admin_site.each_context(request),
+            "title": f"Aprobar pedido {order.order_code}",
+            "order": order,
+            "form": form,
+            "opts": self.model._meta,
+        })
 
     def reject_view(self, request, order_id):
         """Rechazo con mensaje opcional — abre un formulario en vez de actuar directo."""
@@ -459,33 +556,18 @@ class EbayOrderAdmin(ModelAdmin):
 class EbayConfigAdmin(ModelAdmin):
     list_display = ("__str__", "is_active", "updated_at")
 
+    # Solo lo que el owner decide y cambia. El resto de la config (estado de la
+    # sección, texto de la portada, límites, WhatsApp) vive en el modelo pero no
+    # se edita: son decisiones de producto que se tocan por código.
     fieldsets = (
-        ("Estado", {
-            "fields": ("is_active", "intro_text"),
-        }),
         ("Cargos", {
-            "description": "La comisión y el tax se calculan sobre el precio de la publicación.",
             "fields": ("commission_percent", "tax_percent"),
         }),
         ("Envío a Argentina", {
-            "description": (
-                "Lo que sale traer una unidad desde el courier en EE.UU. Es un valor único: "
-                "aplica igual a cartas sueltas, calificadas y productos sellados."
-            ),
             "fields": ("arg_shipping",),
         }),
         ("Conexión con eBay", {
-            "description": (
-                "El ZIP determina el costo de envío que cotiza eBay: es la dirección del "
-                "courier en EE.UU. Las credenciales van en variables de entorno, no acá."
-            ),
-            "fields": ("marketplace_id", "us_country", "us_zip", "default_ebay_shipping"),
-        }),
-        ("Límites", {
-            "fields": ("quote_ttl_minutes", "max_items_per_order", "max_quantity_per_item"),
-        }),
-        ("Contacto", {
-            "fields": ("whatsapp_number",),
+            "fields": ("us_zip",),
         }),
     )
 

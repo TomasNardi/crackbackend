@@ -57,7 +57,7 @@ class EbayConfig(models.Model):
     )
     tax_percent = models.DecimalField(
         "% tax", max_digits=5, decimal_places=2, default=Decimal("7"),
-        help_text="Sales tax del estado del courier. Se aplica sobre el precio de la publicación.",
+        help_text="Se aplica sobre el precio de la publicación.",
     )
 
     arg_shipping = models.DecimalField(
@@ -75,13 +75,9 @@ class EbayConfig(models.Model):
     us_country = models.CharField("País del courier", max_length=2, default="US")
     marketplace_id = models.CharField(
         "Marketplace", max_length=30, default="EBAY_US",
-        help_text="Header X-EBAY-C-MARKETPLACE-ID. Normalmente EBAY_US.",
+        help_text="Sitio de eBay contra el que se cotiza.",
     )
 
-    default_ebay_shipping = models.DecimalField(
-        "Envío eBay por defecto (USD)", max_digits=10, decimal_places=2, default=Decimal("0"),
-        help_text="Se usa cuando la publicación no informa costo de envío.",
-    )
 
     quote_ttl_minutes = models.PositiveIntegerField(
         "Validez de la cotización (minutos)", default=60,
@@ -305,6 +301,10 @@ class EbayOrderItem(models.Model):
     arg_shipping = models.DecimalField("Envío a Argentina", max_digits=12, decimal_places=2, default=0)
 
     price_changed = models.BooleanField("Cambió de precio", default=False)
+    shipping_to_confirm = models.BooleanField(
+        "Envío eBay a confirmar", default=False,
+        help_text="eBay no informó el costo de envío de esta publicación: hay que cargarlo a mano.",
+    )
     original_price = models.DecimalField(
         "Precio cotizado originalmente", max_digits=12, decimal_places=2, null=True, blank=True,
         help_text="Lo que vio el cliente al agregarlo, si difiere del precio final.",

@@ -274,6 +274,7 @@ def _mock_item(item_id: str, variation_id: str | None = None) -> dict:
         "item_web_url": f"https://www.ebay.com/itm/{item_id}",
         "buying_option": "FIXED_PRICE",
         "available": True,
+        "available_quantity": None,
         "seller": base.get("seller") or "demo_seller",
         "condition": base.get("condition") or "New",
         "is_mock": True,
@@ -296,8 +297,13 @@ def _parse_shipping(payload: dict) -> tuple[Decimal, bool]:
     Costo de envío de la primera opción disponible.
 
     `shippingCost` ausente significa que eBay no pudo calcularlo para ese
-    destino; `0.00` significa envío gratis. Son casos distintos y el segundo
-    no debe caer al valor por defecto de la config.
+    destino; `0.00` significa envío gratis. Son casos distintos: el primero
+    viaja como "a confirmar" y el segundo como envío gratis de verdad.
+
+    Cuando no se sabe, el costo queda en 0 y `has_shipping_info` en False. No
+    inventamos un valor por defecto: un número puesto por nosotros se le cobra
+    al cliente como si fuera de eBay, y si erramos la diferencia la come la
+    tienda. El owner lo carga a mano al aprobar el pedido.
     """
     options = payload.get("shippingOptions") or []
     for option in options:
@@ -307,6 +313,27 @@ def _parse_shipping(payload: dict) -> tuple[Decimal, bool]:
         cost, _ = _parse_price(cost_node)
         return cost, True
     return Decimal("0"), False
+
+
+def _parse_available_quantity(payload: dict) -> int | None:
+    """
+    Unidades que eBay dice que quedan, o None si no se puede saber.
+
+    Importa para no dejar que el cliente pida 3 de una publicación que tiene una
+    sola: el pedido se frenaría recién al confirmarlo, después de que armó todo.
+
+    eBay lo informa de tres formas y no siempre manda la misma. Cuando usa
+    `availabilityThresholdType: MORE_THAN` está diciendo "hay más de N" sin dar
+    el número exacto: ahí no hay tope real que aplicar y devolvemos None.
+    """
+    availability = (payload.get("estimatedAvailabilities") or [{}])[0]
+
+    for field in ("estimatedAvailableQuantity", "estimatedRemainingQuantity"):
+        value = availability.get(field)
+        if isinstance(value, int) and value > 0:
+            return value
+
+    return None
 
 
 def _is_available(payload: dict) -> bool:
@@ -425,9 +452,6 @@ def get_item(item_id: str, *, variation_id: str | None = None, use_cache: bool =
     price, currency = _parse_price(payload.get("price"))
     shipping, has_shipping_info = _parse_shipping(payload)
 
-    if not has_shipping_info:
-        shipping = Decimal(config.default_ebay_shipping)
-
     image_url = (payload.get("image") or {}).get("imageUrl", "")
     if not image_url:
         thumbnails = payload.get("thumbnailImages") or []
@@ -450,6 +474,7 @@ def get_item(item_id: str, *, variation_id: str | None = None, use_cache: bool =
         ),
         "buying_options": buying_options,
         "available": _is_available(payload),
+        "available_quantity": _parse_available_quantity(payload),
         "seller": (payload.get("seller") or {}).get("username", ""),
         "condition": payload.get("condition", "") or "",
         "is_mock": False,

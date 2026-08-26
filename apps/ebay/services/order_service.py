@@ -88,6 +88,7 @@ def create_order(validated_data: dict) -> EbayOrder:
                 tax=breakdown["tax"],
                 ebay_shipping=breakdown["ebay_shipping"],
                 arg_shipping=breakdown["arg_shipping"],
+                shipping_to_confirm=not item.get("has_shipping_info", True),
                 price_changed=quoted.get("price_changed", False),
                 original_price=quoted.get("original_price"),
             )
