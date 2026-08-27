@@ -153,6 +153,13 @@
                 </tr>
                 {% endif %}
 
+                {% if card_surcharge_amount %}
+                <tr style="border-bottom:1px solid #1e1e1e;">
+                  <td colspan="2" style="padding:12px 0;font-family:Arial,sans-serif;font-size:12px;color:#fbbf24;">Recargo Mercado Pago / Tarjeta de Cr&eacute;dito{% if card_surcharge_percent %} {{ card_surcharge_percent }}{% endif %}</td>
+                  <td align="right" style="padding:12px 0;font-family:Arial,sans-serif;font-size:13px;font-weight:600;color:#fbbf24;">+{{ card_surcharge_amount }}</td>
+                </tr>
+                {% endif %}
+
                 <tr style="border-bottom:1px solid #1e1e1e;">
                   <td colspan="2" style="padding:12px 0;font-family:Arial,sans-serif;font-size:12px;color:#dddddd;">Costo de envio</td>
                   <td align="right" style="padding:12px 0;font-family:Arial,sans-serif;font-size:13px;color:#ffffff;">{{ shipping_cost_display }}</td>

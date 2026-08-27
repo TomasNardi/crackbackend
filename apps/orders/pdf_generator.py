@@ -349,10 +349,13 @@ def generate_order_pdf(order):
     if shipping_amount is None:
         shipping_amount = order.shipping_cost
 
-    # order.discount_amount almacena cupón + efectivo combinados (ver serializers.py).
-    # Separamos el cupón restando el efectivo, igual que el template de emails.
+    # En órdenes históricas order.discount_amount almacenaba cupón + descuento por
+    # efectivo combinados, así que separamos el cupón restando el efectivo (igual
+    # que el template de emails). En las órdenes nuevas cash_discount_amount es 0 y
+    # el recargo de Mercado Pago viaja aparte en card_surcharge_amount.
     total_discount_amount = order.discount_amount or Decimal("0")
     cash_discount_amount = order.cash_discount_amount or Decimal("0")
+    card_surcharge_amount = order.card_surcharge_amount or Decimal("0")
     coupon_discount_amount = max(Decimal("0"), total_discount_amount - cash_discount_amount)
 
     coupon_label_suffix = ""
@@ -390,6 +393,17 @@ def generate_order_pdf(order):
         totals_data.append([
             Paragraph(f"<b>{cash_label}:</b>", ParagraphStyle("Right", parent=styles["Normal"], alignment=TA_RIGHT)),
             Paragraph(f"-${cash_discount_amount:.2f}", ParagraphStyle("Right", parent=styles["Normal"], alignment=TA_RIGHT, textColor=HexColor("#4CAF50"))),
+        ])
+
+    # Recargo Mercado Pago / Tarjeta de Crédito
+    if card_surcharge_amount > 0:
+        surcharge_percent = order.card_surcharge_percent or Decimal("0")
+        surcharge_label = "Recargo Mercado Pago / Tarjeta de Crédito"
+        if surcharge_percent > 0:
+            surcharge_label += f" ({surcharge_percent:.0f}%)"
+        totals_data.append([
+            Paragraph(f"<b>{surcharge_label}:</b>", ParagraphStyle("Right", parent=styles["Normal"], alignment=TA_RIGHT)),
+            Paragraph(f"+${card_surcharge_amount:.2f}", ParagraphStyle("Right", parent=styles["Normal"], alignment=TA_RIGHT, textColor=HexColor("#C8972E"))),
         ])
     
     # Envío

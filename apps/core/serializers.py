@@ -27,8 +27,8 @@ class SiteConfigSerializer(serializers.ModelSerializer):
             "maintenance_message",
             "show_top_banner",
             "top_banner_message",
-            "cash_discount_enabled",
-            "cash_discount_percent",
+            "card_surcharge_enabled",
+            "card_surcharge_percent",
         )
 
 

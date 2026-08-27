@@ -331,8 +331,8 @@ class PaymentConfigView(APIView):
         return Response(
             {
                 "mercadopago_public_key": settings.MERCADOPAGO_PUBLIC_KEY,
-                "cash_discount_enabled": config.cash_discount_enabled,
-                "cash_discount_percent": float(config.cash_discount_percent),
+                "card_surcharge_enabled": config.card_surcharge_enabled,
+                "card_surcharge_percent": float(config.card_surcharge_percent),
                 "shipping_prices": get_checkout_shipping_prices(),
             },
             status=status.HTTP_200_OK,

@@ -279,8 +279,13 @@ class Order(models.Model):
         choices=PAYMENT_METHOD_CHOICES,
         default=PAYMENT_MERCADOPAGO,
     )
+    # Histórico: órdenes anteriores al cambio a "recargo" guardaron acá el
+    # descuento por pago en efectivo. Se conservan para que emails y PDF de
+    # esas órdenes sigan reflejando lo que el cliente vio en su momento.
     cash_discount_percent = models.DecimalField("% desc. efectivo aplicado", max_digits=5, decimal_places=2, default=0)
     cash_discount_amount = models.DecimalField("Monto desc. efectivo", max_digits=10, decimal_places=2, default=0)
+    card_surcharge_percent = models.DecimalField("% recargo MP aplicado", max_digits=5, decimal_places=2, default=0)
+    card_surcharge_amount = models.DecimalField("Monto recargo MP", max_digits=10, decimal_places=2, default=0)
     mp_preference_id = models.CharField("MP Preference ID", max_length=150, blank=True, db_index=True)
 
     # Paq.ar (Correo Argentino)

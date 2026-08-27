@@ -192,8 +192,14 @@ def _build_order_email_context(order) -> dict:
     is_mp = order.payment_method == Order.PAYMENT_MERCADOPAGO
     payment_method_display = "Efectivo / Transferencia / Crypto" if is_cash else order.get_payment_method_display()
 
+    # Órdenes históricas (modelo viejo de descuento por efectivo): discount_amount
+    # guardaba cupón + descuento efectivo sumados, por eso hay que restar.
+    # Órdenes nuevas (modelo de recargo): discount_amount es solo el cupón y el
+    # recargo de Mercado Pago viaja aparte en card_surcharge_*.
     cash_discount_amount = getattr(order, "cash_discount_amount", Decimal("0")) or Decimal("0")
     cash_discount_percent = getattr(order, "cash_discount_percent", Decimal("0")) or Decimal("0")
+    card_surcharge_amount = getattr(order, "card_surcharge_amount", Decimal("0")) or Decimal("0")
+    card_surcharge_percent = getattr(order, "card_surcharge_percent", Decimal("0")) or Decimal("0")
     total_discount_amount = getattr(order, "discount_amount", Decimal("0")) or Decimal("0")
     coupon_discount_amount = max(Decimal("0"), total_discount_amount - cash_discount_amount)
 
@@ -237,6 +243,8 @@ def _build_order_email_context(order) -> dict:
         "coupon_discount_code": format_discount_code(order),
         "cash_discount_amount": _format_money(cash_discount_amount) if cash_discount_amount else None,
         "cash_discount_percent": f"{cash_discount_percent:.0f}%" if cash_discount_percent else None,
+        "card_surcharge_amount": _format_money(card_surcharge_amount) if card_surcharge_amount else None,
+        "card_surcharge_percent": f"{card_surcharge_percent:.0f}%" if card_surcharge_percent else None,
         "shipping_price": shipping_price_display,
         "shipping_cost_display": shipping_cost_display,
         "shipping_method_label": get_shipping_method_label(shipping_method, shipping_zone),

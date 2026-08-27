@@ -667,8 +667,8 @@ UNFOLD = {
                         "permission": admin_has_perm("core.view_siteconfig"),
                     },
                     {
-                        "title": "Pago en efectivo",
-                        "icon": "point_of_sale",
+                        "title": "Recargo Mercado Pago",
+                        "icon": "credit_card",
                         "link": "/admin/core/paymentsettings/",
                         "permission": admin_has_perm("core.view_paymentsettings"),
                     },
