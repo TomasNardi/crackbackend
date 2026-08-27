@@ -8,7 +8,7 @@ from django.urls import reverse
 from django.utils import timezone
 
 from apps.orders.mercadopago_service import create_checkout_preference
-from apps.orders.models import Order, OrderItem
+from apps.orders.models import DiscountCode, Order, OrderItem, ShippingConfig
 from apps.orders.serializers import OrderCreateSerializer
 from apps.orders.services import reconcile_payment
 from apps.orders.tasks import expire_stale_cash_orders
@@ -17,6 +17,7 @@ from apps.orders.services.stock_reservation_service import (
     release_order_stock,
 )
 from apps.products.models import Product, ProductCategory, ProductImage
+from apps.core.models import ExchangeRate, SiteConfig
 
 
 class MercadoPagoPreferenceTests(TestCase):
@@ -567,3 +568,292 @@ class ReturnStockAdminTests(TestCase):
         self.assertEqual(order.status, Order.STATUS_PAID)
         self.assertEqual(self.product.stock_quantity, 1)
         self.assertEqual(self.product.reserved_quantity, 0)
+
+
+class CardSurchargePricingTests(TestCase):
+    """
+    El precio publicado es el precio en efectivo. Pagar con Mercado Pago suma
+    un recargo que se calcula SOLO sobre los productos, nunca sobre el envío.
+    """
+
+    def setUp(self):
+        ExchangeRate.objects.update_or_create(pk=1, defaults={"usd_to_ars": Decimal("1000")})
+        config = SiteConfig.get()
+        config.card_surcharge_enabled = True
+        config.card_surcharge_percent = Decimal("10.00")
+        config.save()
+
+        ShippingConfig.objects.update_or_create(
+            key=ShippingConfig.KEY_HOME_PROVINCE,
+            defaults={"price": Decimal("13000.00")},
+        )
+
+        self.category = ProductCategory.objects.create(name="Single")
+        # price_usd 10 x cotizacion 1000 = $10.000 de precio en efectivo.
+        self.product = Product.objects.create(
+            category=self.category,
+            name="Sorin TOPPS",
+            price_usd=Decimal("10.00"),
+            in_stock=True,
+            stock_quantity=5,
+        )
+
+    def _checkout(self, payment_method, quantity=1, discount_code="", pickup=False):
+        data = {
+            "customer_name": "Cliente Test",
+            "customer_email": "cliente@test.com",
+            "payment_method": payment_method,
+            "items": [{"product_id": self.product.id, "quantity": quantity}],
+        }
+        if pickup:
+            data.update({
+                "shipping_type": Order.SHIPPING_PICKUP,
+                "shipping_method": Order.SHIPPING_METHOD_STORE_PICKUP,
+            })
+        else:
+            data.update({
+                "shipping_type": Order.SHIPPING_HOME,
+                "shipping_method": Order.SHIPPING_METHOD_HOME,
+                "shipping_zone": Order.SHIPPING_ZONE_PROVINCE,
+                "shipping_address": "Calle Falsa 123",
+                "shipping_city": "Rosario",
+                "shipping_province": "Santa Fe",
+                "shipping_zip": "2000",
+            })
+        if discount_code:
+            data["discount_code"] = discount_code
+
+        serializer = OrderCreateSerializer(data=data)
+        self.assertTrue(serializer.is_valid(), serializer.errors)
+        return serializer.save()
+
+    def test_cash_order_pays_the_published_price_without_surcharge(self):
+        order = self._checkout(Order.PAYMENT_CASH)
+
+        self.assertEqual(order.subtotal, Decimal("10000.00"))
+        self.assertEqual(order.card_surcharge_amount, Decimal("0"))
+        self.assertEqual(order.card_surcharge_percent, Decimal("0"))
+        self.assertEqual(order.total, Decimal("23000.00"))  # 10.000 + 13.000 de envio
+
+    def test_mercadopago_surcharge_applies_only_to_products_not_shipping(self):
+        order = self._checkout(Order.PAYMENT_MERCADOPAGO)
+
+        # El recargo es sobre los $10.000 de productos, NO sobre los $13.000 de envio.
+        self.assertEqual(order.card_surcharge_percent, Decimal("10.00"))
+        self.assertEqual(order.card_surcharge_amount, Decimal("1000.00"))
+        self.assertEqual(order.total, Decimal("24000.00"))
+
+        # Si el recargo tocara el envio el total seria 25.300: lo dejamos explicito
+        # para que un cambio futuro que mueva el calculo rompa el test.
+        surcharge_over_everything = (order.subtotal + order.shipping_price) * Decimal("0.10")
+        self.assertNotEqual(order.card_surcharge_amount, surcharge_over_everything)
+
+    def test_surcharge_is_computed_after_the_coupon(self):
+        DiscountCode.objects.create(
+            code="CRACK20",
+            discount_type=DiscountCode.DISCOUNT_PERCENT,
+            discount_amount=Decimal("20"),
+        )
+        order = self._checkout(Order.PAYMENT_MERCADOPAGO, discount_code="CRACK20")
+
+        # 10.000 - 20% = 8.000 -> recargo 800 -> total 8.000 + 800 + 13.000
+        self.assertEqual(order.discount_amount, Decimal("2000.00"))
+        self.assertEqual(order.card_surcharge_amount, Decimal("800.00"))
+        self.assertEqual(order.total, Decimal("21800.00"))
+
+    def test_discount_amount_no_longer_mixes_coupon_and_payment_adjustment(self):
+        """El recargo viaja en su propio campo: discount_amount es solo el cupon."""
+        DiscountCode.objects.create(
+            code="FIJO500",
+            discount_type=DiscountCode.DISCOUNT_FIXED,
+            discount_amount=Decimal("500"),
+        )
+        order = self._checkout(Order.PAYMENT_MERCADOPAGO, discount_code="FIJO500")
+
+        self.assertEqual(order.discount_amount, Decimal("500.00"))
+        self.assertEqual(order.cash_discount_amount, Decimal("0"))
+        self.assertEqual(order.card_surcharge_amount, Decimal("950.00"))
+
+    def test_surcharge_can_be_turned_off_from_the_admin(self):
+        config = SiteConfig.get()
+        config.card_surcharge_enabled = False
+        config.save()
+
+        order = self._checkout(Order.PAYMENT_MERCADOPAGO)
+
+        self.assertEqual(order.card_surcharge_amount, Decimal("0"))
+        self.assertEqual(order.total, Decimal("23000.00"))
+
+    def test_surcharge_percent_comes_from_the_admin_not_from_a_constant(self):
+        config = SiteConfig.get()
+        config.card_surcharge_percent = Decimal("25.00")
+        config.save()
+
+        order = self._checkout(Order.PAYMENT_MERCADOPAGO)
+
+        self.assertEqual(order.card_surcharge_percent, Decimal("25.00"))
+        self.assertEqual(order.card_surcharge_amount, Decimal("2500.00"))
+
+    def test_pickup_order_has_no_shipping_to_surcharge(self):
+        order = self._checkout(Order.PAYMENT_MERCADOPAGO, pickup=True)
+
+        self.assertEqual(order.shipping_price, Decimal("0"))
+        self.assertEqual(order.card_surcharge_amount, Decimal("1000.00"))
+        self.assertEqual(order.total, Decimal("11000.00"))
+
+
+class CheckoutPriceTamperingTests(TestCase):
+    """El cliente solo manda product_id + quantity: los precios los pone el server."""
+
+    def setUp(self):
+        ExchangeRate.objects.update_or_create(pk=1, defaults={"usd_to_ars": Decimal("1000")})
+        config = SiteConfig.get()
+        config.card_surcharge_enabled = True
+        config.card_surcharge_percent = Decimal("10.00")
+        config.save()
+
+        self.category = ProductCategory.objects.create(name="Single")
+        self.product = Product.objects.create(
+            category=self.category,
+            name="Sorin TOPPS",
+            price_usd=Decimal("10.00"),
+            in_stock=True,
+            stock_quantity=5,
+        )
+
+    def _payload(self, **overrides):
+        data = {
+            "customer_name": "Cliente Test",
+            "customer_email": "cliente@test.com",
+            "payment_method": Order.PAYMENT_MERCADOPAGO,
+            "shipping_type": Order.SHIPPING_PICKUP,
+            "shipping_method": Order.SHIPPING_METHOD_STORE_PICKUP,
+            "items": [{"product_id": self.product.id, "quantity": 1}],
+        }
+        data.update(overrides)
+        return data
+
+    def test_client_supplied_prices_are_ignored(self):
+        serializer = OrderCreateSerializer(data=self._payload(
+            subtotal="1.00",
+            total="1.00",
+            card_surcharge_amount="0",
+            card_surcharge_percent="0",
+            items=[{"product_id": self.product.id, "quantity": 1, "unit_price": "1.00"}],
+        ))
+        self.assertTrue(serializer.is_valid(), serializer.errors)
+        order = serializer.save()
+
+        self.assertEqual(order.subtotal, Decimal("10000.00"))
+        self.assertEqual(order.card_surcharge_amount, Decimal("1000.00"))
+        self.assertEqual(order.total, Decimal("11000.00"))
+        self.assertEqual(order.items.first().unit_price, Decimal("10000.00"))
+
+    def test_unknown_discount_code_does_not_discount(self):
+        serializer = OrderCreateSerializer(data=self._payload(discount_code="NOEXISTE"))
+        self.assertTrue(serializer.is_valid(), serializer.errors)
+        order = serializer.save()
+
+        self.assertEqual(order.discount_amount, Decimal("0"))
+        self.assertEqual(order.total, Decimal("11000.00"))
+
+    def test_expired_discount_code_does_not_discount(self):
+        DiscountCode.objects.create(
+            code="VENCIDO",
+            discount_type=DiscountCode.DISCOUNT_PERCENT,
+            discount_amount=Decimal("50"),
+            expiration_type=DiscountCode.EXPIRATION_DATE,
+            valid_from=timezone.now() - timedelta(days=10),
+            valid_until=timezone.now() - timedelta(days=1),
+        )
+        serializer = OrderCreateSerializer(data=self._payload(discount_code="VENCIDO"))
+        self.assertTrue(serializer.is_valid(), serializer.errors)
+        order = serializer.save()
+
+        self.assertEqual(order.discount_amount, Decimal("0"))
+        self.assertEqual(order.total, Decimal("11000.00"))
+
+    @override_settings(
+        MERCADOPAGO_ACCESS_TOKEN="test-token",
+        FRONTEND_URL="https://front.example",
+        BACKEND_PUBLIC_URL="https://api.example",
+    )
+    @patch("apps.orders.mercadopago_service._sdk")
+    def test_mercadopago_preference_charges_the_total_with_surcharge(self, mock_sdk):
+        sdk = Mock()
+        preference_resource = Mock()
+        preference_resource.create.return_value = {
+            "status": 201,
+            "response": {"id": "pref-abc", "init_point": "https://mp.example/checkout"},
+        }
+        sdk.preference.return_value = preference_resource
+        mock_sdk.return_value = sdk
+
+        serializer = OrderCreateSerializer(data=self._payload())
+        self.assertTrue(serializer.is_valid(), serializer.errors)
+        order = serializer.save()
+
+        create_checkout_preference(order)
+
+        payload = preference_resource.create.call_args[0][0]
+        self.assertEqual(payload["items"][0]["unit_price"], 11000.0)
+        self.assertEqual(payload["metadata"]["card_surcharge_amount"], "1000.00")
+
+
+class MercadoPagoUnderpaymentTests(TestCase):
+    """MP no puede aprobar una orden pagando menos que el total con recargo."""
+
+    def setUp(self):
+        self.category = ProductCategory.objects.create(name="Single")
+        self.product = Product.objects.create(
+            category=self.category,
+            name="Sorin TOPPS",
+            price_usd=Decimal("10.00"),
+            in_stock=True,
+            stock_quantity=5,
+        )
+        self.order = Order.objects.create(
+            customer_name="Cliente Test",
+            customer_email="cliente@test.com",
+            shipping_type=Order.SHIPPING_PICKUP,
+            shipping_method=Order.SHIPPING_METHOD_STORE_PICKUP,
+            payment_method=Order.PAYMENT_MERCADOPAGO,
+            subtotal=Decimal("10000.00"),
+            card_surcharge_percent=Decimal("10.00"),
+            card_surcharge_amount=Decimal("1000.00"),
+            total=Decimal("11000.00"),
+        )
+        OrderItem.objects.create(
+            order=self.order,
+            product=self.product,
+            product_name=self.product.name,
+            unit_price=Decimal("10000.00"),
+            quantity=1,
+        )
+
+    def _payment_data(self, amount):
+        return {
+            "id": "pay-1",
+            "status": "approved",
+            "external_reference": self.order.order_code,
+            "transaction_amount": str(amount),
+            "payment_method_id": "visa",
+            "payment_type_id": "credit_card",
+            "transaction_details": {"net_received_amount": str(amount)},
+            "metadata": {"order_code": self.order.order_code},
+        }
+
+    def test_paying_the_cash_price_does_not_mark_the_order_as_paid(self):
+        # El atacante paga $10.000 (precio en efectivo) una orden de $11.000.
+        order, paid = reconcile_payment(self._payment_data("10000.00"), source="webhook")
+
+        self.assertFalse(paid)
+        order.refresh_from_db()
+        self.assertNotEqual(order.status, Order.STATUS_PAID)
+
+    def test_paying_the_full_total_marks_the_order_as_paid(self):
+        order, paid = reconcile_payment(self._payment_data("11000.00"), source="webhook")
+
+        self.assertTrue(paid)
+        order.refresh_from_db()
+        self.assertEqual(order.status, Order.STATUS_PAID)
