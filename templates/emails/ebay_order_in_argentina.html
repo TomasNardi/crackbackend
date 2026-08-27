@@ -1,0 +1,38 @@
+{% extends "emails/ebay_base.html" %}
+
+{% block subject %}Tu pedido {{ order.order_code }} llegó a Argentina{% endblock %}
+{% block preheader %}Tu pedido {{ order.order_code }} ya está en la tienda. Escribinos para coordinar el retiro o el envío.{% endblock %}
+{% block eyebrow %}Pedido en Argentina{% endblock %}
+{% block icon_bg %}#8250df{% endblock %}
+{% block icon %}&#9992;{% endblock %}
+{% block title %}¡Tu pedido llegó a Argentina!{% endblock %}
+
+{% block intro %}
+  Hola <strong style="color:#ffffff;">{{ order.customer_name }}</strong>, tu pedido
+  <strong style="color:#C8972E;">{{ order.order_code }}</strong> ya está en Argentina y se encuentra en nuestra tienda.<br>
+  <strong style="color:#ffffff;">Contactate con nosotros</strong> para coordinar el retiro o el envío del pedido.
+{% endblock %}
+
+{% block cta %}
+<tr>
+  <td align="center" style="background-color:#161616;padding:32px 48px;border-bottom:1px solid #2a2a2a;">
+    <p style="margin:0 0 20px;font-family:Arial,sans-serif;font-size:14px;color:#888888;line-height:1.7;">
+      {% if order.delivery_type == "pickup" %}
+        Nuestro showroom está en Deheza 2921, PB, Saavedra, Buenos Aires.<br>Escribinos y coordinamos el día y horario de retiro.
+      {% else %}
+        Escribinos y coordinamos el envío junto con su costo.
+      {% endif %}
+    </p>
+    <table border="0" cellpadding="0" cellspacing="0">
+      <tr>
+        <td align="center" style="background-color:#C8972E;border-radius:6px;">
+          <a href="{{ whatsapp_url }}" target="_blank" rel="noopener noreferrer" style="display:inline-block;padding:13px 32px;font-family:Arial,sans-serif;font-size:13px;font-weight:700;color:#0d0d0d;text-decoration:none;letter-spacing:0.5px;white-space:nowrap;">Coordinar la entrega por WhatsApp</a>
+        </td>
+      </tr>
+    </table>
+    <p style="margin:18px 0 0;font-family:Arial,sans-serif;font-size:12px;color:#666666;">
+      También podés <a href="{{ tracking_url }}" style="color:#C8972E;text-decoration:underline;">seguir tu pedido acá</a>.
+    </p>
+  </td>
+</tr>
+{% endblock %}

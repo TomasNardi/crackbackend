@@ -1,0 +1,37 @@
+{% extends "emails/ebay_base.html" %}
+{% comment %}
+Comprobante de que el pago llegó.
+
+A propósito no menciona montos: es un acuse de recibo, no una factura. Por eso
+`show_items` llega en False desde emails.py y no se dibuja el desglose.
+{% endcomment %}
+
+{% block subject %}Recibimos el pago de tu pedido {{ order.order_code }}{% endblock %}
+{% block preheader %}Confirmamos la recepción del pago de tu pedido {{ order.order_code }}.{% endblock %}
+{% block eyebrow %}Pago recibido{% endblock %}
+{% block icon_bg %}#22c55e{% endblock %}
+{% block icon %}&#10003;{% endblock %}
+{% block title %}Recibimos tu pago{% endblock %}
+
+{% block intro %}
+  Hola <strong style="color:#ffffff;">{{ order.customer_name }}</strong>, confirmamos la recepción del pago correspondiente al pedido
+  <strong style="color:#C8972E;">{{ order.order_code }}</strong>.<br>
+  Este correo sirve como comprobante. Ya salimos a comprar tus publicaciones: te vamos a avisar apenas el pedido llegue a Argentina.
+{% endblock %}
+
+{% block notice %}
+<tr>
+  <td style="background-color:#121212;padding:24px 48px;border-top:1px solid #2a2a2a;border-bottom:1px solid #2a2a2a;">
+    <p style="margin:0 0 14px;font-family:Arial,sans-serif;font-size:10px;font-weight:700;color:#C8972E;text-transform:uppercase;letter-spacing:3px;">Próximos pasos</p>
+    <p style="margin:0 0 8px;font-family:Arial,sans-serif;font-size:13px;color:#dddddd;line-height:1.7;">
+      <strong style="color:#ffffff;">1.</strong> Compramos las publicaciones en eBay y las enviamos a nuestro courier.
+    </p>
+    <p style="margin:0 0 8px;font-family:Arial,sans-serif;font-size:13px;color:#dddddd;line-height:1.7;">
+      <strong style="color:#ffffff;">2.</strong> El pedido viaja a Argentina.
+    </p>
+    <p style="margin:0;font-family:Arial,sans-serif;font-size:13px;color:#dddddd;line-height:1.7;">
+      <strong style="color:#ffffff;">3.</strong> Te avisamos cuando llegue y coordinamos el retiro o el envío.
+    </p>
+  </td>
+</tr>
+{% endblock %}

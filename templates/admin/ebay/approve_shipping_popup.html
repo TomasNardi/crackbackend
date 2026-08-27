@@ -1,0 +1,189 @@
+{% load i18n %}<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Aprobar pedido {{ order.order_code }}</title>
+  <style>
+    :root {
+      --bg: #f5f1e8;
+      --card: #ffffff;
+      --text: #1f2937;
+      --muted: #6b7280;
+      --border: #e5e7eb;
+      --primary: #c8972e;
+      --ok: #2ea44f;
+      --ok-strong: #268a42;
+      --warn: #d73a49;
+    }
+
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      min-height: 100vh;
+      font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+      color: var(--text);
+      background:
+        radial-gradient(circle at top right, rgba(200, 151, 46, 0.16), transparent 45%),
+        linear-gradient(180deg, #f9f7f2 0%, var(--bg) 100%);
+      padding: 22px;
+    }
+
+    .wrap {
+      max-width: 620px;
+      margin: 0 auto;
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      padding: 24px;
+      box-shadow: 0 12px 36px rgba(17, 24, 39, 0.09);
+    }
+
+    h1 { margin: 0 0 4px; font-size: 20px; letter-spacing: -0.2px; }
+    .code { color: var(--primary); font-weight: 700; }
+
+    .lead {
+      margin: 0 0 18px;
+      color: var(--muted);
+      font-size: 13px;
+      line-height: 1.6;
+    }
+
+    .summary {
+      background: #faf8f3;
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 12px 14px;
+      margin-bottom: 18px;
+      font-size: 13px;
+      line-height: 1.7;
+    }
+    .summary strong { color: #111827; }
+
+    .row {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 12px 0;
+      border-top: 1px solid var(--border);
+    }
+    .row:first-of-type { border-top: none; }
+
+    .row img {
+      width: 48px; height: 48px;
+      object-fit: cover;
+      border-radius: 8px;
+      border: 1px solid var(--border);
+      flex: 0 0 auto;
+    }
+
+    .row .info { flex: 1 1 auto; min-width: 0; }
+    .row .title {
+      font-size: 13px;
+      font-weight: 600;
+      line-height: 1.4;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      display: -webkit-box;
+      -webkit-line-clamp: 2;
+      -webkit-box-orient: vertical;
+    }
+    .row .meta { font-size: 11px; color: var(--muted); margin-top: 3px; }
+    .row .meta a { color: var(--primary); text-decoration: none; }
+
+    .amount { flex: 0 0 auto; display: flex; align-items: center; gap: 6px; }
+    .amount .usd { font-size: 12px; color: var(--muted); font-weight: 600; }
+
+    input[type="number"] {
+      width: 108px;
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 9px 11px;
+      font-family: inherit;
+      font-size: 13px;
+      text-align: right;
+    }
+    input[type="number"]:focus {
+      outline: none;
+      border-color: var(--primary);
+      box-shadow: 0 0 0 3px rgba(200, 151, 46, 0.18);
+    }
+
+    .errors { color: var(--warn); font-size: 11px; margin-top: 4px; }
+
+    .help {
+      color: var(--muted);
+      font-size: 12px;
+      margin-top: 14px;
+      line-height: 1.6;
+    }
+
+    .actions { display: flex; gap: 10px; margin-top: 20px; }
+
+    button, .cancel {
+      border: none;
+      border-radius: 10px;
+      padding: 11px 18px;
+      font-size: 13px;
+      font-weight: 700;
+      cursor: pointer;
+      text-decoration: none;
+      display: inline-block;
+      font-family: inherit;
+    }
+    button { background: var(--ok); color: #fff; }
+    button:hover { background: var(--ok-strong); }
+    .cancel {
+      background: #f3f4f6;
+      color: var(--text);
+      border: 1px solid var(--border);
+    }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <h1>Aprobar pedido <span class="code">{{ order.order_code }}</span></h1>
+    <p class="lead">
+      eBay no informó el costo de envío de estas publicaciones. Cargalo para que
+      el total del pedido quede completo antes de avisarle al cliente.
+    </p>
+
+    <div class="summary">
+      <div><strong>Cliente:</strong> {{ order.customer_name }} &middot; {{ order.customer_email }}</div>
+      <div><strong>Total sin estos envíos:</strong> US$ {{ order.total|floatformat:2 }}</div>
+      <div><strong>Publicaciones:</strong> {{ order.items.count }}</div>
+    </div>
+
+    <form method="post">
+      {% csrf_token %}
+
+      {% for item, field in form.rows %}
+        <div class="row">
+          {% if item.image_url %}<img src="{{ item.image_url }}" alt="" />{% endif %}
+          <div class="info">
+            <div class="title">{{ item.title }}</div>
+            <div class="meta">
+              {{ item.quantity }} u. &middot;
+              <a href="{{ item.ebay_url }}" target="_blank" rel="noopener noreferrer">Ver en eBay &#8599;</a>
+            </div>
+          </div>
+          <div class="amount">
+            <span class="usd">US$</span>
+            {{ field }}
+          </div>
+        </div>
+        {% if field.errors %}<div class="errors">{{ field.errors|join:" " }}</div>{% endif %}
+      {% endfor %}
+
+      <div class="help">
+        El valor es por unidad, en dólares. Poné <strong>0</strong> si el envío es gratis.
+      </div>
+
+      <div class="actions">
+        <button type="submit">Guardar envíos y aprobar</button>
+        <a class="cancel" href="{% url 'admin:ebay_ebayorder_changelist' %}">Cancelar</a>
+      </div>
+    </form>
+  </div>
+</body>
+</html>

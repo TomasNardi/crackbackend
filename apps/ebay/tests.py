@@ -1,0 +1,593 @@
+"""
+Tests de importación eBay.
+
+La fórmula y la resolución de links se prueban solas. Lo que toca la red se
+cubre parcheando `get_item`, para que la suite no dependa de eBay ni de tener
+credenciales cargadas.
+"""
+
+from decimal import Decimal
+from unittest.mock import patch
+
+from django.contrib.auth import get_user_model
+from django.test import Client, TestCase
+from django.urls import reverse
+from rest_framework.test import APIClient
+
+from apps.ebay.models import EbayConfig, EbayOrder, EbayOrderItem
+from apps.ebay.services import ebay_client
+from apps.ebay.services.ebay_client import (
+    EbayInvalidUrl,
+    EbayItemHasVariations,
+    EbayItemUnavailable,
+    extract_item_id,
+    extract_item_ref,
+    normalize_url,
+)
+from apps.ebay.serializers import QuoteRequestSerializer
+from apps.ebay.services.order_service import OrderBlocked, create_order
+from apps.ebay.services.pricing import build_breakdown, sum_breakdowns
+from apps.ebay.services.quote_service import QuoteRejected, quote_item
+
+
+def fake_item(**overrides):
+    item = {
+        "item_id": "188836541819",
+        "title": "Pokemon TCG 151 ETB Snorlax SEALED",
+        "image_url": "https://i.ebayimg.com/x.jpg",
+        "price": Decimal("548.99"),
+        "currency": "USD",
+        "shipping": Decimal("6.99"),
+        "has_shipping_info": True,
+        "item_web_url": "https://www.ebay.com/itm/188836541819",
+        "buying_option": "FIXED_PRICE",
+        "buying_options": ["FIXED_PRICE"],
+        "available": True,
+        "available_quantity": None,
+        "seller": "seller",
+        "condition": "New",
+        "is_mock": False,
+    }
+    item.update(overrides)
+    return item
+
+
+class PricingTests(TestCase):
+    def test_matches_reference_breakdown(self):
+        """Los números de la calculadora de referencia, al centavo."""
+        breakdown = build_breakdown(
+            price=Decimal("548.99"),
+            ebay_shipping=Decimal("6.99"),
+            arg_shipping=Decimal("3.00"),
+            commission_percent=Decimal("10"),
+            tax_percent=Decimal("7"),
+        )
+
+        self.assertEqual(breakdown["commission"], Decimal("54.90"))
+        self.assertEqual(breakdown["tax"], Decimal("38.43"))
+        self.assertEqual(breakdown["item_with_fees"], Decimal("642.32"))
+        self.assertEqual(breakdown["unit_total"], Decimal("652.31"))
+
+    def test_quantity_multiplies_every_component(self):
+        breakdown = build_breakdown(
+            price=Decimal("100"), ebay_shipping=Decimal("10"), arg_shipping=Decimal("3"),
+            commission_percent=Decimal("10"), tax_percent=Decimal("7"), quantity=3,
+        )
+        self.assertEqual(breakdown["unit_total"], Decimal("130.00"))
+        self.assertEqual(breakdown["line_total"], Decimal("390.00"))
+
+    def test_totals_add_up(self):
+        lines = [
+            build_breakdown(price=Decimal("100"), ebay_shipping=Decimal("5"),
+                            arg_shipping=Decimal("3"), commission_percent=Decimal("10"),
+                            tax_percent=Decimal("7"), quantity=2),
+            build_breakdown(price=Decimal("50"), ebay_shipping=Decimal("0"),
+                            arg_shipping=Decimal("20"), commission_percent=Decimal("10"),
+                            tax_percent=Decimal("7"), quantity=1),
+        ]
+        totals = sum_breakdowns(lines)
+
+        self.assertEqual(totals["items_total"], Decimal("250.00"))
+        self.assertEqual(totals["commission_total"], Decimal("25.00"))
+        self.assertEqual(totals["arg_shipping_total"], Decimal("26.00"))
+        self.assertEqual(
+            totals["total"],
+            totals["items_total"] + totals["commission_total"] + totals["tax_total"]
+            + totals["ebay_shipping_total"] + totals["arg_shipping_total"],
+        )
+
+
+class UrlParsingTests(TestCase):
+    def test_accepts_the_shapes_people_actually_paste(self):
+        cases = [
+            "https://www.ebay.com/itm/188836541819",
+            "https://www.ebay.com/itm/188836541819?_skw=pokemon+151&itmmeta=01ABC",
+            "https://www.ebay.com/itm/pokemon-tcg-151-etb/188836541819",
+            "www.ebay.com/itm/188836541819",
+            "188836541819",
+        ]
+        for url in cases:
+            with self.subTest(url=url):
+                self.assertEqual(extract_item_id(url), "188836541819")
+
+    def test_accepts_a_link_copied_from_a_recommendations_carousel(self):
+        """
+        Los links que salen de "publicaciones similares" arrastran más de mil
+        caracteres de tracking. El id sigue estando al principio.
+        """
+        url = (
+            "https://www.ebay.com/itm/168634024641?_trkparms="
+            + "itmf%3D1%26aid%3D1110006%26rkt%3D12%26" * 40
+            + "&itmmeta=01M0Z638RYGSQEATV2AZVB64R1"
+        )
+        self.assertGreater(len(url), 1000)
+        self.assertEqual(extract_item_id(url), "168634024641")
+
+        serializer = QuoteRequestSerializer(data={"url": url})
+        self.assertTrue(serializer.is_valid(), serializer.errors)
+
+    def test_rejects_other_domains(self):
+        with self.assertRaises(EbayInvalidUrl):
+            normalize_url("https://www.mercadolibre.com.ar/p/123456789")
+
+    def test_rejects_link_without_item_id(self):
+        with self.assertRaises(EbayInvalidUrl):
+            extract_item_id("https://www.ebay.com/sch/i.html?_nkw=pokemon")
+
+    def test_reads_the_chosen_variation(self):
+        """Las 'pick a card' llegan con la variante elegida en `?var=`."""
+        legacy_id, variation_id = extract_item_ref(
+            "https://www.ebay.com/itm/188836541819?var=987654321012&_skw=pokemon"
+        )
+        self.assertEqual(legacy_id, "188836541819")
+        self.assertEqual(variation_id, "987654321012")
+
+    def test_link_without_variation_has_none(self):
+        self.assertEqual(
+            extract_item_ref("https://www.ebay.com/itm/188836541819"),
+            ("188836541819", None),
+        )
+
+    def test_tracking_blob_is_not_mistaken_for_a_variation(self):
+        """
+        `itmprp` es un blob largo donde un `var=` suelto aparece por casualidad.
+        Se lee la query parseada justamente para no morder ese anzuelo.
+        """
+        url = (
+            "https://www.ebay.com/itm/188836541819"
+            "?itmprp=enc%3AAQALAAAA0LB2var%3D999999999999xyz&LH_BIN=1"
+        )
+        self.assertEqual(extract_item_ref(url), ("188836541819", None))
+
+
+class QuoteServiceTests(TestCase):
+    def setUp(self):
+        self.config = EbayConfig.get()
+
+    @patch("apps.ebay.services.quote_service.get_item")
+    def test_unknown_ebay_shipping_stays_at_zero_and_flagged(self, mocked):
+        """
+        Sin dato de envío no inventamos un valor: queda en 0 con la marca, y el
+        owner lo carga a mano. Cobrarle al cliente un número nuestro como si
+        fuera de eBay es plata que después falta.
+        """
+        mocked.return_value = fake_item(shipping=Decimal("0"), has_shipping_info=False)
+
+        result = quote_item("https://www.ebay.com/itm/188836541819")
+
+        self.assertEqual(result["quote"]["ebay_shipping"], Decimal("0.00"))
+        self.assertFalse(result["item"]["has_shipping_info"])
+
+    @patch("apps.ebay.services.quote_service.get_item")
+    def test_free_shipping_is_not_confused_with_unknown(self, mocked):
+        mocked.return_value = fake_item(shipping=Decimal("0"), has_shipping_info=True)
+
+        result = quote_item("https://www.ebay.com/itm/188836541819")
+
+        self.assertEqual(result["quote"]["ebay_shipping"], Decimal("0.00"))
+        self.assertTrue(result["item"]["has_shipping_info"])
+
+    @patch("apps.ebay.services.quote_service.get_item")
+    def test_quantity_is_capped_by_ebay_stock(self, mocked):
+        """Una publicación de una sola unidad no se puede pedir por triplicado."""
+        mocked.return_value = fake_item(available_quantity=1)
+        self.config.max_quantity_per_item = 10
+        self.config.save()
+
+        result = quote_item("https://www.ebay.com/itm/188836541819", quantity=3)
+
+        self.assertEqual(result["quote"]["quantity"], 1)
+        self.assertEqual(result["item"]["max_quantity"], 1)
+
+    @patch("apps.ebay.services.quote_service.get_item")
+    def test_store_limit_still_wins_when_ebay_has_more(self, mocked):
+        mocked.return_value = fake_item(available_quantity=50)
+        self.config.max_quantity_per_item = 4
+        self.config.save()
+
+        result = quote_item("https://www.ebay.com/itm/188836541819", quantity=9)
+
+        self.assertEqual(result["quote"]["quantity"], 4)
+        self.assertEqual(result["item"]["max_quantity"], 4)
+
+    @patch("apps.ebay.services.quote_service.get_item")
+    def test_unknown_stock_does_not_cap(self, mocked):
+        """
+        eBay no siempre da el número ("hay más de 10"). Sin dato no inventamos
+        un tope: queda el de la tienda.
+        """
+        mocked.return_value = fake_item(available_quantity=None)
+        self.config.max_quantity_per_item = 10
+        self.config.save()
+
+        result = quote_item("https://www.ebay.com/itm/188836541819", quantity=6)
+
+        self.assertEqual(result["quote"]["quantity"], 6)
+        self.assertEqual(result["item"]["max_quantity"], 10)
+
+    @patch("apps.ebay.services.quote_service.get_item")
+    def test_listing_with_variations_asks_for_the_chosen_one(self, mocked):
+        """
+        Sin variante elegida eBay rechaza la publicación. El mensaje tiene que
+        decirle al cliente qué hacer: reintentar no lo arregla nunca.
+        """
+        mocked.side_effect = EbayItemHasVariations()
+
+        with self.assertRaises(EbayItemHasVariations) as ctx:
+            quote_item("https://www.ebay.com/itm/188836541819")
+
+        self.assertEqual(ctx.exception.code, "item_has_variations")
+        self.assertIn("elegí", ctx.exception.message)
+
+    @patch("apps.ebay.services.quote_service.get_item")
+    def test_variation_from_the_link_reaches_ebay(self, mocked):
+        mocked.return_value = fake_item()
+        quote_item("https://www.ebay.com/itm/188836541819?var=987654321012")
+
+        self.assertEqual(mocked.call_args.kwargs["variation_id"], "987654321012")
+
+    @patch("apps.ebay.services.quote_service.get_item")
+    def test_arg_shipping_comes_from_config(self, mocked):
+        """El envío es único: no importa si es suelta, calificada o sellada."""
+        mocked.return_value = fake_item()
+        self.config.arg_shipping = Decimal("15.00")
+        self.config.save()
+
+        quoted = quote_item("https://www.ebay.com/itm/188836541819")
+        self.assertEqual(quoted["quote"]["arg_shipping"], Decimal("15.00"))
+
+    @patch("apps.ebay.services.quote_service.get_item")
+    def test_auction_is_rejected(self, mocked):
+        mocked.return_value = fake_item(buying_option="AUCTION", buying_options=["AUCTION"])
+
+        with self.assertRaises(QuoteRejected) as ctx:
+            quote_item("https://www.ebay.com/itm/188836541819")
+        self.assertEqual(ctx.exception.code, "auction_not_supported")
+
+    @patch("apps.ebay.services.quote_service.get_item")
+    def test_non_usd_is_rejected(self, mocked):
+        mocked.return_value = fake_item(currency="EUR")
+
+        with self.assertRaises(QuoteRejected) as ctx:
+            quote_item("https://www.ebay.com/itm/188836541819")
+        self.assertEqual(ctx.exception.code, "currency_not_supported")
+
+    @patch("apps.ebay.services.quote_service.get_item")
+    def test_sold_out_is_rejected(self, mocked):
+        mocked.return_value = fake_item(available=False)
+
+        with self.assertRaises(EbayItemUnavailable):
+            quote_item("https://www.ebay.com/itm/188836541819")
+
+    @patch("apps.ebay.services.quote_service.get_item")
+    def test_quantity_is_capped_by_config(self, mocked):
+        mocked.return_value = fake_item()
+        self.config.max_quantity_per_item = 2
+        self.config.save()
+
+        quoted = quote_item("https://www.ebay.com/itm/188836541819", quantity=99)
+        self.assertEqual(quoted["quote"]["quantity"], 2)
+
+
+class OrderCreationTests(TestCase):
+    def setUp(self):
+        config = EbayConfig.get()
+        config.arg_shipping = Decimal("3.00")
+        config.save()
+        self.payload = {
+            "customer_name": "Tomás",
+            "customer_email": "tomas@example.com",
+            "customer_phone": "1150588131",
+            "delivery_type": EbayOrder.DELIVERY_PICKUP,
+            "shipping_address": "", "shipping_city": "", "shipping_province": "",
+            "shipping_zip": "", "shipping_branch": "", "customer_notes": "",
+            "items": [{
+                "url": "https://www.ebay.com/itm/188836541819",
+                "quantity": 1,
+                "quoted_price": Decimal("548.99"),
+            }],
+        }
+
+    @patch("apps.ebay.services.quote_service.get_item")
+    def test_totals_come_from_the_server(self, mocked):
+        mocked.return_value = fake_item()
+
+        order = create_order(dict(self.payload))
+
+        self.assertEqual(order.status, EbayOrder.STATUS_PENDING)
+        self.assertEqual(order.total, Decimal("652.31"))
+        self.assertEqual(order.commission_percent, Decimal("10.00"))
+        self.assertFalse(order.has_price_changes)
+        self.assertEqual(len(order.order_code), 6)
+
+    @patch("apps.ebay.services.quote_service.get_item")
+    def test_price_change_is_recorded_but_does_not_block(self, mocked):
+        mocked.return_value = fake_item(price=Decimal("600.00"))
+
+        order = create_order(dict(self.payload))
+        item = order.items.first()
+
+        self.assertTrue(order.has_price_changes)
+        self.assertTrue(item.price_changed)
+        self.assertEqual(item.original_price, Decimal("548.99"))
+        self.assertEqual(item.price, Decimal("600.00"))
+        # El total sigue al precio real, no al que mandó el front.
+        self.assertEqual(order.items_total, Decimal("600.00"))
+
+    @patch("apps.ebay.services.quote_service.get_item")
+    def test_sold_out_blocks_the_order_but_keeps_the_record(self, mocked):
+        mocked.return_value = fake_item(available=False)
+
+        with self.assertRaises(OrderBlocked) as ctx:
+            create_order(dict(self.payload))
+
+        blocked = ctx.exception.order
+        self.assertIsNotNone(blocked)
+        # Sobrevive fuera de la transacción del pedido bueno: es el historial.
+        self.assertTrue(EbayOrder.objects.filter(pk=blocked.pk).exists())
+        self.assertEqual(blocked.status, EbayOrder.STATUS_BLOCKED)
+        self.assertIn("disponible", blocked.block_reason)
+        self.assertEqual(blocked.items.count(), 0)
+
+
+class ApiTests(TestCase):
+    def setUp(self):
+        self.client = APIClient()
+        config = EbayConfig.get()
+        config.arg_shipping = Decimal("3.00")
+        config.save()
+
+    def test_config_endpoint_is_public(self):
+        response = self.client.get(reverse("ebay_config"))
+        self.assertEqual(response.status_code, 200)
+        self.assertIn("arg_shipping", response.data)
+        self.assertEqual(len(response.data["delivery_types"]), 3)
+
+    @patch("apps.ebay.services.quote_service.get_item")
+    def test_quote_endpoint(self, mocked):
+        mocked.return_value = fake_item()
+
+        response = self.client.post(reverse("ebay_quote"), {
+            "url": "https://www.ebay.com/itm/188836541819",
+        }, format="json")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(Decimal(response.data["quote"]["unit_total"]), Decimal("652.31"))
+
+    def test_quote_endpoint_rejects_a_non_ebay_link(self):
+        response = self.client.post(reverse("ebay_quote"), {
+            "url": "https://www.amazon.com/dp/B01",
+        }, format="json")
+
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(response.data["code"], "invalid_url")
+
+    @patch("apps.ebay.services.quote_service.get_item")
+    def test_create_and_track_order(self, mocked):
+        mocked.return_value = fake_item()
+
+        created = self.client.post(reverse("ebay_order_create"), {
+            "customer_name": "Tomás",
+            "customer_email": "tomas@example.com",
+            "delivery_type": "pickup",
+            "items": [{"url": "https://www.ebay.com/itm/188836541819", "quantity": 1}],
+        }, format="json")
+
+        self.assertEqual(created.status_code, 201)
+        code = created.data["order_code"]
+
+        tracked = self.client.get(reverse("ebay_order_detail", args=[code]))
+        self.assertEqual(tracked.status_code, 200)
+        self.assertEqual(tracked.data["status"], EbayOrder.STATUS_PENDING)
+        # El seguimiento es solo por código: nada de datos de contacto.
+        self.assertNotIn("customer_email", tracked.data)
+        self.assertNotIn("customer_phone", tracked.data)
+
+    def test_home_delivery_requires_an_address(self):
+        response = self.client.post(reverse("ebay_order_create"), {
+            "customer_name": "Tomás",
+            "customer_email": "tomas@example.com",
+            "delivery_type": "home",
+            "items": [{"url": "https://www.ebay.com/itm/188836541819"}],
+        }, format="json")
+
+        self.assertEqual(response.status_code, 400)
+        self.assertIn("shipping_address", response.data)
+
+    @patch("apps.ebay.services.quote_service.get_item")
+    def test_sold_out_returns_409_with_the_offending_index(self, mocked):
+        mocked.return_value = fake_item(available=False)
+
+        response = self.client.post(reverse("ebay_order_create"), {
+            "customer_name": "Tomás",
+            "customer_email": "tomas@example.com",
+            "delivery_type": "pickup",
+            "items": [{"url": "https://www.ebay.com/itm/188836541819"}],
+        }, format="json")
+
+        self.assertEqual(response.status_code, 409)
+        self.assertEqual(response.data["code"], "order_blocked")
+        self.assertEqual(response.data["item_index"], 0)
+
+    def test_unknown_code_is_a_404(self):
+        response = self.client.get(reverse("ebay_order_detail", args=["ZZZZZZ"]))
+        self.assertEqual(response.status_code, 404)
+
+    @patch("apps.ebay.services.quote_service.get_item")
+    def test_blocked_orders_are_not_publicly_visible(self, mocked):
+        mocked.return_value = fake_item(available=False)
+        try:
+            create_order({
+                "customer_name": "Tomás", "customer_email": "t@example.com",
+                "customer_phone": "", "delivery_type": "pickup",
+                "shipping_address": "", "shipping_city": "", "shipping_province": "",
+                "shipping_zip": "", "shipping_branch": "", "customer_notes": "",
+                "items": [{"url": "https://www.ebay.com/itm/188836541819",
+                           "quantity": 1, "quoted_price": None}],
+            })
+        except OrderBlocked as exc:
+            code = exc.order.order_code
+
+        response = self.client.get(reverse("ebay_order_detail", args=[code]))
+        self.assertEqual(response.status_code, 404)
+
+
+class WorkflowTests(TestCase):
+    def setUp(self):
+        EbayConfig.get()
+        self.order = EbayOrder.objects.create(
+            customer_name="Tomás", customer_email="t@example.com", total=Decimal("100"),
+        )
+
+    def test_mark_stamps_the_step(self):
+        self.order.mark(EbayOrder.STATUS_APPROVED)
+        self.order.refresh_from_db()
+
+        self.assertEqual(self.order.status, EbayOrder.STATUS_APPROVED)
+        self.assertIsNotNone(self.order.approved_at)
+        self.assertIsNone(self.order.payment_received_at)
+
+    def test_mark_does_not_move_a_timestamp_already_set(self):
+        self.order.mark(EbayOrder.STATUS_APPROVED)
+        first = EbayOrder.objects.get(pk=self.order.pk).approved_at
+
+        self.order.mark(EbayOrder.STATUS_APPROVED)
+        self.assertEqual(EbayOrder.objects.get(pk=self.order.pk).approved_at, first)
+
+
+class ApiErrorMessageTests(TestCase):
+    def test_rate_limit_does_not_say_permission_denied(self):
+        """
+        Pasarse del límite no es un problema de permisos. El mensaje por
+        defecto de DRF dice justo eso, y encima trata de usted.
+        """
+        from django_ratelimit.exceptions import Ratelimited
+
+        from apps.core.api_exceptions import api_exception_handler
+
+        response = api_exception_handler(Ratelimited(), {})
+
+        self.assertEqual(response.status_code, 429)
+        self.assertEqual(response.data["code"], "rate_limited")
+        self.assertIn("consultas seguidas", response.data["detail"])
+        self.assertNotIn("permiso", response.data["detail"])
+
+
+class ApproveWithShippingTests(TestCase):
+    """
+    La aprobación pide los envíos que eBay no informó antes de avisarle al
+    cliente: el email lleva el total, y mandarlo con un envío en cero es
+    cobrar de menos y no poder reclamar después.
+    """
+
+    def setUp(self):
+        EbayConfig.get()
+        self.client = Client()
+        self.admin = get_user_model().objects.create_superuser(
+            "owner@example.com", password="x",
+        )
+        self.client.force_login(self.admin)
+
+        self.order = EbayOrder.objects.create(
+            customer_name="Tomás", customer_email="t@example.com",
+        )
+        self.item = EbayOrderItem.objects.create(
+            order=self.order,
+            ebay_item_id="188836541819",
+            ebay_url="https://www.ebay.com/itm/188836541819",
+            title="Pokemon TCG 151 ETB",
+            quantity=1,
+            price=Decimal("100.00"),
+            commission=Decimal("10.00"),
+            tax=Decimal("7.00"),
+            ebay_shipping=Decimal("0.00"),
+            arg_shipping=Decimal("20.00"),
+            shipping_to_confirm=True,
+        )
+        self.order.recalculate_totals()
+        self.url = reverse("admin:ebay_ebayorder_approve", args=[self.order.pk])
+
+    def test_approving_asks_for_the_missing_shipping_instead_of_approving(self):
+        response = self.client.get(self.url)
+
+        self.assertEqual(response.status_code, 200)
+        self.order.refresh_from_db()
+        self.assertEqual(self.order.status, EbayOrder.STATUS_PENDING)
+
+    @patch("apps.ebay.tasks.enqueue")
+    def test_saving_the_shipping_approves_and_updates_the_total(self, enqueue):
+        response = self.client.post(self.url, {f"shipping_{self.item.pk}": "8.50"})
+
+        self.assertEqual(response.status_code, 302)
+        self.item.refresh_from_db()
+        self.order.refresh_from_db()
+
+        self.assertEqual(self.item.ebay_shipping, Decimal("8.50"))
+        self.assertFalse(self.item.shipping_to_confirm)
+        self.assertEqual(self.order.total, Decimal("145.50"))
+        self.assertEqual(self.order.status, EbayOrder.STATUS_APPROVED)
+        enqueue.assert_called_once_with("send_order_approved_task", self.order.id)
+
+    @patch("apps.ebay.tasks.enqueue")
+    def test_zero_means_free_shipping_and_is_accepted(self, enqueue):
+        self.client.post(self.url, {f"shipping_{self.item.pk}": "0"})
+
+        self.item.refresh_from_db()
+        self.order.refresh_from_db()
+        self.assertEqual(self.item.ebay_shipping, Decimal("0.00"))
+        self.assertFalse(self.item.shipping_to_confirm)
+        self.assertEqual(self.order.status, EbayOrder.STATUS_APPROVED)
+
+    def test_a_negative_shipping_is_rejected(self):
+        response = self.client.post(self.url, {f"shipping_{self.item.pk}": "-5"})
+
+        self.assertEqual(response.status_code, 200)
+        self.item.refresh_from_db()
+        self.order.refresh_from_db()
+        self.assertTrue(self.item.shipping_to_confirm)
+        self.assertEqual(self.order.status, EbayOrder.STATUS_PENDING)
+
+    @patch("apps.ebay.tasks.enqueue")
+    def test_an_order_without_pending_shipping_approves_directly(self, enqueue):
+        self.item.shipping_to_confirm = False
+        self.item.save(update_fields=["shipping_to_confirm"])
+
+        response = self.client.get(self.url)
+
+        self.assertEqual(response.status_code, 302)
+        self.order.refresh_from_db()
+        self.assertEqual(self.order.status, EbayOrder.STATUS_APPROVED)
+
+
+class MockModeTests(TestCase):
+    def test_mock_mode_is_on_without_credentials(self):
+        with self.settings(EBAY_CLIENT_ID="", EBAY_CLIENT_SECRET=""):
+            self.assertTrue(ebay_client.is_mock_mode())
+
+    def test_mock_returns_a_usable_item(self):
+        with self.settings(EBAY_MOCK=True):
+            item = ebay_client.get_item("188836541819")
+
+        self.assertTrue(item["is_mock"])
+        self.assertEqual(item["currency"], "USD")
+        self.assertGreater(item["price"], 0)
