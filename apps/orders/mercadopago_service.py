@@ -72,7 +72,7 @@ def _build_checkout_items(order):
         {
             "id": f"order-{order.id}",
             "title": item_title,
-            "description": "Total final de la orden, incluyendo envio y descuentos aplicados.",
+            "description": "Total final de la orden, incluyendo envio, descuentos y recargo aplicados.",
             "quantity": 1,
             "currency_id": "ARS",
             "unit_price": float(_decimal_amount(order.total)),
@@ -128,6 +128,7 @@ def create_checkout_preference(order, frontend_url_override: str = ""):
             "subtotal": str(_decimal_amount(order.subtotal)),
             "shipping_amount": str(_decimal_amount(shipping_amount)),
             "discount_amount": str(_decimal_amount(order.discount_amount)),
+            "card_surcharge_amount": str(_decimal_amount(getattr(order, "card_surcharge_amount", 0))),
             "total_amount": str(_decimal_amount(order.total)),
         },
     }

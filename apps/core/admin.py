@@ -72,24 +72,28 @@ class SiteConfigAdmin(ModelAdmin):
 
 @admin.register(PaymentSettings)
 class PaymentSettingsAdmin(ModelAdmin):
-    list_display = ("pago_efectivo_activo", "descuento_efectivo")
+    list_display = ("recargo_activo", "recargo_porcentaje")
     fieldsets = (
         (
-            "Configuración de pagos",
+            "Recargo Mercado Pago",
             {
-                "fields": ("cash_discount_enabled", "cash_discount_percent"),
-                "description": "Configura pago en efectivo y porcentaje de descuento.",
+                "fields": ("card_surcharge_enabled", "card_surcharge_percent"),
+                "description": (
+                    "Recargo que se suma al pagar con Mercado Pago / tarjeta de crédito. "
+                    "Se aplica solo sobre los productos, nunca sobre el costo de envío. "
+                    "El precio publicado es el precio en efectivo."
+                ),
             },
         ),
     )
 
-    @admin.display(description="Pago en efectivo")
-    def pago_efectivo_activo(self, obj):
-        return "Habilitado" if obj.cash_discount_enabled else "Deshabilitado"
+    @admin.display(description="Recargo Mercado Pago")
+    def recargo_activo(self, obj):
+        return "Habilitado" if obj.card_surcharge_enabled else "Deshabilitado"
 
-    @admin.display(description="Descuento efectivo")
-    def descuento_efectivo(self, obj):
-        return f"{obj.cash_discount_percent}%"
+    @admin.display(description="% recargo")
+    def recargo_porcentaje(self, obj):
+        return f"{obj.card_surcharge_percent}%"
 
     def has_add_permission(self, request):
         return False

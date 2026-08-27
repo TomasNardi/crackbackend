@@ -224,14 +224,19 @@ class OrderCreateSerializer(serializers.Serializer):
             else:
                 discount_value = Decimal("0")
 
-            cash_discount_percent = Decimal("0")
-            cash_discount_amount = Decimal("0")
+            # El precio publicado es el precio en efectivo. Pagar con Mercado
+            # Pago / tarjeta suma un recargo que se calcula SOLO sobre los
+            # productos (después del cupón), nunca sobre el envío.
+            card_surcharge_percent = Decimal("0")
+            card_surcharge_amount = Decimal("0")
             payment_method = validated_data.get("payment_method", Order.PAYMENT_MERCADOPAGO)
-            if payment_method == Order.PAYMENT_CASH:
+            if payment_method == Order.PAYMENT_MERCADOPAGO:
                 config = SiteConfig.get()
-                if config.cash_discount_enabled and config.cash_discount_percent > 0:
-                    cash_discount_percent = Decimal(config.cash_discount_percent)
-                    cash_discount_amount = (subtotal - discount_value) * cash_discount_percent / Decimal("100")
+                if config.card_surcharge_enabled and config.card_surcharge_percent > 0:
+                    card_surcharge_percent = Decimal(config.card_surcharge_percent)
+                    card_surcharge_amount = (
+                        (subtotal - discount_value) * card_surcharge_percent / Decimal("100")
+                    ).quantize(Decimal("0.01"))
 
             shipping_method = validated_data.get("shipping_method", Order.SHIPPING_METHOD_HOME)
             shipping_zone = validated_data.get("shipping_zone", Order.SHIPPING_ZONE_PROVINCE)
@@ -244,7 +249,7 @@ class OrderCreateSerializer(serializers.Serializer):
                 except Exception as exc:
                     raise serializers.ValidationError({"shipping_method": str(exc)}) from exc
 
-            total = subtotal - discount_value - cash_discount_amount + shipping_price
+            total = subtotal - discount_value + card_surcharge_amount + shipping_price
             total = max(total, Decimal("0"))
 
             order = Order.objects.create(
@@ -266,9 +271,9 @@ class OrderCreateSerializer(serializers.Serializer):
                 payment_method=payment_method,
                 discount_code=discount_code.code.upper() if discount_code else "",
                 discount_type=discount_type,
-                discount_amount=discount_value + cash_discount_amount,
-                cash_discount_percent=cash_discount_percent,
-                cash_discount_amount=cash_discount_amount,
+                discount_amount=discount_value,
+                card_surcharge_percent=card_surcharge_percent,
+                card_surcharge_amount=card_surcharge_amount,
                 subtotal=subtotal,
                 total=total,
             )
@@ -311,6 +316,7 @@ class OrderReadSerializer(serializers.ModelSerializer):
             "shipping_province", "shipping_zip", "shipping_cost",
             "shipping_method", "shipping_zone", "shipping_price", "has_shipping", "shipping_status",
             "payment_method", "cash_discount_percent", "cash_discount_amount",
+            "card_surcharge_percent", "card_surcharge_amount",
             "discount_code", "discount_amount",
             "subtotal", "total", "status",
             "items", "created_at",

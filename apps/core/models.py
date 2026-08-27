@@ -64,17 +64,17 @@ class SiteConfig(models.Model):
         default="Envíos a todo el país — 15% OFF con código CRACK15",
         help_text="Mensaje visible en el banner superior del sitio.",
     )
-    cash_discount_enabled = models.BooleanField(
-        "Descuento por efectivo activo",
+    card_surcharge_enabled = models.BooleanField(
+        "Recargo Mercado Pago activo",
         default=True,
-        help_text="Aplica descuento cuando el cliente elige pagar en efectivo.",
+        help_text="Aplica el recargo cuando el cliente elige pagar con Mercado Pago / tarjeta de crédito.",
     )
-    cash_discount_percent = models.DecimalField(
-        "% descuento efectivo",
+    card_surcharge_percent = models.DecimalField(
+        "% recargo Mercado Pago",
         max_digits=5,
         decimal_places=2,
-        default=15,
-        help_text="Porcentaje de descuento para pago en efectivo.",
+        default=10,
+        help_text="Porcentaje de recargo sobre los productos (no sobre el envío) al pagar con Mercado Pago / tarjeta.",
     )
 
     class Meta:
@@ -96,12 +96,12 @@ class SiteConfig(models.Model):
 
 
 class PaymentSettings(SiteConfig):
-    """Proxy para editar pago en efectivo desde una opción separada del admin."""
+    """Proxy para editar el recargo de Mercado Pago desde una opción separada del admin."""
 
     class Meta:
         proxy = True
-        verbose_name = "Configuración de pago en efectivo"
-        verbose_name_plural = "Configuración de pago en efectivo"
+        verbose_name = "Recargo Mercado Pago"
+        verbose_name_plural = "Recargo Mercado Pago"
 
 
 class EmailSubscription(models.Model):
