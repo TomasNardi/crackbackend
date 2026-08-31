@@ -33,7 +33,6 @@ from apps.ebay.views import (
     EbayOrderDetailView,
     EbayQuoteView,
 )
-from apps.catalog.views import MarkUnlimitedPrintsView  # TEMPORAL: borrar junto con apps/catalog/views.py
 from apps.core.views import (
     SiteConfigView,
     EmailSubscribeView,
@@ -90,10 +89,6 @@ urlpatterns = [
     path("contact/mark-read/confirm/", ContactMarkReadConfirmView.as_view(), name="contact_mark_read_confirm"),
     path("sale-requests/", SolicitudVentaCreateView.as_view(), name="sale_requests"),
     path("ping/", PingView.as_view(), name="ping"),
-
-    # TEMPORAL: para correr el marcado de Unlimited contra prod sin entrar al
-    # Shell de Render. Borrar esta ruta y apps/catalog/views.py después de usarla.
-    path("catalog/mark-unlimited/", MarkUnlimitedPrintsView.as_view(), name="mark_unlimited_prints"),
 
     # Webhooks
     path("webhooks/resend/", ResendWebhookView.as_view(), name="resend_webhook"),

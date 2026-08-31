@@ -1,8 +1,8 @@
 """
 Marca como "(Unlimited)" las cartas de los sets WOTC cuyo escaneo es 1st Edition.
 
-La lógica vive en `apps.catalog.services.unlimited`, que también usa el endpoint
-POST /api/v1/catalog/mark-unlimited/. Acá está solo la interfaz de consola.
+La lógica vive en `apps.catalog.services.unlimited`; acá está solo la interfaz
+de consola.
 
 `import_catalog` lo vuelve a correr al terminar, porque el import rebaja el
 nombre desde la fuente y borraría el sufijo.

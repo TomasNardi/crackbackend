@@ -9,7 +9,7 @@ Unlimited, el nombre lo aclara para que la foto no confunda al comprador.
 No hay fuente alternativa: pokemontcg.io y TCGdex sirven exactamente el mismo
 escaneo. Por eso el arreglo es el nombre y no la imagen.
 
-Lo usan el comando `mark_unlimited_prints` y el endpoint del mismo nombre.
+Lo usa el comando `mark_unlimited_prints`.
 """
 
 from django.db import transaction
