@@ -297,9 +297,18 @@ def search_view(request):
     return JsonResponse({"results": _attach_loaded_counts(payloads)})
 
 
-def _resolve_name(card):
-    """Mismo criterio que ProductAdminForm, para que los nombres no se bifurquen."""
-    label = card.name
+def _resolve_name(card, label=""):
+    """
+    Mismo criterio que ProductAdminForm, para que los nombres no se bifurquen.
+
+    `label` pisa el nombre de la carta sin tocar el catálogo. Hace falta porque
+    en los sets WOTC (Jungle, Fossil, Team Rocket, Gym, Neo) TCGplayer publica
+    una sola foto por carta y es la 1st Edition, así que el catálogo las titula
+    "(Unlimited)": quien tiene la 1st necesita corregir ese producto puntual.
+    El "— <expansión>" lo sigue poniendo el backend, para que todos los
+    productos se titulen igual aunque el nombre venga editado.
+    """
+    label = (label or "").strip() or card.name
     if card.number and card.number not in label:
         label = f"{label} {card.number}"
     return f"{label} — {card.card_set.name}"[:255]
@@ -383,7 +392,7 @@ def _create_batch(items, condition_by_id):
             "category": category,
             # Sin carta (sellado suelto, accesorio) el TCG y el nombre los ponés vos.
             "tcg": card.card_set.tcg if card else tcgs.get(item["tcg_id"]),
-            "name": _resolve_name(card) if card else item["name"],
+            "name": _resolve_name(card, item["name"]) if card else item["name"],
             "price_usd": item["price_usd"],
             "discount_percent": item["discount_percent"],
             "condition": condition_by_id.get(item["condition_id"]),

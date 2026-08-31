@@ -189,6 +189,16 @@
   .cl-batch-row { padding:7px 14px; font-size:13px; }
   .cl-batch-item:hover { background:var(--cl-soft); }
   .cl-batch-row .cl-name { font-size:13px; }
+  /* El nombre de la fila se edita en el lugar: se ve como el título hasta que
+     lo tocás. Corrige el producto puntual, no la carta del catálogo. */
+  .cl-batch-row .cl-name-edit { font-weight:700; font-size:13px; height:26px;
+                                padding:2px 5px; margin:-2px -5px; width:calc(100% + 10px);
+                                background:transparent; border:1px solid transparent;
+                                border-radius:5px; color:inherit;
+                                text-overflow:ellipsis; }
+  .cl-batch-row .cl-name-edit:hover { border-color:var(--cl-line); }
+  .cl-batch-row .cl-name-edit:focus { background:var(--cl-bg); border-color:var(--cl-accent);
+                                      outline:2px solid var(--cl-accent); outline-offset:1px; }
   .cl-batch-row input, .cl-batch-row select { width:100%; min-width:0; padding:5px 7px;
                                               font-size:13px; height:32px; }
   .cl-batch-row .cl-price, .cl-batch-row .cl-qty { text-align:right; }
@@ -961,7 +971,10 @@
         <div class="cl-batch-row cl-cols">
           ${thumbHtml(it.shots[0] || it.thumb, true)}
           <div class="cl-id">
-            <div class="cl-name">${esc(it.label)}</div>
+            ${it.card_id
+              ? `<input type="text" class="cl-name-edit" value="${esc(it.name || it.label)}"
+                        title="Nombre del producto. Se guarda solo en este producto, la carta del catálogo no se toca.">`
+              : `<div class="cl-name">${esc(it.label)}</div>`}
             <div class="cl-sub">${esc(it.set_name)}</div>
           </div>
           <span class="cl-lang">${it.language ? (it.language === "ja" ? "JP" : "EN") : "—"}</span>
@@ -1060,6 +1073,8 @@
     else if (t.classList.contains("cl-f-image"))    item.image_url = t.value.trim();
     else if (t.classList.contains("cl-f-ref"))      item.pricecharting_url = t.value.trim();
     else if (t.classList.contains("cl-desc"))       item.description = t.value;
+    // Vacío vuelve al nombre del catálogo, así que no hace falta deshacer a mano.
+    else if (t.classList.contains("cl-name-edit"))  item.name = t.value;
     else if (t.classList.contains("cl-f-name")) {
       item.name = t.value;
       // El título de la fila sigue al nombre, pero sin re-render: perdería el foco.
