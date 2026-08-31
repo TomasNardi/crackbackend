@@ -12,11 +12,15 @@ Uso:
     python manage.py import_catalog --language en    # solo inglés
     python manage.py import_catalog --sets-only      # solo expansiones, sin cartas
     python manage.py import_catalog --dry-run        # muestra qué haría
+
+Al terminar corre `mark_unlimited_prints`, porque acá el nombre se rebaja desde
+la fuente y perdería el sufijo "(Unlimited)" de los sets WOTC.
 """
 
 from datetime import datetime
 from datetime import timezone as dt_timezone
 
+from django.core.management import call_command
 from django.core.management.base import BaseCommand, CommandError
 from django.db import transaction
 from django.utils import timezone
@@ -116,6 +120,11 @@ class Command(BaseCommand):
         if dry_run:
             self.stdout.write(self.style.WARNING("(dry-run: no se escribió nada)"))
         elif not options["sets_only"]:
+            # El import rebaja el nombre desde la fuente, así que hay que volver
+            # a marcar los sets WOTC cuyo escaneo es 1st Edition.
+            self.stdout.write(self.style.MIGRATE_HEADING("\nSets Unlimited"))
+            call_command("mark_unlimited_prints", stdout=self.stdout)
+
             pending = CatalogCard.objects.filter(image_status=CatalogCard.IMAGE_PENDING).count()
             self.stdout.write(
                 f"Faltan bajar {pending} imágenes. "
