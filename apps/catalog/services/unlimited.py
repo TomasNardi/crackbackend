@@ -34,9 +34,7 @@ AFFECTED_SETS = {
     "N4": 1444,   # Neo Destiny
 }
 
-# Gym Challenge tiene el mismo problema, pero se marca solo si se pide,
-# para no cambiar nombres que nadie revisó todavía.
-DEFAULT_SETS = ["JU", "FO", "TR", "G1", "N1", "N2", "N3", "N4"]
+DEFAULT_SETS = ["JU", "FO", "TR", "G1", "G2", "N1", "N2", "N3", "N4"]
 
 
 class UnknownSetError(ValueError):

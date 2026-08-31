@@ -20,20 +20,39 @@ from rest_framework_simplejwt.authentication import JWTAuthentication
 
 from apps.catalog.services import unlimited
 
+TRUTHY = {"1", "true", "t", "yes", "y", "si", "sí"}
+
+
+def _flag(raw):
+    """Lee un booleano de la query string: ?dry_run=1, ?revert=true, etc."""
+    return str(raw).strip().lower() in TRUTHY if raw is not None else False
+
 
 class MarkUnlimitedPrintsView(APIView):
     """
-    POST /api/v1/catalog/mark-unlimited/
+    GET/POST /api/v1/catalog/mark-unlimited/
 
-    Body (todo opcional):
-        {"sets": ["G2"], "dry_run": true, "revert": false}
+    El GET está para poder dispararlo desde el navegador, con la sesión del
+    admin de Django. Sí, un GET que escribe: es un one-shot que se borra apenas
+    esté corrido, y la operación es idempotente y reversible con ?revert=1.
 
-    Sin `sets` procesa los ocho de siempre: JU FO TR G1 N1 N2 N3 N4.
-    Es idempotente: repetirlo no vuelve a tocar lo ya marcado.
+    GET  ?sets=FO,N1&dry_run=1&revert=1
+    POST {"sets": ["FO"], "dry_run": true, "revert": false}
+
+    Sin `sets` procesa los nueve afectados: JU FO TR G1 G2 N1 N2 N3 N4.
+    Repetirlo no vuelve a tocar lo ya marcado.
     """
 
     authentication_classes = [SessionAuthentication, JWTAuthentication]
     permission_classes = [permissions.IsAdminUser]
+
+    def get(self, request):
+        raw_sets = (request.query_params.get("sets") or "").strip()
+        return self._run(
+            sets=[part for part in raw_sets.split(",") if part.strip()] or None,
+            revert=_flag(request.query_params.get("revert")),
+            dry_run=_flag(request.query_params.get("dry_run")),
+        )
 
     def post(self, request):
         sets = request.data.get("sets") or None
@@ -42,12 +61,16 @@ class MarkUnlimitedPrintsView(APIView):
                 {"detail": "sets tiene que ser una lista de abreviaturas."},
                 status=status.HTTP_400_BAD_REQUEST,
             )
+        return self._run(
+            sets=sets,
+            revert=bool(request.data.get("revert")),
+            dry_run=bool(request.data.get("dry_run")),
+        )
 
+    def _run(self, sets, revert, dry_run):
         try:
             report = unlimited.mark_unlimited(
-                abbreviations=sets,
-                revert=bool(request.data.get("revert")),
-                dry_run=bool(request.data.get("dry_run")),
+                abbreviations=sets, revert=revert, dry_run=dry_run,
             )
         except unlimited.UnknownSetError as exc:
             return Response({"detail": str(exc)}, status=status.HTTP_400_BAD_REQUEST)

@@ -9,7 +9,7 @@ nombre desde la fuente y borraría el sufijo.
 
 Uso:
     python manage.py mark_unlimited_prints
-    python manage.py mark_unlimited_prints --sets G2      # sumar Gym Challenge
+    python manage.py mark_unlimited_prints --sets FO N1   # solo algunos sets
     python manage.py mark_unlimited_prints --dry-run
     python manage.py mark_unlimited_prints --revert
 """
