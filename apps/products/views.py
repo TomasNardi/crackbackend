@@ -120,7 +120,7 @@ class ProductViewSet(viewsets.ModelViewSet):
         return ProductListSerializer
 
     def get_permissions(self):
-        if self.action in ("list", "retrieve", "featured", "new_arrivals", "sitemap_index", "seo_facets"):
+        if self.action in ("list", "retrieve", "featured", "new_arrivals", "sitemap_index", "seo_facets", "feed"):
             return [permissions.AllowAny()]
         return [permissions.IsAdminUser()]
 
@@ -422,6 +422,103 @@ class ProductViewSet(viewsets.ModelViewSet):
             for p in qs.iterator(chunk_size=1000)
         ]
         return Response(data)
+
+    @action(detail=False, methods=["get"], url_path="feed", permission_classes=[permissions.AllowAny])
+    def feed(self, request):
+        """
+        GET /products/feed/
+
+        Payload plano para los feeds de shopping (Google Merchant Center y el
+        catalogo de Meta). Es un endpoint aparte y no el `list` paginado porque
+        los feeds se piden enteros: paginar 3000 productos de a 12 son 250
+        requests cada vez que Google refresca.
+
+        Dos cosas que hay que resolver a mano aca:
+
+        1. El tipo de cambio se busca UNA vez. `Product.price_ars` es una
+           property que llama a `ExchangeRate.get()`, o sea una query por
+           producto: sobre el catalogo completo son miles de queries.
+        2. `select_related` sobre las FK que se serializan; si no, cada producto
+           dispara una query por categoria, tcg, condicion y certificadora.
+        """
+        from decimal import Decimal
+        from apps.core.models import ExchangeRate
+
+        rate = ExchangeRate.get().usd_to_ars
+
+        qs = (
+            Product.objects
+            .filter(in_stock=True)
+            .select_related(
+                "category", "tcg", "condition",
+                "certification_entity", "certification_grade",
+                "catalog_card", "catalog_card__card_set",
+            )
+            .order_by("-updated_at")
+        )
+
+        items = []
+        for p in qs.iterator(chunk_size=500):
+            price_ars = round(p.price_usd * rate, 2)
+            if p.discount_percent:
+                final_price = round(price_ars * ((100 - p.discount_percent) / Decimal("100")), 2)
+            else:
+                final_price = price_ars
+
+            # Una fila sin precio o sin imagen la rechaza Google igual: se
+            # descarta aca y no gasta cuota de revision de la cuenta.
+            if price_ars <= 0 or not p.image_url:
+                continue
+
+            images = []
+            for url in (p.image_url, p.image_url_2, p.image_url_3):
+                if url and url not in images:
+                    images.append(optimize_cloudinary_url(url, DELIVERY_TRANSFORM_DETAIL))
+
+            card = p.catalog_card if p.catalog_card_id else None
+
+            items.append({
+                "id": p.id,
+                "slug": p.slug,
+                "name": p.name,
+                "description": p.description or "",
+                "price_ars": str(price_ars),
+                "final_price": str(final_price),
+                "discount_percent": p.discount_percent or 0,
+                "stock_quantity": p.stock_quantity,
+                "available_quantity": p.available_quantity,
+                "images": images,
+                "updated_at": p.updated_at.isoformat(),
+                "category": p.category.name if p.category_id else None,
+                "category_slug": p.category.slug if p.category_id else None,
+                "tcg": p.tcg.name if p.tcg_id else None,
+                "tcg_slug": p.tcg.slug if p.tcg_id else None,
+                "condition": p.condition.name if p.condition_id else None,
+                "condition_abbr": p.condition.abbreviation if p.condition_id else None,
+                "certification_entity": (
+                    (p.certification_entity.abbreviation or p.certification_entity.name)
+                    if p.certification_entity_id else None
+                ),
+                "certification_grade": (
+                    str(p.certification_grade.grade) if p.certification_grade_id else None
+                ),
+                # `item_group_id` agrupa las variantes de la misma carta (mismo
+                # numero de catalogo, distinta condicion o nota). Google y Meta
+                # las muestran como un producto con variantes en vez de como
+                # avisos duplicados compitiendo entre si por la misma busqueda.
+                "catalog_external_id": card.external_id if card else None,
+                "catalog_number": card.number if card else None,
+                "catalog_rarity": card.rarity if card else None,
+                "catalog_set": card.card_set.name if card and card.card_set_id else None,
+                "catalog_language": card.card_set.language if card and card.card_set_id else None,
+            })
+
+        return Response({
+            "generated_at": timezone.now().isoformat(),
+            "currency": "ARS",
+            "count": len(items),
+            "items": items,
+        })
 
     @action(detail=False, methods=["get"], url_path="by-ids")
     def by_ids(self, request):
