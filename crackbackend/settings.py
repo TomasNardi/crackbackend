@@ -624,6 +624,12 @@ UNFOLD = {
                         "permission": admin_has_perm("orders.view_order"),
                     },
                     {
+                        "title": "Logs de órdenes",
+                        "icon": "history",
+                        "link": "/admin/orders/orderlog/",
+                        "permission": admin_has_perm("orders.view_orderlog"),
+                    },
+                    {
                         "title": "Pagos MercadoPago",
                         "icon": "payments",
                         "link": "/admin/orders/mercadopagopayment/",

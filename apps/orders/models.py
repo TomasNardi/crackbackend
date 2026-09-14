@@ -429,6 +429,21 @@ class ShippingOrder(Order):
         verbose_name_plural = "Envíos"
 
 
+class OrderLog(Order):
+    """
+    Proxy con las órdenes que nunca se concretaron.
+
+    Vencidas, canceladas y los checkouts de Mercado Pago que quedaron
+    esperando el pago: no son trabajo pendiente del local, así que se
+    miran aparte y no ensucian la solapa de Órdenes.
+    """
+
+    class Meta:
+        proxy = True
+        verbose_name = "Log de orden"
+        verbose_name_plural = "Logs de órdenes"
+
+
 class OrderItem(models.Model):
     """Ítem de una orden."""
 

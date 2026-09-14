@@ -7,6 +7,7 @@ from django.urls import reverse, path
 from django.http import HttpResponse, HttpResponseRedirect
 from django.utils.html import format_html
 from django.contrib import messages
+from django.core.exceptions import ValidationError
 from django.db.models import Q
 import logging
 from unfold.admin import ModelAdmin, TabularInline
@@ -21,9 +22,25 @@ from .models import (
     ShippingConfig,
     Shipment,
     ShippingOrder,
+    OrderLog,
 )
 from .pdf_generator import generate_order_pdf
 from .services.stock_reservation_service import consume_order_stock, release_order_stock
+
+
+def logged_orders_q():
+    """
+    Órdenes que nunca se concretaron y no son trabajo pendiente del local.
+
+    Vencidas, canceladas y los checkouts de Mercado Pago que quedaron
+    esperando el pago. La solapa Órdenes las excluye y la solapa Logs de
+    órdenes muestra exactamente estas, así ninguna orden queda sin aparecer
+    en algún lado.
+    """
+    return (
+        Q(status__in=[Order.STATUS_EXPIRED, Order.STATUS_CANCELLED])
+        | Q(status=Order.STATUS_PENDING, payment_method=Order.PAYMENT_MERCADOPAGO)
+    )
 
 
 class SuggestedProductAdminForm(forms.ModelForm):
@@ -158,6 +175,28 @@ class OrderAdmin(ModelAdmin):
         "action_return_stock",
         "action_download_pdf",
     ]
+
+    def get_queryset(self, request):
+        # Las que no se concretaron viven en "Logs de órdenes".
+        return super().get_queryset(request).exclude(logged_orders_q())
+
+    def get_object(self, request, object_id, from_field=None):
+        """
+        La lista esconde las órdenes que no se concretaron, la ficha no.
+
+        Los links directos —desde Logs de órdenes, Envíos o los logs de
+        email— tienen que seguir abriendo la orden, así que si no está en
+        la lista se busca igual sobre el manager completo.
+        """
+        obj = super().get_object(request, object_id, from_field)
+        if obj is not None:
+            return obj
+
+        field = self.model._meta.pk if from_field is None else self.model._meta.get_field(from_field)
+        try:
+            return self.model._default_manager.get(**{field.name: field.to_python(object_id)})
+        except (self.model.DoesNotExist, ValidationError, ValueError):
+            return None
 
     def has_add_permission(self, request):
         return False
@@ -697,6 +736,180 @@ class OrderAdmin(ModelAdmin):
                 f"{skipped} orden(es) omitidas: no tenían mercadería tomada del stock.",
                 level=messages.WARNING,
             )
+
+
+class OrderLogReasonFilter(SimpleListFilter):
+    title = "Motivo"
+    parameter_name = "log_reason"
+
+    def lookups(self, request, model_admin):
+        return [
+            ("awaiting_payment", "Esperando pago (Mercado Pago)"),
+            ("expired", "Vencidas"),
+            ("cancelled", "Canceladas"),
+        ]
+
+    def queryset(self, request, queryset):
+        value = self.value()
+        if value == "awaiting_payment":
+            return queryset.filter(
+                status=Order.STATUS_PENDING,
+                payment_method=Order.PAYMENT_MERCADOPAGO,
+            )
+        if value == "expired":
+            return queryset.filter(status=Order.STATUS_EXPIRED)
+        if value == "cancelled":
+            return queryset.filter(status=Order.STATUS_CANCELLED)
+        return queryset
+
+
+@admin.register(OrderLog)
+class OrderLogAdmin(ModelAdmin):
+    """
+    Historial de órdenes que no llegaron a cobrarse.
+
+    Es la contracara de OrderAdmin: acá cae exactamente lo que aquella
+    solapa esconde, para que el local pueda consultarlo cuando lo necesita
+    sin tenerlo arriba de la mesa todo el día.
+    """
+
+    list_display = (
+        "order_summary", "customer_summary", "total_display",
+        "reason_summary", "stock_summary",
+    )
+    list_display_links = None
+    list_filter = (OrderLogReasonFilter, "payment_method")
+    search_fields = (
+        "order_code", "customer_name", "customer_email", "discount_code",
+        "mp_preference_id",
+    )
+    ordering = ("-created_at",)
+    date_hierarchy = "created_at"
+    list_per_page = 40
+
+    def get_queryset(self, request):
+        return (
+            super()
+            .get_queryset(request)
+            .filter(logged_orders_q())
+            .prefetch_related("mp_payments")
+            .order_by("-created_at")
+        )
+
+    def has_add_permission(self, request):
+        return False
+
+    def has_change_permission(self, request, obj=None):
+        return False
+
+    def has_delete_permission(self, request, obj=None):
+        return False
+
+    def _latest_mp_payment(self, obj):
+        """Último intento de pago, leído del prefetch para no pegarle a la base por fila."""
+        payments = list(obj.mp_payments.all())
+        if not payments:
+            return None
+        return max(payments, key=lambda p: (p.updated_at or p.created_at))
+
+    @admin.display(description="Orden", ordering="created_at")
+    def order_summary(self, obj):
+        local = timezone.localtime(obj.created_at)
+        url = reverse("admin:orders_order_change", args=[obj.pk])
+        return format_html(
+            '<div style="line-height:1.45;">'
+            '<div style="font-weight:700;font-size:13px;letter-spacing:0.03em;">'
+            '<a href="{}" style="color:inherit;text-decoration:none;">{}</a></div>'
+            '<div style="color:#9ca3af;font-size:11px;margin-top:2px;white-space:nowrap;">{}</div>'
+            '</div>',
+            url,
+            obj.order_code,
+            local.strftime("%d/%m/%Y · %H:%M"),
+        )
+
+    @admin.display(description="Cliente", ordering="customer_name")
+    def customer_summary(self, obj):
+        return format_html(
+            '<div style="line-height:1.45;max-width:240px;">'
+            '<div style="font-weight:600;color:#1a1a1a;white-space:nowrap;'
+            'overflow:hidden;text-overflow:ellipsis;">{}</div>'
+            '<div style="color:#9ca3af;font-size:11px;margin-top:2px;white-space:nowrap;'
+            'overflow:hidden;text-overflow:ellipsis;" title="{}">{}</div>'
+            '</div>',
+            obj.customer_name or "—",
+            obj.customer_email or "",
+            obj.customer_email or "—",
+        )
+
+    @admin.display(description="Total", ordering="total")
+    def total_display(self, obj):
+        amount = f"{obj.total:,.2f}".replace(",", "@").replace(".", ",").replace("@", ".")
+        return format_html(
+            '<span style="font-weight:700;font-size:13px;white-space:nowrap;color:#6b7280;">$ {}</span>',
+            amount,
+        )
+
+    @admin.display(description="Motivo", ordering="status")
+    def reason_summary(self, obj):
+        """Por qué esta orden está en el log, y el último rastro del pago."""
+        if obj.status == Order.STATUS_EXPIRED:
+            label, color = "Vencida", "#C8972E"
+        elif obj.status == Order.STATUS_CANCELLED:
+            label, color = "Cancelada", "#d73a49"
+        else:
+            label, color = "Esperando pago", "#e36209"
+
+        detail = obj.get_payment_method_display()
+        if obj.payment_method == Order.PAYMENT_MERCADOPAGO:
+            mp_payment = self._latest_mp_payment(obj)
+            if mp_payment:
+                status_key = (mp_payment.status or "").strip().lower()
+                mp_label = OrderAdmin.MP_STATUS_LABELS.get(
+                    status_key, (mp_payment.status or "").strip() or "Sin estado"
+                )
+                detail = f"Mercado Pago · {mp_label}"
+                moment = mp_payment.expired_at or mp_payment.expires_at
+                if moment:
+                    detail = f"{detail} · {timezone.localtime(moment).strftime('%d/%m/%Y %H:%M')}"
+            else:
+                detail = "Mercado Pago · Sin novedades"
+
+        return format_html(
+            '<div style="line-height:1.6;">'
+            '<div><span style="display:inline-block;padding:2px 9px;border-radius:6px;'
+            'font-size:11px;font-weight:600;color:{};background:{}1f;">{}</span></div>'
+            '<div style="font-size:11px;color:#6b7280;margin-top:4px;">{}</div>'
+            '</div>',
+            color, color, label, detail,
+        )
+
+    @admin.display(description="Stock", ordering="stock_status")
+    def stock_summary(self, obj):
+        """
+        Qué pasó con la mercadería.
+
+        Si la orden todavía tiene cartas tomadas —típico del checkout de
+        Mercado Pago que quedó abierto— desde acá se las devuelve a la venta.
+        """
+        if obj.stock_status not in {Order.STOCK_RESERVED, Order.STOCK_CONSUMED}:
+            return format_html(
+                '<span style="font-size:11px;color:#9ca3af;">{}</span>',
+                obj.get_stock_status_display(),
+            )
+
+        url = reverse("admin:orders_order_return_stock", args=[obj.pk])
+        return format_html(
+            '<div style="line-height:1.6;">'
+            '<div style="font-size:11px;color:#6b7280;margin-bottom:4px;">{}</div>'
+            '<a href="{}" onclick="return confirm(&#39;¿Devolver la mercadería de esta '
+            'orden al stock? La orden queda cancelada.&#39;);" '
+            'style="background:#d73a49;color:#fff;padding:3px 9px;border-radius:6px;'
+            'font-size:11px;font-weight:600;text-decoration:none;display:inline-block;" '
+            'title="Libera la mercadería y cancela la orden">↩ Regresar al stock</a>'
+            '</div>',
+            obj.get_stock_status_display(),
+            url,
+        )
 
 
 @admin.register(DiscountCode)
