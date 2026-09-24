@@ -183,7 +183,7 @@ class OrderCreateSerializer(serializers.Serializer):
         token = (data.get("receipt_token") or "").strip()
         if not token:
             raise serializers.ValidationError({
-                "receipt_token": "Adjuntá el comprobante de la transferencia para confirmar la compra.",
+                "receipt_token": "Adjuntá el comprobante para confirmar tu pedido.",
             })
 
         try:

@@ -129,33 +129,33 @@ def store_receipt(uploaded_file) -> dict:
     objeto firmada, que `resolve_receipt_token` traduce de vuelta.
     """
     if uploaded_file is None:
-        raise ReceiptValidationError("Adjuntá el comprobante de la transferencia.")
+        raise ReceiptValidationError("Adjuntá el comprobante para confirmar tu pedido.")
 
     name = os.path.basename(getattr(uploaded_file, "name", "") or "comprobante")[:200]
     extension = name.rsplit(".", 1)[-1].lower() if "." in name else ""
     if extension not in ALLOWED_EXTENSIONS:
         raise ReceiptValidationError(
-            "El comprobante tiene que ser una imagen (jpg, png, webp, heic) o un PDF."
+            "El comprobante debe ser una imagen (JPG, PNG, WEBP, HEIC) o un PDF."
         )
 
     size = getattr(uploaded_file, "size", 0) or 0
     if size > MAX_BYTES:
         raise ReceiptValidationError(
-            "El comprobante no puede pesar más de 10 MB. Probá con una captura de pantalla."
+            "El archivo supera los 10 MB. Adjuntá una versión más liviana."
         )
 
     content = uploaded_file.read()
     if not content:
-        raise ReceiptValidationError("El archivo está vacío.")
+        raise ReceiptValidationError("El archivo está vacío. Adjuntá el comprobante nuevamente.")
     if len(content) > MAX_BYTES:
-        raise ReceiptValidationError("El comprobante no puede pesar más de 10 MB.")
+        raise ReceiptValidationError("El archivo supera los 10 MB. Adjuntá una versión más liviana.")
 
     is_pdf = extension == "pdf" or content[:5] == b"%PDF-"
     if is_pdf:
         # La extensión sola la elige quien sube: un .pdf que no empieza con la
         # firma del formato no es un PDF, y no queremos guardar cualquier cosa.
         if content[:5] != b"%PDF-":
-            raise ReceiptValidationError("El PDF del comprobante no es válido.")
+            raise ReceiptValidationError("No pudimos leer el PDF. Adjuntá el comprobante nuevamente.")
         content_type = PDF_CONTENT_TYPE
     else:
         compressed = _compress_image(content, name)
@@ -202,10 +202,10 @@ def resolve_receipt_token(token: str) -> str:
         )
     except signing.SignatureExpired as exc:
         raise ReceiptValidationError(
-            "El comprobante que subiste caducó. Volvé a adjuntarlo."
+            "La sesión expiró. Adjuntá el comprobante nuevamente."
         ) from exc
     except signing.BadSignature as exc:
-        raise ReceiptValidationError("El comprobante no es válido. Volvé a adjuntarlo.") from exc
+        raise ReceiptValidationError("No pudimos validar el comprobante. Adjuntalo nuevamente.") from exc
 
 
 def view_url(key: str, expires_in: int = VIEW_URL_TTL_SECONDS) -> str:

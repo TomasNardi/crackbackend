@@ -1,7 +1,7 @@
 import json
 import re
 from django import forms
-from django.contrib import admin
+from django.contrib import admin, messages
 from django.contrib.admin.sites import NotRegistered
 from django.shortcuts import redirect
 from django.http import HttpResponseRedirect, JsonResponse
@@ -139,6 +139,20 @@ class TransferSettingsAdmin(ModelAdmin):
         obj = SiteConfig.get()
         change_url = reverse("admin:core_transfersettings_change", args=[obj.pk])
         return redirect(change_url)
+
+    def changeform_view(self, request, object_id=None, form_url="", extra_context=None):
+        # Sin CBU ni alias el checkout esconde la opción de transferencia: el
+        # comprador se queda solo con Mercado Pago y nadie se entera. El aviso
+        # va acá, que es donde se arregla, y no en la pantalla del cliente.
+        config = SiteConfig.get()
+        if not (config.transfer_cbu.strip() or config.transfer_alias.strip()):
+            self.message_user(
+                request,
+                "Falta el CBU o el alias. Hasta que cargues uno de los dos, el "
+                "checkout no ofrece la opción de pagar por transferencia.",
+                level=messages.WARNING,
+            )
+        return super().changeform_view(request, object_id, form_url, extra_context)
 
 
 @admin.register(EmailSubscription)

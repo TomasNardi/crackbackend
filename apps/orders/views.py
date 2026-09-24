@@ -379,7 +379,7 @@ class OrderReceiptUploadView(APIView):
         except (ReceiptStorageError, R2ConfigurationError) as exc:
             logger.exception("No se pudo guardar el comprobante: %s", exc)
             return Response(
-                {"detail": "No pudimos guardar el comprobante. Probá de nuevo en un momento."},
+                {"detail": "No pudimos procesar el comprobante en este momento. Volvé a intentar en unos minutos."},
                 status=status.HTTP_502_BAD_GATEWAY,
             )
 
