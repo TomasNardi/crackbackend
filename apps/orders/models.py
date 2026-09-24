@@ -150,10 +150,10 @@ class Order(models.Model):
         (STATUS_CANCELLED, "Cancelada"),
     ]
 
-    # Qué se hizo con el stock de esta orden. Las órdenes de pago manual
-    # (efectivo, transferencia, crypto) apartan la mercadería sin descontarla:
-    # recién al cobrar se convierte en venta. Guardarlo evita el doble
-    # descuento y el doble regreso al stock.
+    # Qué se hizo con el stock de esta orden. Las órdenes por transferencia
+    # apartan la mercadería sin descontarla: recién al confirmar que la plata
+    # entró se convierte en venta. Guardarlo evita el doble descuento y el
+    # doble regreso al stock.
     STOCK_NONE = "none"
     STOCK_RESERVED = "reserved"
     STOCK_CONSUMED = "consumed"
@@ -166,10 +166,10 @@ class Order(models.Model):
     ]
 
     PAYMENT_MERCADOPAGO = "mercadopago"
-    PAYMENT_CASH = "cash"
+    PAYMENT_TRANSFER = "transfer"
     PAYMENT_METHOD_CHOICES = [
         (PAYMENT_MERCADOPAGO, "Mercado Pago"),
-        (PAYMENT_CASH, "Efectivo"),
+        (PAYMENT_TRANSFER, "Transferencia"),
     ]
 
     SHIPPING_HOME = "home"
@@ -280,13 +280,29 @@ class Order(models.Model):
         default=PAYMENT_MERCADOPAGO,
     )
     # Histórico: órdenes anteriores al cambio a "recargo" guardaron acá el
-    # descuento por pago en efectivo. Se conservan para que emails y PDF de
-    # esas órdenes sigan reflejando lo que el cliente vio en su momento.
-    cash_discount_percent = models.DecimalField("% desc. efectivo aplicado", max_digits=5, decimal_places=2, default=0)
-    cash_discount_amount = models.DecimalField("Monto desc. efectivo", max_digits=10, decimal_places=2, default=0)
+    # descuento que tenía el pago manual. Se conservan para que emails y PDF de
+    # esas órdenes sigan reflejando lo que el cliente vio en su momento; en las
+    # órdenes nuevas valen 0.
+    cash_discount_percent = models.DecimalField("% desc. manual aplicado (histórico)", max_digits=5, decimal_places=2, default=0)
+    cash_discount_amount = models.DecimalField("Monto desc. manual (histórico)", max_digits=10, decimal_places=2, default=0)
     card_surcharge_percent = models.DecimalField("% recargo MP aplicado", max_digits=5, decimal_places=2, default=0)
     card_surcharge_amount = models.DecimalField("Monto recargo MP", max_digits=10, decimal_places=2, default=0)
     mp_preference_id = models.CharField("MP Preference ID", max_length=150, blank=True, db_index=True)
+
+    # Comprobante de transferencia
+    # ----------------------------
+    # El archivo vive en un bucket privado de R2 y acá queda solo su clave: se
+    # mira desde el admin con un link firmado que caduca
+    # (apps/orders/services/receipts.py). La orden por transferencia no se crea
+    # sin esto, y por eso mismo no vence: la plata ya está enviada, solo falta
+    # que alguien la mire.
+    receipt_key = models.CharField(
+        "Comprobante (clave R2)", max_length=255, blank=True, default="",
+        help_text="Ruta del archivo en el bucket privado de comprobantes.",
+    )
+    receipt_name = models.CharField("Comprobante (nombre)", max_length=255, blank=True, default="")
+    receipt_content_type = models.CharField("Comprobante (tipo)", max_length=100, blank=True, default="")
+    receipt_uploaded_at = models.DateTimeField("Comprobante subido el", null=True, blank=True)
 
     # Paq.ar (Correo Argentino)
     PAQAR_STATUS_PENDING = "pending"
@@ -342,6 +358,20 @@ class Order(models.Model):
 
     def __str__(self):
         return f"Orden #{self.id} [{self.order_code}] — {self.customer_name} ({self.get_status_display()})"
+
+    @property
+    def has_receipt(self) -> bool:
+        return bool(self.receipt_key)
+
+    @property
+    def receipt_is_pdf(self) -> bool:
+        return self.receipt_content_type == "application/pdf"
+
+    def receipt_view_url(self) -> str:
+        """Link firmado y temporal al comprobante. "" si no hay o si falla R2."""
+        from apps.orders.services.receipts import view_url
+
+        return view_url(self.receipt_key)
 
 
 class ShippingConfig(models.Model):

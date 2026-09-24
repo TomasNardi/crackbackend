@@ -29,6 +29,10 @@ class SiteConfigSerializer(serializers.ModelSerializer):
             "top_banner_message",
             "card_surcharge_enabled",
             "card_surcharge_percent",
+            "transfer_bank",
+            "transfer_holder",
+            "transfer_cbu",
+            "transfer_alias",
         )
 
 

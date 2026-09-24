@@ -189,8 +189,8 @@ class Product(models.Model):
     reserved_quantity = models.PositiveIntegerField(
         "Reservado", default=0,
         help_text=(
-            "Unidades apartadas por órdenes de pago manual (efectivo, transferencia, "
-            "crypto) que todavía no se cobraron. No se venden, pero siguen siendo tuyas "
+            "Unidades apartadas por órdenes por transferencia que todavía no se "
+            "confirmaron. No se venden, pero siguen siendo tuyas "
             "hasta que marques la orden como pagada."
         ),
     )
@@ -290,7 +290,7 @@ class Product(models.Model):
             return
 
         # Se publica según lo disponible, no según lo que tenés: una carta
-        # apartada por una orden en efectivo sin pagar sale de la vidriera pero
+        # apartada por una transferencia sin confirmar sale de la vidriera pero
         # no se descuenta del stock hasta que cobrás.
         self.in_stock = self.available_quantity > 0
 

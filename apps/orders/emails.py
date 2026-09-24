@@ -141,7 +141,7 @@ def _resolve_payment_status(order) -> tuple[str, object | None]:
     if order.status == Order.STATUS_CANCELLED:
         return "Cancelada", None
 
-    if order.payment_method == Order.PAYMENT_CASH:
+    if order.payment_method == Order.PAYMENT_TRANSFER:
         if order.status == Order.STATUS_PAID:
             return "Pagada", None
         return "Pendiente", None
@@ -188,12 +188,14 @@ def _build_order_email_context(order) -> dict:
 
     payment_status_display, mp_payment = _resolve_payment_status(order)
     site_url = _resolve_public_site_url()
-    is_cash = order.payment_method == Order.PAYMENT_CASH
+    is_transfer = order.payment_method == Order.PAYMENT_TRANSFER
     is_mp = order.payment_method == Order.PAYMENT_MERCADOPAGO
-    payment_method_display = "Efectivo / Transferencia / Crypto" if is_cash else order.get_payment_method_display()
+    payment_method_display = order.get_payment_method_display()
 
-    # Órdenes históricas (modelo viejo de descuento por efectivo): discount_amount
-    # guardaba cupón + descuento efectivo sumados, por eso hay que restar.
+    # Órdenes históricas (modelo viejo, con descuento por pago manual):
+    # discount_amount guardaba cupón + ese descuento sumados, por eso hay que
+    # restar. Se mantienen para que el mail de una orden vieja siga cerrando con
+    # lo que el cliente vio en su momento; en las nuevas valen 0.
     # Órdenes nuevas (modelo de recargo): discount_amount es solo el cupón y el
     # recargo de Mercado Pago viaja aparte en card_surcharge_*.
     cash_discount_amount = getattr(order, "cash_discount_amount", Decimal("0")) or Decimal("0")
@@ -255,10 +257,10 @@ def _build_order_email_context(order) -> dict:
         "total": _format_money(order.total),
         "payment_method_display": payment_method_display,
         "payment_status_display": payment_status_display,
-        "is_cash_payment": is_cash,
-        # Plazo para pagar antes de que la reserva se libere. Va al email para
-        # que el cliente sepa que la carta está apartada, pero no para siempre.
-        "cash_expiration_hours": getattr(settings, "CASH_ORDER_EXPIRATION_HOURS", 24),
+        "is_transfer_payment": is_transfer,
+        # La orden ya nació con el comprobante encima: lo que falta no es que el
+        # cliente pague, es que alguien mire la transferencia.
+        "has_receipt": order.has_receipt,
         "is_mercadopago_payment": is_mp,
         "mp_preference_id": getattr(order, "mp_preference_id", "") or None,
         "mp_payment_id": getattr(mp_payment, "payment_id", "") or None,

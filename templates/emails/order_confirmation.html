@@ -95,7 +95,7 @@
           <tr>
             <td style="background-color:#0f0f0f;padding:32px 48px;border-top:1px solid #2a2a2a;border-bottom:1px solid #2a2a2a;">
               <p style="margin:0 0 20px;font-family:Arial,sans-serif;font-size:10px;font-weight:700;color:#C8972E;text-transform:uppercase;letter-spacing:3px;">Próximos pasos</p>
-              {% if is_cash_payment %}
+              {% if is_transfer_payment %}
               <table border="0" cellpadding="0" cellspacing="0" width="100%">
                 <!-- Paso 1 -->
                 <tr>
@@ -125,8 +125,8 @@
                     </table>
                   </td>
                   <td valign="top" style="padding-left:14px;padding-bottom:20px;">
-                    <p style="margin:0 0 2px;font-family:Arial,sans-serif;font-size:13px;font-weight:700;color:#888888;">Te contactamos para el pago</p>
-                    <p style="margin:0;font-family:Arial,sans-serif;font-size:12px;color:#555555;line-height:1.5;">Te escribiremos al email o teléfono indicado.</p>
+                    <p style="margin:0 0 2px;font-family:Arial,sans-serif;font-size:13px;font-weight:700;color:#888888;">Verificamos la transferencia</p>
+                    <p style="margin:0;font-family:Arial,sans-serif;font-size:12px;color:#555555;line-height:1.5;">Revisamos el comprobante que subiste y te avisamos por mail.</p>
                   </td>
                 </tr>
                 <!-- Paso 3 -->
@@ -205,18 +205,17 @@
               </table>
               {% endif %}
               
-              <!-- Nota importante si es pago efectivo -->
-              {% if order.payment_method == "cash" %}
+              <!-- Nota para las compras por transferencia -->
+              {% if is_transfer_payment %}
               <table border="0" cellpadding="0" cellspacing="0" width="100%" style="background-color:#1a1a1a;border-radius:8px;padding:12px 16px;margin-top:16px;">
                 <tr>
                   <td>
                     <p style="margin:0 0 10px;font-family:Arial,sans-serif;font-size:11px;color:#fbbf24;line-height:1.5;">
-                      <strong>&#9432; Pago manual:</strong> Podés abonar por Efectivo, Transferencia o Crypto. Te enviaremos los datos para completar el pago y luego avanzar con el despacho.
+                      <strong>&#9432; Comprobante recibido:</strong> ya tenemos tu transferencia cargada. Estamos verificando que se haya acreditado.
                     </p>
                     <p style="margin:0;font-family:Arial,sans-serif;font-size:11px;color:#fbbf24;line-height:1.5;">
-                      <strong>&#9200; Tenés {{ cash_expiration_hours }} horas</strong> para transferir o ponerte en contacto con nosotros indicando tu número de orden
-                      <strong style="color:#ffffff;">#{{ order.order_code }}</strong> para finalizar la compra. Mientras tanto te guardamos los productos apartados.
-                      Pasado ese plazo la orden vence y los productos vuelven a la tienda.
+                      Te avisamos por mail en cuanto esté confirmada y avanzamos con el despacho. Tus productos quedan apartados mientras tanto.
+                      Si necesitás escribirnos, mencioná tu número de orden <strong style="color:#ffffff;">#{{ order.order_code }}</strong>.
                     </p>
                   </td>
                 </tr>
@@ -270,7 +269,7 @@
                 {% if cash_discount_amount %}
                 <tr style="border-bottom:1px solid #1e1e1e;">
                   <td colspan="2" style="padding:12px 0;font-family:Arial,sans-serif;font-size:12px;color:#4ade80;">
-                    Descuento (Efectivo/Transferencia/Crypto)
+                    Descuento por transferencia
                     {% if cash_discount_percent %}
                     <span style="background-color:#052e16;color:#4ade80;font-size:10px;font-weight:700;padding:2px 8px;border-radius:4px;margin-left:8px;letter-spacing:1px;">{{ cash_discount_percent }}</span>
                     {% endif %}

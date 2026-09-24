@@ -6,12 +6,14 @@ Orders Serializers
 from collections import OrderedDict
 from decimal import Decimal
 from django.db import transaction
+from django.utils import timezone
 from rest_framework import serializers
 from apps.products.models import Product
 from apps.core.models import SiteConfig, EmailSubscription
 from .models import Order, OrderItem, MercadoPagoPayment, DiscountCode, Shipment
 from .services.stock_reservation_service import reserve_order_stock
 from .services.shipping_service import normalize_shipping_zone, resolve_shipping_price
+from .services.receipts import ReceiptValidationError, resolve_receipt_token
 
 
 class OrderItemInputSerializer(serializers.Serializer):
@@ -55,6 +57,11 @@ class OrderCreateSerializer(serializers.Serializer):
     shipping_branch = serializers.CharField(max_length=255, required=False, allow_blank=True)
     payment_method = serializers.ChoiceField(choices=Order.PAYMENT_METHOD_CHOICES, default=Order.PAYMENT_MERCADOPAGO)
     discount_code = serializers.CharField(max_length=20, required=False, allow_blank=True)
+    # Lo que devolvió POST /orders/receipt/ con el archivo ya guardado en R2.
+    # Obligatorio para transferencia: la orden no existe sin comprobante.
+    receipt_token = serializers.CharField(required=False, allow_blank=True)
+    receipt_name = serializers.CharField(max_length=255, required=False, allow_blank=True)
+    receipt_content_type = serializers.CharField(max_length=100, required=False, allow_blank=True)
     items = OrderItemInputSerializer(many=True)
 
     def validate_items(self, items):
@@ -164,9 +171,30 @@ class OrderCreateSerializer(serializers.Serializer):
         if shipping_errors:
             raise serializers.ValidationError(shipping_errors)
 
+    def _validate_receipt(self, data):
+        """Resuelve el comprobante. Sin él no hay orden por transferencia.
+
+        Se valida acá (y no al crear) para que el comprador reciba el error del
+        formulario junto con los demás, antes de que se toque el stock.
+        """
+        if data.get("payment_method") != Order.PAYMENT_TRANSFER:
+            return
+
+        token = (data.get("receipt_token") or "").strip()
+        if not token:
+            raise serializers.ValidationError({
+                "receipt_token": "Adjuntá el comprobante de la transferencia para confirmar la compra.",
+            })
+
+        try:
+            data["_receipt_key"] = resolve_receipt_token(token)
+        except ReceiptValidationError as exc:
+            raise serializers.ValidationError({"receipt_token": str(exc)}) from exc
+
     def validate(self, data):
         """Valida stock y resuelve productos."""
         self._validate_shipping(data)
+        self._validate_receipt(data)
 
         normalized_items = self._normalize_items(data["items"])
         products = self._get_products_map([item["product_id"] for item in normalized_items])
@@ -180,6 +208,7 @@ class OrderCreateSerializer(serializers.Serializer):
 
     def create(self, validated_data):
         items_input = validated_data.pop("_normalized_items", validated_data.pop("items"))
+        receipt_key = validated_data.pop("_receipt_key", "")
 
         with transaction.atomic():
             products = self._get_products_map(
@@ -224,9 +253,9 @@ class OrderCreateSerializer(serializers.Serializer):
             else:
                 discount_value = Decimal("0")
 
-            # El precio publicado es el precio en efectivo. Pagar con Mercado
-            # Pago / tarjeta suma un recargo que se calcula SOLO sobre los
-            # productos (después del cupón), nunca sobre el envío.
+            # El precio publicado es el precio por transferencia. Pagar con
+            # Mercado Pago / tarjeta suma un recargo que se calcula SOLO sobre
+            # los productos (después del cupón), nunca sobre el envío.
             card_surcharge_percent = Decimal("0")
             card_surcharge_amount = Decimal("0")
             payment_method = validated_data.get("payment_method", Order.PAYMENT_MERCADOPAGO)
@@ -276,6 +305,10 @@ class OrderCreateSerializer(serializers.Serializer):
                 card_surcharge_amount=card_surcharge_amount,
                 subtotal=subtotal,
                 total=total,
+                receipt_key=receipt_key,
+                receipt_name=(validated_data.get("receipt_name") or "")[:255] if receipt_key else "",
+                receipt_content_type=(validated_data.get("receipt_content_type") or "")[:100] if receipt_key else "",
+                receipt_uploaded_at=timezone.now() if receipt_key else None,
             )
 
             Shipment.objects.create(order=order, status=Shipment.STATUS_PENDING)
@@ -292,10 +325,10 @@ class OrderCreateSerializer(serializers.Serializer):
                 )
 
             # Mercado Pago descuenta el stock recién cuando el pago queda
-            # aprobado. El pago manual (efectivo, transferencia, crypto) no se
-            # cobra en el momento: aparta la mercadería y la descuenta cuando
-            # marcás la orden como pagada desde el admin.
-            if payment_method == Order.PAYMENT_CASH:
+            # aprobado. La transferencia no se acredita sola: la orden aparta
+            # la mercadería con el comprobante subido y la descuenta cuando
+            # confirmás el pago desde el admin.
+            if payment_method == Order.PAYMENT_TRANSFER:
                 reserve_order_stock(order)
 
                 if discount_code:
@@ -306,6 +339,10 @@ class OrderCreateSerializer(serializers.Serializer):
 
 class OrderReadSerializer(serializers.ModelSerializer):
     items = OrderItemSerializer(many=True, read_only=True)
+    # La URL del comprobante nunca sale de acá: es un documento bancario y se
+    # mira con link firmado desde el admin. Al cliente le alcanza con saber que
+    # lo recibimos.
+    has_receipt = serializers.BooleanField(read_only=True)
 
     class Meta:
         model = Order
@@ -315,10 +352,11 @@ class OrderReadSerializer(serializers.ModelSerializer):
             "shipping_type", "shipping_address", "shipping_city",
             "shipping_province", "shipping_zip", "shipping_cost",
             "shipping_method", "shipping_zone", "shipping_price", "has_shipping", "shipping_status",
-            "payment_method", "cash_discount_percent", "cash_discount_amount",
+            "payment_method",
             "card_surcharge_percent", "card_surcharge_amount",
             "discount_code", "discount_amount",
             "subtotal", "total", "status",
+            "has_receipt",
             "items", "created_at",
         )
 

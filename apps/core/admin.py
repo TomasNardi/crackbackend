@@ -14,6 +14,7 @@ from .emails import send_sale_request_status_email
 from .models import (
     SiteConfig,
     PaymentSettings,
+    TransferSettings,
     EmailSubscription,
     EmailCampaign,
     ExchangeRate,
@@ -81,7 +82,7 @@ class PaymentSettingsAdmin(ModelAdmin):
                 "description": (
                     "Recargo que se suma al pagar con Mercado Pago / tarjeta de crédito. "
                     "Se aplica solo sobre los productos, nunca sobre el costo de envío. "
-                    "El precio publicado es el precio en efectivo."
+                    "El precio publicado es el precio por transferencia."
                 ),
             },
         ),
@@ -104,6 +105,39 @@ class PaymentSettingsAdmin(ModelAdmin):
     def changelist_view(self, request, extra_context=None):
         obj = SiteConfig.get()
         change_url = reverse("admin:core_paymentsettings_change", args=[obj.pk])
+        return redirect(change_url)
+
+
+@admin.register(TransferSettings)
+class TransferSettingsAdmin(ModelAdmin):
+    list_display = ("cuenta", "transfer_cbu", "transfer_alias")
+    fieldsets = (
+        (
+            "Datos de transferencia",
+            {
+                "fields": ("transfer_bank", "transfer_holder", "transfer_cbu", "transfer_alias"),
+                "description": (
+                    "Lo que ve el comprador en el checkout al elegir transferencia, "
+                    "con botón de copiar para el CBU y el alias. Cambiarlo acá lo "
+                    "cambia en el sitio al instante, sin deploy."
+                ),
+            },
+        ),
+    )
+
+    @admin.display(description="Cuenta")
+    def cuenta(self, obj):
+        return f"{obj.transfer_bank} — {obj.transfer_holder}".strip(" —") or "Sin configurar"
+
+    def has_add_permission(self, request):
+        return False
+
+    def has_delete_permission(self, request, obj=None):
+        return False
+
+    def changelist_view(self, request, extra_context=None):
+        obj = SiteConfig.get()
+        change_url = reverse("admin:core_transfersettings_change", args=[obj.pk])
         return redirect(change_url)
 
 

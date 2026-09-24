@@ -165,13 +165,16 @@ class OrderAdmin(ModelAdmin):
     readonly_fields = (
         "order_code", "created_at", "updated_at",
         "mp_preference_id",
+        # El comprobante lo sube el comprador; desde acá solo se mira.
+        "receipt_display", "receipt_key", "receipt_name",
+        "receipt_content_type", "receipt_uploaded_at",
     )
     ordering = ("-created_at",)
     list_per_page = 40
     list_max_show_all = 200
     inlines = [OrderItemInline, MercadoPagoPaymentInline]
     actions = [
-        "action_mark_cash_paid",
+        "action_mark_transfer_paid",
         "action_return_stock",
         "action_download_pdf",
     ]
@@ -242,12 +245,12 @@ class OrderAdmin(ModelAdmin):
     def payment_summary(self, obj):
         """Método de pago + estado de cobro (badge o botón de acción)."""
         method = obj.get_payment_method_display()
-        if obj.payment_method == Order.PAYMENT_CASH and obj.status == Order.STATUS_PENDING:
-            url = reverse("admin:orders_order_mark_cash_paid", args=[obj.pk])
+        if obj.payment_method == Order.PAYMENT_TRANSFER and obj.status == Order.STATUS_PENDING:
+            url = reverse("admin:orders_order_mark_transfer_paid", args=[obj.pk])
             badge = format_html(
                 '<a href="{}" style="background:#2ea44f;color:#fff;padding:3px 9px;'
                 'border-radius:6px;font-size:11px;font-weight:600;text-decoration:none;'
-                'display:inline-block;" title="Marcar orden en efectivo como pagada">'
+                'display:inline-block;" title="Confirmar que la transferencia se acreditó">'
                 '✓ Marcar pagada</a>',
                 url,
             )
@@ -258,14 +261,28 @@ class OrderAdmin(ModelAdmin):
                 'font-size:11px;font-weight:600;color:{};background:{}1f;">{}</span>',
                 color, color, label,
             )
+        # Antes de confirmar el cobro hay que mirar el comprobante, así que el
+        # link vive en la misma celda que el botón de "Marcar pagada".
+        if obj.has_receipt:
+            receipt = format_html(
+                '<a href="{}" style="font-size:10px;color:#2ea44f;font-weight:600;'
+                'text-decoration:none;" title="Ver el comprobante que subió el comprador">'
+                '📎 Ver comprobante</a>',
+                reverse("admin:orders_order_change", args=[obj.pk]),
+            )
+        else:
+            receipt = ""
+
         return format_html(
             '<div style="line-height:1.6;">'
             '<div style="font-size:11px;color:#6b7280;margin-bottom:4px;">{}</div>'
             '<div>{}</div>'
             '<div style="margin-top:4px;">{}</div>'
+            '<div style="margin-top:4px;">{}</div>'
             '</div>',
             method,
             badge,
+            receipt,
             self.return_stock_button(obj),
         )
 
@@ -316,10 +333,10 @@ class OrderAdmin(ModelAdmin):
         if obj.status == Order.STATUS_CANCELLED:
             return "cancelled", "Cancelada", "#d73a49"
 
-        if obj.payment_method == Order.PAYMENT_CASH and obj.status == Order.STATUS_PENDING:
-            return "pending_cash", "Pendiente", "#2ea44f"
-        if obj.payment_method == Order.PAYMENT_CASH and obj.status == Order.STATUS_PAID:
-            return "paid_cash", "Pagada", "#2ea44f"
+        if obj.payment_method == Order.PAYMENT_TRANSFER and obj.status == Order.STATUS_PENDING:
+            return "pending_transfer", "Pendiente", "#2ea44f"
+        if obj.payment_method == Order.PAYMENT_TRANSFER and obj.status == Order.STATUS_PAID:
+            return "paid_transfer", "Pagada", "#2ea44f"
 
         if obj.payment_method == Order.PAYMENT_MERCADOPAGO:
             mp_payment = obj.mp_payments.order_by("-updated_at", "-created_at").first()
@@ -368,17 +385,57 @@ class OrderAdmin(ModelAdmin):
 
     @admin.display(description="Cobro")
     def payment_status_display(self, obj):
-        if obj.payment_method == Order.PAYMENT_CASH and obj.status == Order.STATUS_PENDING:
-            url = reverse("admin:orders_order_mark_cash_paid", args=[obj.pk])
+        if obj.payment_method == Order.PAYMENT_TRANSFER and obj.status == Order.STATUS_PENDING:
+            url = reverse("admin:orders_order_mark_transfer_paid", args=[obj.pk])
             return format_html(
                 '<a href="{}" style="'
                 'background:#2ea44f;color:#fff;padding:4px 10px;border-radius:4px;'
                 'font-size:12px;font-weight:600;text-decoration:none;display:inline-block;"'
-                'title="Marcar orden en efectivo como pagada">Marcar pagada</a>',
+                'title="Confirmar que la transferencia se acreditó">Marcar pagada</a>',
                 url,
             )
         _, label, color = self._payment_status_meta(obj)
         return format_html('<span style="color:{}; font-weight:600;">{}</span>', color, label)
+
+    @admin.display(description="Comprobante")
+    def receipt_display(self, obj):
+        """Previsualización del comprobante con link firmado y temporal.
+
+        El link se arma en cada carga de la ficha y caduca a los 15 minutos, así
+        que no queda una URL que sirva para siempre en el historial ni en una
+        captura. Las imágenes se muestran; los PDF van por link porque el
+        navegador no los embebe de forma confiable dentro del admin.
+        """
+        if not obj.has_receipt:
+            return format_html('<span style="color:#888;">Sin comprobante.</span>')
+
+        url = obj.receipt_view_url()
+        if not url:
+            return format_html(
+                '<span style="color:#d73a49;">No se pudo generar el link '
+                '(revisá las credenciales de R2).</span>'
+            )
+
+        nombre = obj.receipt_name or "comprobante"
+        if obj.receipt_is_pdf:
+            return format_html(
+                '<a href="{}" target="_blank" rel="noopener" style="background:#2ea44f;'
+                'color:#fff;padding:5px 12px;border-radius:4px;font-size:12px;'
+                'font-weight:600;text-decoration:none;display:inline-block;">📄 Ver {}</a>'
+                '<div style="font-size:11px;color:#6b7280;margin-top:6px;">'
+                'El link vence en 15 minutos.</div>',
+                url, nombre,
+            )
+
+        return format_html(
+            '<a href="{}" target="_blank" rel="noopener">'
+            '<img src="{}" alt="{}" style="max-width:420px;max-height:420px;'
+            'border-radius:8px;border:1px solid rgba(0,0,0,0.1);display:block;" />'
+            '</a>'
+            '<div style="font-size:11px;color:#6b7280;margin-top:6px;">'
+            '{} — el link vence en 15 minutos.</div>',
+            url, url, nombre, nombre,
+        )
 
     @admin.display(description="PDF")
     def pdf_download_button(self, obj):
@@ -454,8 +511,8 @@ class OrderAdmin(ModelAdmin):
         custom = [
             path(
                 "<int:order_id>/mark-cash-paid/",
-                self.admin_site.admin_view(self.mark_cash_paid_view),
-                name="orders_order_mark_cash_paid",
+                self.admin_site.admin_view(self.mark_transfer_paid_view),
+                name="orders_order_mark_transfer_paid",
             ),
             path(
                 "<int:order_id>/return-stock/",
@@ -577,17 +634,17 @@ class OrderAdmin(ModelAdmin):
         }
         return render(request, "admin/orders/shipping_popup.html", context)
 
-    def mark_cash_paid_view(self, request, order_id):
+    def mark_transfer_paid_view(self, request, order_id):
         try:
             order = Order.objects.get(pk=order_id)
         except Order.DoesNotExist:
             self.message_user(request, "Orden no encontrada.", level=messages.ERROR)
             return HttpResponseRedirect(reverse("admin:orders_order_changelist"))
 
-        if order.payment_method != Order.PAYMENT_CASH:
+        if order.payment_method != Order.PAYMENT_TRANSFER:
             self.message_user(
                 request,
-                f"La orden #{order.order_code} no es de pago en efectivo.",
+                f"La orden #{order.order_code} no se paga por transferencia.",
                 level=messages.WARNING,
             )
         elif order.status == Order.STATUS_PAID:
@@ -677,16 +734,16 @@ class OrderAdmin(ModelAdmin):
                 level=messages.INFO
             )
 
-    @admin.action(description="Marcar como pagadas (solo efectivo pendientes)")
-    def action_mark_cash_paid(self, request, queryset):
-        pending_cash = queryset.filter(
-            payment_method=Order.PAYMENT_CASH,
+    @admin.action(description="Confirmar transferencia recibida")
+    def action_mark_transfer_paid(self, request, queryset):
+        pending_transfer = queryset.filter(
+            payment_method=Order.PAYMENT_TRANSFER,
             status=Order.STATUS_PENDING,
         )
         # Una por una y no con `update()`: cada orden tiene que convertir su
         # reserva en venta, y eso mira los ítems de esa orden.
         order_ids = []
-        for order in pending_cash:
+        for order in pending_transfer:
             order.status = Order.STATUS_PAID
             order.save(update_fields=["status", "updated_at"])
             consume_order_stock(order)
@@ -696,7 +753,7 @@ class OrderAdmin(ModelAdmin):
         skipped = queryset.count() - updated
 
         if updated:
-            self.message_user(request, f"{updated} orden(es) en efectivo marcadas como pagadas.", level=messages.SUCCESS)
+            self.message_user(request, f"{updated} orden(es) por transferencia marcadas como pagadas.", level=messages.SUCCESS)
             from .emails import send_payment_confirmed_email
             for order_id in order_ids:
                 try:
@@ -706,7 +763,7 @@ class OrderAdmin(ModelAdmin):
         if skipped:
             self.message_user(
                 request,
-                f"{skipped} orden(es) omitidas: solo se actualizan órdenes en efectivo con estado pendiente.",
+                f"{skipped} orden(es) omitidas: solo se actualizan órdenes por transferencia con estado pendiente.",
                 level=messages.WARNING,
             )
             

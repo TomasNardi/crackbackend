@@ -45,7 +45,7 @@ Cada PDF contiene:
 5. **Resumen de Totales**
    - Subtotal
    - Descuento por código (si aplica)
-   - Descuento por efectivo (si aplica)
+   - Descuento manual histórico (si aplica)
    - Costo de envío (si aplica)
    - **TOTAL** destacado en dorado
 

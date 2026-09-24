@@ -3,6 +3,7 @@ from decimal import Decimal
 from unittest.mock import Mock, patch
 
 from django.contrib.auth import get_user_model
+from django.core import signing
 from django.test import TestCase, override_settings
 from django.urls import reverse
 from django.utils import timezone
@@ -11,13 +12,22 @@ from apps.orders.mercadopago_service import create_checkout_preference
 from apps.orders.models import DiscountCode, Order, OrderItem, ShippingConfig
 from apps.orders.serializers import OrderCreateSerializer
 from apps.orders.services import reconcile_payment
-from apps.orders.tasks import expire_stale_cash_orders
+from apps.orders.services.receipts import SIGNING_SALT
 from apps.orders.services.stock_reservation_service import (
     consume_order_stock,
     release_order_stock,
 )
 from apps.products.models import Product, ProductCategory, ProductImage
 from apps.core.models import ExchangeRate, SiteConfig
+
+
+def receipt_token(key="comprobantes/2026/01/test.jpg"):
+    """Token de comprobante valido, sin tocar R2.
+
+    Es lo mismo que devuelve `store_receipt` despues de subir el archivo: la
+    clave del objeto firmada. Los tests solo necesitan que el checkout la acepte.
+    """
+    return signing.dumps(key, salt=SIGNING_SALT)
 
 
 class MercadoPagoPreferenceTests(TestCase):
@@ -105,7 +115,8 @@ class OrderProductImageIntegrityTests(TestCase):
             data={
                 "customer_name": "Cliente Test",
                 "customer_email": "cliente@test.com",
-                "payment_method": Order.PAYMENT_CASH,
+                "payment_method": Order.PAYMENT_TRANSFER,
+                "receipt_token": receipt_token(),
                 "shipping_type": Order.SHIPPING_PICKUP,
                 "shipping_method": Order.SHIPPING_METHOD_STORE_PICKUP,
                 "items": [{"product_id": product.id, "quantity": 1}],
@@ -253,7 +264,8 @@ class SingleStockTests(TestCase):
             data={
                 "customer_name": "Cliente Test",
                 "customer_email": "cliente@test.com",
-                "payment_method": Order.PAYMENT_CASH,
+                "payment_method": Order.PAYMENT_TRANSFER,
+                "receipt_token": receipt_token(),
                 "shipping_type": Order.SHIPPING_PICKUP,
                 "shipping_method": Order.SHIPPING_METHOD_STORE_PICKUP,
                 "items": [{"product_id": self.product.id, "quantity": quantity}],
@@ -415,13 +427,18 @@ class MercadoPagoMultiUnitStockTests(TestCase):
         self.assertTrue(product.in_stock)
 
 
-class CashOrderExpirationTests(TestCase):
+class TransferReceiptTests(TestCase):
     """
-    La reserva no es eterna: pasado el plazo del email, la mercadería vuelve a
-    la tienda y la orden queda vencida.
+    La orden por transferencia nace con el comprobante o no nace.
+
+    Es el reemplazo del viejo plazo de pago: antes la orden se creaba y un
+    worker la vencía si nadie transfería. Ahora el comprobante es la puerta de
+    entrada, así que toda orden que existe ya tiene la plata enviada y su
+    reserva no caduca.
     """
 
     def setUp(self):
+        ExchangeRate.objects.create(usd_to_ars=Decimal("1000.00"))
         self.category = ProductCategory.objects.create(name="Single")
         self.product = Product.objects.create(
             category=self.category,
@@ -431,67 +448,92 @@ class CashOrderExpirationTests(TestCase):
             stock_quantity=2,
         )
 
-    def _cash_order(self, quantity=2, age_hours=0):
+    def _payload(self, **extra):
+        data = {
+            "customer_name": "Cliente Test",
+            "customer_email": "cliente@test.com",
+            "payment_method": Order.PAYMENT_TRANSFER,
+            "shipping_type": Order.SHIPPING_PICKUP,
+            "shipping_method": Order.SHIPPING_METHOD_STORE_PICKUP,
+            "items": [{"product_id": self.product.id, "quantity": 2}],
+        }
+        data.update(extra)
+        return data
+
+    def test_transfer_order_requires_a_receipt(self):
+        serializer = OrderCreateSerializer(data=self._payload())
+
+        self.assertFalse(serializer.is_valid())
+        self.assertIn("receipt_token", serializer.errors)
+        # Nada se reservó: el stock sigue entero para el próximo comprador.
+        self.product.refresh_from_db()
+        self.assertEqual(self.product.reserved_quantity, 0)
+
+    def test_a_forged_receipt_token_is_rejected(self):
         serializer = OrderCreateSerializer(
-            data={
-                "customer_name": "Cliente Test",
-                "customer_email": "cliente@test.com",
-                "payment_method": Order.PAYMENT_CASH,
-                "shipping_type": Order.SHIPPING_PICKUP,
-                "shipping_method": Order.SHIPPING_METHOD_STORE_PICKUP,
-                "items": [{"product_id": self.product.id, "quantity": quantity}],
-            }
+            data=self._payload(receipt_token="comprobantes/../catalog/secreto.jpg")
+        )
+
+        self.assertFalse(serializer.is_valid())
+        self.assertIn("receipt_token", serializer.errors)
+
+    def test_expired_receipt_token_is_rejected(self):
+        token = receipt_token()
+
+        with patch(
+            "apps.orders.services.receipts.TOKEN_MAX_AGE_SECONDS", -1
+        ):
+            serializer = OrderCreateSerializer(data=self._payload(receipt_token=token))
+            self.assertFalse(serializer.is_valid())
+
+        self.assertIn("receipt_token", serializer.errors)
+
+    def test_order_stores_the_receipt_and_reserves_the_stock(self):
+        serializer = OrderCreateSerializer(
+            data=self._payload(
+                receipt_token=receipt_token("comprobantes/2026/01/abc.pdf"),
+                receipt_name="transferencia.pdf",
+                receipt_content_type="application/pdf",
+            )
         )
         self.assertTrue(serializer.is_valid(), serializer.errors)
         order = serializer.save()
 
-        if age_hours:
-            created = timezone.now() - timedelta(hours=age_hours)
-            Order.objects.filter(pk=order.pk).update(created_at=created)
-            order.refresh_from_db()
+        self.assertEqual(order.receipt_key, "comprobantes/2026/01/abc.pdf")
+        self.assertEqual(order.receipt_name, "transferencia.pdf")
+        self.assertTrue(order.has_receipt)
+        self.assertTrue(order.receipt_is_pdf)
+        self.assertIsNotNone(order.receipt_uploaded_at)
 
-        return order
-
-    @override_settings(CASH_ORDER_EXPIRATION_HOURS=24)
-    def test_order_within_the_deadline_keeps_its_reservation(self):
-        order = self._cash_order(age_hours=5)
-
-        result = expire_stale_cash_orders()
-
-        order.refresh_from_db()
         self.product.refresh_from_db()
-        self.assertEqual(result["expired"], 0)
-        self.assertEqual(order.status, Order.STATUS_PENDING)
         self.assertEqual(self.product.reserved_quantity, 2)
 
-    @override_settings(CASH_ORDER_EXPIRATION_HOURS=24)
-    def test_expired_order_returns_the_stock_to_the_shop(self):
-        order = self._cash_order(age_hours=30)
+    def test_mercadopago_order_needs_no_receipt(self):
+        serializer = OrderCreateSerializer(
+            data=self._payload(payment_method=Order.PAYMENT_MERCADOPAGO)
+        )
 
-        result = expire_stale_cash_orders()
+        self.assertTrue(serializer.is_valid(), serializer.errors)
+        order = serializer.save()
+        self.assertFalse(order.has_receipt)
 
-        order.refresh_from_db()
-        self.product.refresh_from_db()
-        self.assertEqual(result["expired"], 1)
-        self.assertEqual(order.status, Order.STATUS_EXPIRED)
-        self.assertEqual(order.stock_status, Order.STOCK_RELEASED)
-        self.assertEqual(self.product.reserved_quantity, 0)
-        self.assertEqual(self.product.stock_quantity, 2)
-        self.assertTrue(self.product.in_stock)
+    def test_an_old_transfer_order_keeps_its_reservation(self):
+        """Ya no hay barrido que la venza: la reserva aguanta lo que haga falta."""
+        serializer = OrderCreateSerializer(
+            data=self._payload(receipt_token=receipt_token())
+        )
+        self.assertTrue(serializer.is_valid(), serializer.errors)
+        order = serializer.save()
 
-    @override_settings(CASH_ORDER_EXPIRATION_HOURS=24)
-    def test_paid_order_is_never_expired(self):
-        order = self._cash_order(age_hours=30)
-        consume_order_stock(order)
-        Order.objects.filter(pk=order.pk).update(status=Order.STATUS_PAID)
-
-        result = expire_stale_cash_orders()
+        Order.objects.filter(pk=order.pk).update(
+            created_at=timezone.now() - timedelta(days=30)
+        )
 
         order.refresh_from_db()
         self.product.refresh_from_db()
-        self.assertEqual(result["expired"], 0)
-        self.assertEqual(order.status, Order.STATUS_PAID)
-        self.assertEqual(self.product.stock_quantity, 0)
+        self.assertEqual(order.status, Order.STATUS_PENDING)
+        self.assertEqual(order.stock_status, Order.STOCK_RESERVED)
+        self.assertEqual(self.product.reserved_quantity, 2)
 
 
 class ReturnStockAdminTests(TestCase):
@@ -522,7 +564,8 @@ class ReturnStockAdminTests(TestCase):
             data={
                 "customer_name": "Cliente Test",
                 "customer_email": "cliente@test.com",
-                "payment_method": Order.PAYMENT_CASH,
+                "payment_method": Order.PAYMENT_TRANSFER,
+                "receipt_token": receipt_token(),
                 "shipping_type": Order.SHIPPING_PICKUP,
                 "shipping_method": Order.SHIPPING_METHOD_STORE_PICKUP,
                 "items": [{"product_id": self.product.id, "quantity": quantity}],
@@ -557,9 +600,9 @@ class ReturnStockAdminTests(TestCase):
         self.assertEqual(self.product.stock_quantity, 3)
         self.assertEqual(self.product.reserved_quantity, 0)
 
-    def test_marking_cash_paid_from_the_admin_discounts_the_reservation(self):
+    def test_marking_transfer_paid_from_the_admin_discounts_the_reservation(self):
         order = self._cash_order(quantity=2)
-        url = reverse("admin:orders_order_mark_cash_paid", args=[order.pk])
+        url = reverse("admin:orders_order_mark_transfer_paid", args=[order.pk])
 
         self.client.get(url)
 
@@ -572,7 +615,7 @@ class ReturnStockAdminTests(TestCase):
 
 class CardSurchargePricingTests(TestCase):
     """
-    El precio publicado es el precio en efectivo. Pagar con Mercado Pago suma
+    El precio publicado es el precio por transferencia. Pagar con Mercado Pago suma
     un recargo que se calcula SOLO sobre los productos, nunca sobre el envío.
     """
 
@@ -589,7 +632,7 @@ class CardSurchargePricingTests(TestCase):
         )
 
         self.category = ProductCategory.objects.create(name="Single")
-        # price_usd 10 x cotizacion 1000 = $10.000 de precio en efectivo.
+        # price_usd 10 x cotizacion 1000 = $10.000 de precio por transferencia.
         self.product = Product.objects.create(
             category=self.category,
             name="Sorin TOPPS",
@@ -605,6 +648,8 @@ class CardSurchargePricingTests(TestCase):
             "payment_method": payment_method,
             "items": [{"product_id": self.product.id, "quantity": quantity}],
         }
+        if payment_method == Order.PAYMENT_TRANSFER:
+            data["receipt_token"] = receipt_token()
         if pickup:
             data.update({
                 "shipping_type": Order.SHIPPING_PICKUP,
@@ -628,7 +673,7 @@ class CardSurchargePricingTests(TestCase):
         return serializer.save()
 
     def test_cash_order_pays_the_published_price_without_surcharge(self):
-        order = self._checkout(Order.PAYMENT_CASH)
+        order = self._checkout(Order.PAYMENT_TRANSFER)
 
         self.assertEqual(order.subtotal, Decimal("10000.00"))
         self.assertEqual(order.card_surcharge_amount, Decimal("0"))
@@ -844,7 +889,7 @@ class MercadoPagoUnderpaymentTests(TestCase):
         }
 
     def test_paying_the_cash_price_does_not_mark_the_order_as_paid(self):
-        # El atacante paga $10.000 (precio en efectivo) una orden de $11.000.
+        # El atacante paga $10.000 (precio por transferencia) una orden de $11.000.
         order, paid = reconcile_payment(self._payment_data("10000.00"), source="webhook")
 
         self.assertFalse(paid)

@@ -357,15 +357,6 @@ try:
     MERCADOPAGO_EXPIRATION_GRACE_MINUTES = int(os.environ.get("MP_EXPIRATION_GRACE_MINUTES", "5"))
 except ValueError:
     MERCADOPAGO_EXPIRATION_GRACE_MINUTES = 5
-# Plazo para pagar una orden manual (efectivo, transferencia, crypto) antes de
-# que venza y la mercadería reservada vuelva a la venta. El email de compra le
-# avisa este mismo número al cliente.
-try:
-    CASH_ORDER_EXPIRATION_HOURS = int(os.environ.get("CASH_ORDER_EXPIRATION_HOURS", "24"))
-except ValueError:
-    CASH_ORDER_EXPIRATION_HOURS = 24
-CASH_ORDER_EXPIRATION_HOURS = max(1, min(CASH_ORDER_EXPIRATION_HOURS, 30 * 24))
-
 # Opcional: forzar URL pública de retorno para Checkout Pro en desarrollo local.
 # Se puede sobreescribir con MP_FRONTEND_RETURN_URL en entorno.
 MERCADOPAGO_FRONTEND_RETURN_URL = os.environ.get(
@@ -428,6 +419,12 @@ R2_ACCESS_KEY_ID = os.environ.get("R2_ACCESS_KEY_ID", "")
 R2_SECRET_ACCESS_KEY = os.environ.get("R2_SECRET_ACCESS_KEY", "")
 R2_BUCKET = os.environ.get("R2_BUCKET", "")
 R2_PUBLIC_BASE_URL = os.environ.get("R2_PUBLIC_BASE_URL", "")
+
+# Bucket aparte, PRIVADO, para los comprobantes de transferencia que sube el
+# comprador. No lleva dominio público: un comprobante es un documento bancario
+# y se mira solo con link firmado desde el admin (apps/orders/services/receipts.py).
+#   R2_RECEIPTS_BUCKET=crack-comprobantes
+R2_RECEIPTS_BUCKET = os.environ.get("R2_RECEIPTS_BUCKET", "")
 
 # ---------------------------------------------------------------------------
 # Paq.ar (Correo Argentino) — Integración de envíos

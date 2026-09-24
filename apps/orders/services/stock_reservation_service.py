@@ -2,7 +2,7 @@
 Reserva de stock para órdenes de pago manual
 ============================================
 
-Una compra por efectivo, transferencia o crypto no se cobra en el momento: el
+Una compra por transferencia no se acredita sola: el
 cliente tiene que transferir o pasar por el local. Hasta que eso pase, la carta
 no puede seguir a la venta —si no, la vendés dos veces— pero tampoco está
 vendida.

@@ -10,9 +10,11 @@ from django.utils.dateparse import parse_datetime
 from django.utils.decorators import method_decorator
 from django_ratelimit.decorators import ratelimit
 from rest_framework import viewsets, permissions, status
+from rest_framework.parsers import FormParser, MultiPartParser
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
+from apps.catalog.services.r2 import R2ConfigurationError
 from apps.core.models import SiteConfig
 from .models import Order, DiscountCode, MercadoPagoPayment
 from .serializers import OrderCreateSerializer, OrderReadSerializer
@@ -33,6 +35,11 @@ from .services import (
     reconcile_payment,
 )
 from .services.shipping_service import get_checkout_shipping_prices
+from .services.receipts import (
+    ReceiptStorageError,
+    ReceiptValidationError,
+    store_receipt,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -104,8 +111,9 @@ class OrderViewSet(viewsets.ModelViewSet):
                     status=status.HTTP_502_BAD_GATEWAY,
                 )
 
-        # Para efectivo la orden queda confirmada en creación. En MP se envía al aprobar el pago.
-        if order.payment_method == Order.PAYMENT_CASH:
+        # Por transferencia la orden ya nace con el comprobante, así que se
+        # confirma en la creación. En MP el mail sale al aprobarse el pago.
+        if order.payment_method == Order.PAYMENT_TRANSFER:
             send_order_emails(order.id)
 
         return Response(
@@ -334,6 +342,45 @@ class PaymentConfigView(APIView):
                 "card_surcharge_enabled": config.card_surcharge_enabled,
                 "card_surcharge_percent": float(config.card_surcharge_percent),
                 "shipping_prices": get_checkout_shipping_prices(),
+                # Datos de la cuenta que el checkout muestra al elegir
+                # transferencia. Se editan desde el admin, sin deploy.
+                "transfer": {
+                    "bank": config.transfer_bank,
+                    "holder": config.transfer_holder,
+                    "cbu": config.transfer_cbu,
+                    "alias": config.transfer_alias,
+                },
             },
             status=status.HTTP_200_OK,
         )
+
+
+class OrderReceiptUploadView(APIView):
+    """POST /orders/receipt/ — recibe el comprobante y lo guarda en R2.
+
+    Se llama *antes* de crear la orden: devuelve un token firmado que el
+    checkout manda en el alta. Sin ese token no hay orden por transferencia, y
+    por eso la orden ya no vence: cuando existe, la plata ya se envió.
+
+    Es público (el comprador no tiene cuenta), así que va con límite por IP.
+    """
+
+    permission_classes = [permissions.AllowAny]
+    parser_classes = [MultiPartParser, FormParser]
+
+    @method_decorator(ratelimit(key="ip", rate="10/h", method="POST", block=True))
+    def post(self, request):
+        archivo = request.FILES.get("file") or request.FILES.get("archivo")
+
+        try:
+            guardado = store_receipt(archivo)
+        except ReceiptValidationError as exc:
+            return Response({"detail": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+        except (ReceiptStorageError, R2ConfigurationError) as exc:
+            logger.exception("No se pudo guardar el comprobante: %s", exc)
+            return Response(
+                {"detail": "No pudimos guardar el comprobante. Probá de nuevo en un momento."},
+                status=status.HTTP_502_BAD_GATEWAY,
+            )
+
+        return Response(guardado, status=status.HTTP_201_CREATED)

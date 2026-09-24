@@ -77,6 +77,38 @@ class SiteConfig(models.Model):
         help_text="Porcentaje de recargo sobre los productos (no sobre el envío) al pagar con Mercado Pago / tarjeta.",
     )
 
+    # Datos de la cuenta que ve el comprador en el checkout cuando elige
+    # transferencia. Viven acá y no en el frontend para que cambiar de cuenta
+    # no requiera un deploy.
+    transfer_bank = models.CharField(
+        "Banco / billetera",
+        max_length=100,
+        blank=True,
+        default="",
+        help_text="Ej: Mercado Pago, Banco Galicia. Se muestra en el checkout.",
+    )
+    transfer_holder = models.CharField(
+        "Titular de la cuenta",
+        max_length=150,
+        blank=True,
+        default="",
+        help_text="Nombre completo del titular, tal como figura en el banco.",
+    )
+    transfer_cbu = models.CharField(
+        "CBU / CVU",
+        max_length=40,
+        blank=True,
+        default="",
+        help_text="Se muestra en el checkout con botón de copiar.",
+    )
+    transfer_alias = models.CharField(
+        "Alias",
+        max_length=100,
+        blank=True,
+        default="",
+        help_text="Se muestra en el checkout con botón de copiar.",
+    )
+
     class Meta:
         verbose_name = "Configuración del sitio"
         verbose_name_plural = "Configuración del sitio"
@@ -102,6 +134,15 @@ class PaymentSettings(SiteConfig):
         proxy = True
         verbose_name = "Recargo Mercado Pago"
         verbose_name_plural = "Recargo Mercado Pago"
+
+
+class TransferSettings(SiteConfig):
+    """Proxy para cargar los datos bancarios desde una opción separada del admin."""
+
+    class Meta:
+        proxy = True
+        verbose_name = "Datos de transferencia"
+        verbose_name_plural = "Datos de transferencia"
 
 
 class EmailSubscription(models.Model):

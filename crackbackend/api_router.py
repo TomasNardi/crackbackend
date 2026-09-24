@@ -25,6 +25,7 @@ from apps.orders.views import (
     MercadoPagoWebhookView,
     MercadoPagoVerifyView,
     PaymentConfigView,
+    OrderReceiptUploadView,
     ValidateDiscountView,
 )
 from apps.ebay.views import (
@@ -66,6 +67,10 @@ urlpatterns = [
     path("auth/register/", RegisterView.as_view(), name="register"),
     path("auth/me/", UserProfileView.as_view(), name="user_profile"),
     path("auth/create-superuser/", CreateSuperuserView.as_view(), name="create_superuser"),
+
+    # Comprobante de transferencia. Va antes del router: si quedara después,
+    # la ruta de detalle `orders/<pk>/` se comería "receipt".
+    path("orders/receipt/", OrderReceiptUploadView.as_view(), name="order_receipt_upload"),
 
     # Payments
     path("payments/webhook/", MercadoPagoWebhookView.as_view(), name="mp_webhook"),

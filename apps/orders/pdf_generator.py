@@ -350,7 +350,7 @@ def generate_order_pdf(order):
         shipping_amount = order.shipping_cost
 
     # En órdenes históricas order.discount_amount almacenaba cupón + descuento por
-    # efectivo combinados, así que separamos el cupón restando el efectivo (igual
+    # manual combinados, así que separamos el cupón restando ese otro (igual
     # que el template de emails). En las órdenes nuevas cash_discount_amount es 0 y
     # el recargo de Mercado Pago viaja aparte en card_surcharge_amount.
     total_discount_amount = order.discount_amount or Decimal("0")
@@ -384,10 +384,10 @@ def generate_order_pdf(order):
             Paragraph(f"-${coupon_discount_amount:.2f}", ParagraphStyle("Right", parent=styles["Normal"], alignment=TA_RIGHT, textColor=HexColor("#4CAF50"))),
         ])
 
-    # Descuento efectivo
+    # Descuento manual histórico
     if cash_discount_amount > 0:
         cash_percent = order.cash_discount_percent or Decimal("0")
-        cash_label = "Descuento Efectivo/Transferencia/Crypto"
+        cash_label = "Descuento por transferencia"
         if cash_percent > 0:
             cash_label += f" ({cash_percent:.0f}%)"
         totals_data.append([
