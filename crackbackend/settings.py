@@ -714,6 +714,12 @@ UNFOLD = {
                         "permission": admin_has_perm("core.view_paymentsettings"),
                     },
                     {
+                        "title": "Datos de transferencia",
+                        "icon": "account_balance",
+                        "link": "/admin/core/transfersettings/",
+                        "permission": admin_has_perm("core.view_transfersettings"),
+                    },
+                    {
                         "title": "Tipo de cambio",
                         "icon": "currency_exchange",
                         "link": "/admin/core/exchangerate/",
