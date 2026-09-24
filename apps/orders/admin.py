@@ -262,13 +262,14 @@ class OrderAdmin(ModelAdmin):
                 color, color, label,
             )
         # Antes de confirmar el cobro hay que mirar el comprobante, así que el
-        # link vive en la misma celda que el botón de "Marcar pagada".
+        # link vive en la misma celda que el botón de "Marcar pagada". Abre el
+        # archivo directo en otra pestaña: no hay que entrar a la ficha.
         if obj.has_receipt:
             receipt = format_html(
-                '<a href="{}" style="font-size:10px;color:#2ea44f;font-weight:600;'
-                'text-decoration:none;" title="Ver el comprobante que subió el comprador">'
-                '📎 Ver comprobante</a>',
-                reverse("admin:orders_order_change", args=[obj.pk]),
+                '<a href="{}" target="_blank" rel="noopener" style="font-size:10px;'
+                'color:#2ea44f;font-weight:600;text-decoration:none;" '
+                'title="Abrir el comprobante que subió el comprador">Ver comprobante</a>',
+                reverse("admin:orders_order_receipt", args=[obj.pk]),
             )
         else:
             receipt = ""
@@ -399,42 +400,16 @@ class OrderAdmin(ModelAdmin):
 
     @admin.display(description="Comprobante")
     def receipt_display(self, obj):
-        """Previsualización del comprobante con link firmado y temporal.
-
-        El link se arma en cada carga de la ficha y caduca a los 15 minutos, así
-        que no queda una URL que sirva para siempre en el historial ni en una
-        captura. Las imágenes se muestran; los PDF van por link porque el
-        navegador no los embebe de forma confiable dentro del admin.
-        """
+        """Botón que abre el comprobante —imagen o PDF— en otra pestaña."""
         if not obj.has_receipt:
             return format_html('<span style="color:#888;">Sin comprobante.</span>')
 
-        url = obj.receipt_view_url()
-        if not url:
-            return format_html(
-                '<span style="color:#d73a49;">No se pudo generar el link '
-                '(revisá las credenciales de R2).</span>'
-            )
-
-        nombre = obj.receipt_name or "comprobante"
-        if obj.receipt_is_pdf:
-            return format_html(
-                '<a href="{}" target="_blank" rel="noopener" style="background:#2ea44f;'
-                'color:#fff;padding:5px 12px;border-radius:4px;font-size:12px;'
-                'font-weight:600;text-decoration:none;display:inline-block;">📄 Ver {}</a>'
-                '<div style="font-size:11px;color:#6b7280;margin-top:6px;">'
-                'El link vence en 15 minutos.</div>',
-                url, nombre,
-            )
-
         return format_html(
-            '<a href="{}" target="_blank" rel="noopener">'
-            '<img src="{}" alt="{}" style="max-width:420px;max-height:420px;'
-            'border-radius:8px;border:1px solid rgba(0,0,0,0.1);display:block;" />'
-            '</a>'
-            '<div style="font-size:11px;color:#6b7280;margin-top:6px;">'
-            '{} — el link vence en 15 minutos.</div>',
-            url, url, nombre, nombre,
+            '<a href="{}" target="_blank" rel="noopener" style="background:#2ea44f;'
+            'color:#fff;padding:5px 12px;border-radius:4px;font-size:12px;'
+            'font-weight:600;text-decoration:none;display:inline-block;">'
+            'Ver comprobante</a>',
+            reverse("admin:orders_order_receipt", args=[obj.pk]),
         )
 
     @admin.display(description="PDF")
@@ -523,6 +498,11 @@ class OrderAdmin(ModelAdmin):
                 "<int:order_id>/pdf/",
                 self.admin_site.admin_view(self.pdf_download_view),
                 name="orders_order_pdf_download",
+            ),
+            path(
+                "<int:order_id>/comprobante/",
+                self.admin_site.admin_view(self.receipt_view),
+                name="orders_order_receipt",
             ),
             path(
                 "<int:order_id>/shipping-popup/",
@@ -633,6 +613,36 @@ class OrderAdmin(ModelAdmin):
             "form": form,
         }
         return render(request, "admin/orders/shipping_popup.html", context)
+
+    def receipt_view(self, request, order_id):
+        """Abre el comprobante: imagen o PDF, tal cual lo subió el comprador.
+
+        El archivo vive en R2 privado, así que no se puede linkear directo. Acá
+        se firma un link al momento del clic y se redirige: el admin ve el
+        archivo y la URL firmada no queda escrita en el HTML de la lista.
+        """
+        order = Order.objects.filter(pk=order_id).only(
+            "id", "order_code", "receipt_key", "receipt_content_type"
+        ).first()
+
+        if not order or not order.has_receipt:
+            self.message_user(request, "La orden no tiene comprobante.", level=messages.WARNING)
+            return HttpResponseRedirect(
+                request.META.get("HTTP_REFERER") or reverse("admin:orders_order_changelist")
+            )
+
+        url = order.receipt_view_url()
+        if not url:
+            self.message_user(
+                request,
+                "No se pudo abrir el comprobante. Revisá las credenciales de R2.",
+                level=messages.ERROR,
+            )
+            return HttpResponseRedirect(
+                request.META.get("HTTP_REFERER") or reverse("admin:orders_order_changelist")
+            )
+
+        return HttpResponseRedirect(url)
 
     def mark_transfer_paid_view(self, request, order_id):
         try:
