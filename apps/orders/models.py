@@ -214,6 +214,13 @@ class Order(models.Model):
     customer_name = models.CharField("Nombre cliente", max_length=255)
     customer_email = models.EmailField("Email cliente")
     customer_phone = models.CharField("Teléfono", max_length=30, blank=True)
+    # Cuenta del comprador. Vacío = compra de invitado. Se completa en el
+    # checkout si compró con la sesión abierta, o al entrar a su cuenta si el
+    # email de la orden coincide con el suyo (ver apps/customers/services.py).
+    customer = models.ForeignKey(
+        "customers.Customer", on_delete=models.SET_NULL, null=True, blank=True,
+        related_name="orders", verbose_name="Cuenta del cliente",
+    )
 
     # Envío
     shipping_type = models.CharField(

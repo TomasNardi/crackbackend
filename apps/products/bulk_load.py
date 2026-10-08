@@ -23,13 +23,16 @@ from django.contrib import messages
 from django.core.cache import cache
 from django.core.exceptions import ValidationError as DjangoValidationError
 from django.core.validators import URLValidator
-from django.db import transaction
+from django.db import IntegrityError, transaction
 from django.db.models import Case, F, IntegerField, Q, Sum, Value, When
 from django.db.models.functions import Coalesce
 from django.http import JsonResponse
 from django.shortcuts import render
+from django.templatetags.static import static
 from django.urls import reverse
+from django.utils.text import slugify
 
+from apps.catalog import finishes
 from apps.catalog.models import CatalogCard
 
 from .models import (
@@ -62,20 +65,35 @@ SEARCH_CACHE_TTL = 300
 # Columnas que necesita la búsqueda: las que van al front (`_card_payload`) más
 # las que usa el ordenamiento. Todo lo demás se queda en la base.
 SEARCH_FIELDS = (
-    "id", "name", "number", "rarity", "image_url_thumb", "image_status",
+    "id", "name", "number", "rarity", "image_url_thumb", "image_status", "printings",
     "card_set__id", "card_set__name", "card_set__abbreviation",
     "card_set__language", "card_set__is_supplemental", "card_set__released_at",
 )
 
-# Tope de items por lote.
+# Tope de items por lote de la carga individual.
 #
-# El límite real no es la memoria sino el reloj: `_create_batch` crea los
-# productos de a uno (no se puede usar bulk_create porque `save()` arma el slug y
-# resuelve la imagen del catálogo), y cada INSERT es un viaje a la base en
-# Oregon. Medido: ~390 ms por producto, o sea ~4 s para 10 y ~2 min para 300 —
-# muy por encima del timeout de request de Render, así que un lote grande se caía
-# entero sin guardar nada.
-MAX_BATCH_SIZE = 10
+# Antes era 10: cada producto se creaba de a uno (~390 ms por INSERT contra la
+# base de Oregon) y un lote grande pasaba el timeout de Render. Desde que el lote
+# entra con un solo bulk_create (`create_products`) el tiempo casi no depende
+# del tamaño; el tope queda para que la pantalla siga siendo manejable. Para
+# cargar un set entero está la carga masiva (apps/products/set_load).
+MAX_BATCH_SIZE = 50
+
+# Insignia de cada atributo en la tabla de la carga masiva, como en TCG Fans
+# (y en Delta): 3 letras de respaldo, el color de la casilla marcada y el ícono.
+ATTRIBUTE_BADGES = {
+    "altered": ("ALT", "#3730a3", "alterada"),
+    "signed": ("FIR", "#57534e", "firmada"),
+    "stamped": ("EST", "#dc2626", "estampada"),
+    "freshly_opened": ("REC", "#ea580c", "recien_abierta"),
+}
+
+# Bandera de cada idioma (static/admin/img/flags). La de portugués es la de
+# Brasil, que es de donde salen las cartas en portugués.
+FLAGS = {"en": "en", "es": "es", "pt": "br", "ja": "jp", "zh": "cn"}
+
+# Íconos de las insignias de acabado que tienen uno (las demás son una letra).
+BADGE_ICONS = {"reverse": "reverse", "1st": "primera"}
 
 # Condición con la que entran las filas nuevas. Se resuelve por `abbreviation`
 # porque el nombre visible puede cambiar; si alguien borra esa condición, la
@@ -159,6 +177,8 @@ def _card_payload(card):
         # Solo la miniatura: caer al `image_url` grande hacía que una búsqueda
         # de 40 filas bajara 40 imágenes de tamaño completo.
         "thumb": card.image_url_thumb,
+        # Normal / Holofoil / Reverse Holofoil...: el primero es el por defecto.
+        "printings": card.printings or [],
     }
 
 
@@ -196,7 +216,8 @@ def _attach_loaded_counts(payloads):
 
 def _search_cache_key(*parts):
     raw = "|".join(str(p).lower() for p in parts)
-    return "bulk_load:search:" + hashlib.md5(raw.encode("utf-8")).hexdigest()
+    # v2: desde que la carta trae sus acabados (`printings`).
+    return "bulk_load:search:v2:" + hashlib.md5(raw.encode("utf-8")).hexdigest()
 
 
 @requires_add_permission
@@ -297,7 +318,15 @@ def search_view(request):
     return JsonResponse({"results": _attach_loaded_counts(payloads)})
 
 
-def _resolve_name(card, label=""):
+def with_attributes(name, item):
+    """Suma al nombre las particularidades que cambian qué es el producto: "(Firmada)"."""
+    for field, label, in_name in Product.ATTRIBUTES:
+        if in_name and item.get(field):
+            name = f"{name} ({label})"
+    return name
+
+
+def _resolve_name(card, label="", finish="", attributes=None):
     """
     Mismo criterio que ProductAdminForm, para que los nombres no se bifurquen.
 
@@ -311,6 +340,10 @@ def _resolve_name(card, label=""):
     label = (label or "").strip() or card.name
     if card.number and card.number not in label:
         label = f"{label} {card.number}"
+    # El acabado solo se nombra cuando distingue una impresión de otra de la
+    # misma carta ("Bulbasaur 001/165 (Reverse Holo)"); ver catalog/finishes.py.
+    label = finishes.title(label, finish, card.printings or [])
+    label = with_attributes(label, attributes or {})
     return f"{label} — {card.card_set.name}"[:255]
 
 
@@ -349,71 +382,145 @@ def _attach_uploads(product, draft_token, manual_url=""):
         raise
 
 
-@transaction.atomic
-def _create_batch(items, condition_by_id):
+def resolve_language(requested, card):
     """
-    Crea los productos del lote. Devuelve (publicaciones, unidades, errores).
+    El idioma con el que se publica.
+
+    Una carta de un set japonés es japonesa: su imagen y su set ya lo son, así
+    que no se elige. En el resto se respeta el elegido (inglés, español,
+    portugués o chino) y, sin elegir, el del set. Sin carta, el elegido o nada.
+    """
+    set_language = card.card_set.language if card else ""
+    if set_language == Product.LANGUAGE_JA:
+        return Product.LANGUAGE_JA
+    if requested in Product.SELECTABLE_LANGUAGES:
+        return requested
+    return set_language
+
+
+def assign_slugs(products):
+    """
+    El mismo slug que arma `Product.save()` ("nombre", "nombre-1"...), pero para
+    todo el lote con UNA consulta en vez de una (o varias) por producto.
+    """
+    max_length = Product._meta.get_field("slug").max_length
+    bases = []
+    for product in products:
+        base = slugify(product.name)[:max_length].strip("-") or "item"
+        bases.append((product, base))
+
+    query = Q()
+    for base in {base for _, base in bases}:
+        query |= Q(slug__startswith=base)
+    taken = set(Product.objects.filter(query).values_list("slug", flat=True))
+
+    for product, base in bases:
+        slug, counter = base, 1
+        while slug in taken:
+            suffix = f"-{counter}"
+            slug = f"{base[:max_length - len(suffix)].rstrip('-')}{suffix}"
+            counter += 1
+        taken.add(slug)
+        product.slug = slug
+
+
+def load_cards(card_ids):
+    """Las cartas del lote con solo lo que hace falta para crear el producto."""
+    return {
+        c.id: c
+        for c in CatalogCard.objects.select_related("card_set")
+        .only(
+            "id", "name", "number", "image_url", "image_status", "printings",
+            "card_set__id", "card_set__name", "card_set__tcg_id", "card_set__language",
+        )
+        .filter(id__in=card_ids)
+    }
+
+
+@transaction.atomic
+def create_products(items, cards):
+    """
+    Crea los productos del lote con UN bulk_create. Devuelve (creados, unidades).
+
+    Antes cada producto era un `Product.objects.create()`: `save()` arma el slug
+    (una consulta o más), completa la imagen del catálogo y recién ahí inserta,
+    y cada viaje a la base de Oregon cuesta ~390 ms. Un lote de 10 tardaba 4 s y
+    uno grande pasaba el timeout de Render. Acá todo lo que hacía `save()` se
+    resuelve en memoria y se inserta junto: el lote entero es un puñado de
+    consultas, tenga 5 filas o 500.
 
     Cada item trae su propia categoría: en un mismo lote podés mezclar singles,
-    un slab certificado y un sellado suelto sin volver a la pantalla.
+    un slab certificado y un sellado suelto.
 
-    La cantidad siempre va a `stock_quantity`, en todas las categorías: tres
-    copias de la misma carta en el mismo estado son una publicación con stock 3,
-    no tres publicaciones repetidas en la tienda. Si una de esas copias está en
-    otra condición, es otra fila del lote y ahí sí sale otra publicación.
+    La cantidad siempre va a `stock_quantity`: tres copias de la misma carta en
+    el mismo estado son una publicación con stock 3, no tres publicaciones.
     """
-    card_ids = [item["card_id"] for item in items if item["card_id"]]
-    cards = {
-        c.id: c
-        for c in CatalogCard.objects.select_related("card_set", "card_set__tcg").filter(
-            id__in=card_ids
-        )
-    }
     entities = {e.id: e for e in CertificationEntity.objects.all()}
     grades = {g.id: g for g in CertificationGrade.objects.all()}
-    tcgs = {t.id: t for t in TCG.objects.all()}
+    conditions = {c.id: c for c in CardCondition.objects.all()}
 
-    created = 0
+    products = []
     units = 0
-    errors = []
-
     for item in items:
-        card = None
-        if item["card_id"]:
-            card = cards.get(item["card_id"])
-            if card is None:
-                errors.append(f"La carta {item['card_id']} ya no existe en el catálogo.")
-                continue
-
-        category = item["category"]
+        card = cards.get(item["card_id"]) if item["card_id"] else None
         quantity = item["quantity"]
-        base = {
-            "catalog_card": card,
-            "category": category,
+        # El acabado es de las cartas sueltas: sin elegir, el por defecto de la carta.
+        finish = item.get("finish", "")
+        if card and item.get("is_single") and not finish:
+            finish = finishes.default(card.printings or [])
+        attributes = {field: bool(item.get(field)) for field, _, _ in Product.ATTRIBUTES}
+        product = Product(
+            catalog_card=card,
+            category=item["category"],
             # Sin carta (sellado suelto, accesorio) el TCG y el nombre los ponés vos.
-            "tcg": card.card_set.tcg if card else tcgs.get(item["tcg_id"]),
-            "name": _resolve_name(card, item["name"]) if card else item["name"],
-            "price_usd": item["price_usd"],
-            "discount_percent": item["discount_percent"],
-            "condition": condition_by_id.get(item["condition_id"]),
-            "certification_entity": entities.get(item["certification_entity_id"]),
-            "certification_grade": grades.get(item["certification_grade_id"]),
-            "description": item["description"],
-            "pricecharting_url": item["pricecharting_url"],
+            tcg_id=card.card_set.tcg_id if card else item["tcg_id"],
+            name=(
+                _resolve_name(card, item["name"], finish, attributes)
+                if card else with_attributes(item["name"], attributes)[:255]
+            ),
+            finish=finish,
+            **attributes,
+            language=resolve_language(item.get("language"), card),
+            price_usd=item["price_usd"],
+            discount_percent=item["discount_percent"],
+            condition=conditions.get(item["condition_id"]),
+            certification_entity=entities.get(item.get("certification_entity_id")),
+            certification_grade=grades.get(item.get("certification_grade_id")),
+            description=item.get("description", ""),
+            pricecharting_url=item["pricecharting_url"],
             # Vacío deja que `apply_catalog_image_fallback` use la del catálogo.
-            "image_url": item["image_url"],
-            "in_stock": True,
-            "stock_quantity": quantity,
-        }
-
-        # `save()` arma el slug y baja la imagen del catálogo, así que no se
-        # puede usar bulk_create acá.
-        product = Product.objects.create(**base)
-        _attach_uploads(product, item["draft_token"], item["image_url"])
-        created += 1
+            image_url=item["image_url"],
+            in_stock=True,
+            stock_quantity=quantity,
+        )
+        # Lo mismo que hace `save()` antes de insertar.
+        product.normalize_stock()
+        product.apply_catalog_image_fallback()
+        products.append(product)
         units += quantity
 
-    return created, units, errors
+    assign_slugs(products)
+    Product.objects.bulk_create(products)
+
+    # Las fotos subidas son la excepción (casi nunca hay): esas sí van de a una
+    # porque cada producto tiene su galería.
+    for product, item in zip(products, items):
+        _attach_uploads(product, item["draft_token"], item["image_url"])
+
+    return len(products), units
+
+
+def _create_batch(items):
+    """Crea el lote. Si otro lote tomó el mismo slug en el medio, reintenta una vez."""
+    cards = load_cards([item["card_id"] for item in items if item["card_id"]])
+    missing = [item["card_id"] for item in items if item["card_id"] and item["card_id"] not in cards]
+    if missing:
+        raise DjangoValidationError(f"La carta {missing[0]} ya no existe en el catálogo.")
+    try:
+        return create_products(items, cards)
+    except IntegrityError:
+        # La transacción ya se deshizo: se recalculan los slugs y listo.
+        return create_products(items, cards)
 
 
 def _queue_image_fetch(card_ids):
@@ -532,6 +639,29 @@ def save_view(request):
         if not certification_required and (entity_id or grade_id):
             return fail(f"la certificación es solo para Slabs, no para {category.name}.")
 
+        # El acabado es de las cartas sueltas y tiene que existir de esa carta
+        # (o ser Reverse / 1st, que se pueden marcar siempre: finishes.OPTIONAL).
+        finish = (raw.get("finish") or "").strip() if kind in UNIQUE_KINDS and card_id else ""
+        if finish:
+            card_printings = (
+                CatalogCard.objects.filter(pk=card_id).values_list("printings", flat=True).first() or []
+            )
+            if not finishes.is_allowed(finish, card_printings):
+                return fail("ese detalle no existe para esta carta.")
+
+        language = (raw.get("language") or "").strip()
+        if language and language not in Product.SELECTABLE_LANGUAGES:
+            return fail("idioma inválido.")
+
+        # Sí/no de verdad: "false" como texto no es False.
+        attributes = {}
+        for field, label, _ in Product.ATTRIBUTES:
+            value = raw.get(field, False)
+            if not isinstance(value, bool):
+                return fail(f"«{label}» tiene que ser sí o no.")
+            # Un sellado no se firma ni se altera.
+            attributes[field] = value and kind != "sealed"
+
         image_url = (raw.get("image_url") or "").strip()
         pricecharting_url = (raw.get("pricecharting_url") or "").strip()
         for label, value in (("la URL de imagen", image_url),
@@ -559,10 +689,14 @@ def save_view(request):
             "pricecharting_url": pricecharting_url,
             "description": (raw.get("description") or "").strip(),
             "draft_token": (raw.get("draft_token") or "").strip(),
+            "is_single": kind in UNIQUE_KINDS,
+            "finish": finish,
+            "language": language,
+            **attributes,
         })
 
     try:
-        created, units, errors = _create_batch(items, condition_by_id)
+        created, units = _create_batch(items)
     except (CloudinaryValidationError, DjangoValidationError) as exc:
         # `_create_batch` es atómica: si algo se cae, no queda medio lote cargado.
         return JsonResponse({"error": f"No se guardó nada. {exc}"}, status=400)
@@ -574,7 +708,7 @@ def save_view(request):
     return JsonResponse({
         "created": created,
         "units": units,
-        "errors": errors,
+        "errors": [],
         "changelist_url": reverse("admin:products_product_changelist"),
     })
 
@@ -590,11 +724,51 @@ def _cloudinary_ready():
         return False
 
 
+# Los datos fijos de la pantalla (expansiones y rarezas) solo cambian al
+# reimportar el catálogo. Se guardan armados para que abrir la pantalla no
+# recorra el catálogo entero buscando las rarezas distintas en cada carga.
+PAGE_DATA_CACHE_KEY = "bulk_load:page_data:v1"
+PAGE_DATA_CACHE_TTL = 600
+
+
+def _catalog_page_data():
+    """Expansiones y rarezas del catálogo, armadas una vez cada 10 minutos."""
+    from apps.catalog.models import CardSet
+
+    try:
+        cached = cache.get(PAGE_DATA_CACHE_KEY)
+    except Exception:  # noqa: BLE001 — sin Redis, se arma igual
+        cached = None
+    if cached is not None:
+        return cached
+
+    data = {
+        # Ordenados por fecha: lo que estás cargando casi siempre es lo último
+        # que salió.
+        "card_sets": list(
+            CardSet.objects.order_by(F("released_at").desc(nulls_last=True), "name")
+            .values("id", "name", "language", "abbreviation")
+        ),
+        "rarities": list(
+            CatalogCard.objects.exclude(rarity="")
+            .order_by("rarity")
+            .values_list("rarity", flat=True)
+            .distinct()
+        ),
+    }
+    if data["card_sets"]:
+        try:
+            cache.set(PAGE_DATA_CACHE_KEY, data, PAGE_DATA_CACHE_TTL)
+        except Exception:  # noqa: BLE001
+            pass
+    return data
+
+
 def page_view(model_admin, request):
     """GET carga-stock/ — la pantalla."""
     from apps.core.models import ExchangeRate
 
-    from apps.catalog.models import CardSet
+    from .set_load.domain import MAX_ROWS, MAX_UNITS
 
     # La botonera respeta este orden, así que va de lo que más se carga a lo que
     # menos: Singles es el 90% del trabajo y tiene que ser el primer botón.
@@ -611,25 +785,20 @@ def page_view(model_admin, request):
         categories[0] if categories else None,
     )
 
-    # Los sets van al desplegable ordenados por fecha: lo que estás cargando
-    # casi siempre es lo último que salió.
-    card_sets = CardSet.objects.order_by(
-        F("released_at").desc(nulls_last=True), "name"
-    ).values("id", "name", "language", "abbreviation")
-
-    rarities = (
-        CatalogCard.objects.exclude(rarity="")
-        .order_by("rarity")
-        .values_list("rarity", flat=True)
-        .distinct()
-    )
+    catalog = _catalog_page_data()
+    conditions = list(CardCondition.objects.all())
 
     context = {
-        "card_sets": list(card_sets),
-        "rarities": list(rarities),
+        "card_sets": catalog["card_sets"],
+        "rarities": catalog["rarities"],
         **model_admin.admin_site.each_context(request),
         "title": "Carga de stock",
-        "conditions": CardCondition.objects.all(),
+        "conditions": conditions,
+        # Para la carga masiva: la abreviatura va en la columna "en stock".
+        "conditions_json": [
+            {"id": c.id, "label": str(c), "short": c.abbreviation or c.name[:3].upper()}
+            for c in conditions
+        ],
         "default_condition_id": (
             CardCondition.objects.filter(abbreviation=DEFAULT_CONDITION_ABBR)
             .values_list("id", flat=True)
@@ -651,6 +820,39 @@ def page_view(model_admin, request):
         "cloudinary_signature_url": reverse("cloudinary_upload_signature"),
         "cloudinary_register_url": reverse("cloudinary_register_upload"),
         "cloudinary_enabled": _cloudinary_ready(),
+        "max_images": MAX_PRODUCT_IMAGES,
+        # Carga masiva por expansión (apps/products/set_load). La URL lleva un 0
+        # que el JS reemplaza por el id del set.
+        "set_load_url": reverse("admin:products_product_set_load", args=[0]),
+        "set_load_save_url": reverse("admin:products_product_set_load_save"),
+        "set_load_max_rows": MAX_ROWS,
+        "set_load_max_units": MAX_UNITS,
+        # Cómo se lee cada acabado de TCGplayer ("Reverse Holofoil" → "Reverse Holo").
+        "finish_labels": {f: finishes.label(f) for f in finishes.ORDER},
+        # Insignias de acabado: R y 1st con su ícono (admin/img/insignias/).
+        "finish_badges": [
+            {**b, "icon": static(f"admin/img/insignias/{BADGE_ICONS[b['key']]}.svg")}
+            if b["key"] in BADGE_ICONS else b
+            for b in finishes.BADGES
+        ],
+        # Idiomas que se eligen por fila (japonés no: sale del set japonés).
+        "languages": [
+            {"id": code, "label": label, "flag": static(f"admin/img/flags/flag-{FLAGS[code]}.svg")}
+            for code, label in Product.LANGUAGE_CHOICES
+            if code in Product.SELECTABLE_LANGUAGES
+        ],
+        # Bandera de todos los idiomas, japonés incluido (para mostrarlo fijo).
+        "language_flags": {
+            code: {"label": label, "flag": static(f"admin/img/flags/flag-{FLAGS[code]}.svg")}
+            for code, label in Product.LANGUAGE_CHOICES
+        },
+        # Atributos de la unidad, con la insignia que los marca en la tabla.
+        "attributes": [
+            {"field": field, "label": label, "short": ATTRIBUTE_BADGES[field][0],
+             "color": ATTRIBUTE_BADGES[field][1],
+             "icon": static(f"admin/img/insignias/{ATTRIBUTE_BADGES[field][2]}.svg")}
+            for field, label, _ in Product.ATTRIBUTES
+        ],
     }
 
     if not categories:

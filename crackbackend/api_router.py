@@ -68,6 +68,9 @@ urlpatterns = [
     path("auth/me/", UserProfileView.as_view(), name="user_profile"),
     path("auth/create-superuser/", CreateSuperuserView.as_view(), name="create_superuser"),
 
+    # Cuenta del comprador (Supabase Auth)
+    path("customers/", include("apps.customers.urls")),
+
     # Comprobante de transferencia. Va antes del router: si quedara después,
     # la ruta de detalle `orders/<pk>/` se comería "receipt".
     path("orders/receipt/", OrderReceiptUploadView.as_view(), name="order_receipt_upload"),

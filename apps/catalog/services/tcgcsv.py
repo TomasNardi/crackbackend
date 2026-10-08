@@ -80,6 +80,24 @@ def fetch_products(category_id: int, group_id: int) -> list[dict]:
     return payload.get("results", [])
 
 
+def fetch_printings(category_id: int, group_id: int) -> dict[int, list[str]]:
+    """
+    {productId: [acabados]} de una expansión.
+
+    Los acabados ("Normal", "Reverse Holofoil"...) no vienen en los productos:
+    son las filas del endpoint de precios, una por variante de cada carta. Solo
+    se usa el nombre de la variante; los precios no se guardan.
+    """
+    payload = _get(f"{category_id}/{group_id}/prices")
+    printings: dict[int, set] = {}
+    for row in payload.get("results", []):
+        product_id = row.get("productId")
+        subtype = (row.get("subTypeName") or "").strip()
+        if product_id and subtype:
+            printings.setdefault(product_id, set()).add(subtype)
+    return {pid: sorted(subtypes) for pid, subtypes in printings.items()}
+
+
 def extended_value(product: dict, field_name: str) -> str:
     """
     Extrae un campo de `extendedData`, que viene como lista de diccionarios:

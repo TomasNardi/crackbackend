@@ -1,8 +1,9 @@
 {% extends "admin/base_site.html" %}
-{% load i18n %}
+{% load i18n l10n static %}
 
 {% block extrastyle %}
 {{ block.super }}
+<link rel="stylesheet" href="{% static 'admin/css/carga_masiva.css' %}">
 <style>
   .cl-wrap { --cl-bg:#ffffff; --cl-soft:#f7f6f4; --cl-line:#e3e0da; --cl-text:#1a1a1a;
              --cl-dim:#6b6560; --cl-accent:#b8860b; --cl-accent-soft:#fdf6e3;
@@ -280,6 +281,24 @@
 
   <div id="cl-msg" class="cl-msg"></div>
 
+  {% comment %}
+    Dos modos sobre los mismos filtros, cada uno con su color para que se vea
+    de un vistazo qué estás haciendo. "Individual" es el buscador + lote;
+    "Masiva" trae el set entero en una grilla (ver apps/products/set_load y
+    static/admin/js/carga_masiva.js). Lo que se esconde en cada modo va
+    marcado con .cl-only-lote / .cl-only-masiva.
+  {% endcomment %}
+  <div class="cm-modes" id="cm-modes" role="tablist" aria-label="Modo de carga">
+    <button type="button" role="tab" data-mode="lote" class="cm-mode is-individual is-on" aria-selected="true">
+      <span class="cm-mode-icon" aria-hidden="true">＋</span>
+      <span><b>Carga individual</b><small>Buscás cartas una por una y armás un lote.</small></span>
+    </button>
+    <button type="button" role="tab" data-mode="masiva" class="cm-mode is-masiva" aria-selected="false">
+      <span class="cm-mode-icon" aria-hidden="true">▦</span>
+      <span><b>Carga masiva</b><small>Elegís una expansión y cargás el set entero.</small></span>
+    </button>
+  </div>
+
   <!-- Todo lo que acota la búsqueda, en una sola barra. Condición, cantidad y
        descuento NO están acá a propósito: se editan en la fila de cada carta,
        que es donde realmente cambian. -->
@@ -328,7 +347,7 @@
         <div class="cl-combo-list" id="cl-set-list"></div>
       </div>
     </div>
-    <div class="cl-field cl-only-catalog">
+    <div class="cl-field cl-only-catalog cl-only-lote">
       <label for="cl-rarity">Rareza</label>
       <select id="cl-rarity" class="cl-filter" style="max-width:165px" tabindex="4">
         <option value="">Todas</option>
@@ -336,16 +355,16 @@
       </select>
     </div>
     <button type="button" class="cl-reset" id="cl-reset" tabindex="5">Limpiar</button>
-    <div class="cl-hint">
+    <div class="cl-hint cl-only-lote">
       <kbd>Enter</kbd> agrega &nbsp;·&nbsp; <kbd>↑</kbd><kbd>↓</kbd> se mueve &nbsp;·&nbsp; <kbd>Esc</kbd> limpia<br>
       Dólar hoy: <b>${{ usd_to_ars }}</b> &nbsp;·&nbsp; máx. {{ max_batch_size }} por lote
     </div>
   </div>
 
-  <input type="text" id="cl-search" class="cl-only-catalog" tabindex="12" autofocus autocomplete="off"
+  <input type="text" id="cl-search" class="cl-only-catalog cl-only-lote" tabindex="12" autofocus autocomplete="off"
          placeholder="Buscá por nombre, número o set — ej: charizard 4/102 (o elegí una expansión y dejalo vacío)">
 
-  <div class="cl-panel cl-only-catalog">
+  <div class="cl-panel cl-only-catalog cl-only-lote">
     <h2>
       <span>Resultados del catálogo</span>
       <span class="cl-badge" id="cl-count">—</span>
@@ -360,7 +379,7 @@
     piezas propias (un slab es una unidad certificada concreta, con su foto). En
     esas categorías la búsqueda no aplica y se carga todo a mano.
   {% endcomment %}
-  <div class="cl-manual-note" id="cl-manual-note" hidden>
+  <div class="cl-manual-note cl-only-lote" id="cl-manual-note" hidden>
     <div>
       <b id="cl-manual-note-kind">Estos productos</b> se cargan a mano: no están en el
       catálogo de TCGplayer. Completá nombre y TCG en cada fila.
@@ -370,7 +389,7 @@
 
   <!-- El lote va a lo ancho de la pantalla: cada fila es una tabla y necesita
        lugar para condición, descripción, precio y cantidad sin apretarse. -->
-  <div class="cl-panel" style="margin-top:14px">
+  <div class="cl-panel cl-only-lote" style="margin-top:14px">
     <h2>
       <span>Lote a cargar</span>
       <span style="display:flex;gap:8px;align-items:center;">
@@ -398,9 +417,129 @@
       <button class="cl-save" id="cl-save" tabindex="13" disabled>Guardar todo</button>
     </div>
   </div>
+
+  {# ------------------------------------------------ carga masiva por expansión #}
+  <section class="cl-only-masiva cm" id="cm" aria-label="Carga masiva por expansión">
+
+    <div class="cl-empty cm-start" id="cm-empty">
+      Elegí una expansión arriba para traer el set completo.
+    </div>
+
+    {# Guardar va arriba de la tabla y queda pegado al scrollear: siempre a mano. #}
+    <div class="cm-savebar" id="cm-foot" hidden>
+      {% comment %}
+        Grupos de precio: "Grupo 1 = USD 30". Cada fila tiene una marquita por
+        grupo; marcarla le pone ese precio, y cambiar el precio del grupo
+        cambia el de todas sus cartas. Lo dibuja carga_masiva.js.
+      {% endcomment %}
+      <div class="cm-groups" id="cm-groups" role="group" aria-label="Grupos de precio"></div>
+      <div class="cm-foot-info">
+        <span id="cm-foot-info">Nada para guardar todavía.</span>
+        <b><span id="cm-total-usd">USD 0.00</span> · <span id="cm-total-ars">$0 ARS</span></b>
+      </div>
+      <button type="button" class="cl-save cm-accent-btn" id="cm-save" disabled>Subir 0 cartas</button>
+    </div>
+
+    <div class="cm-list" id="cm-list" hidden>
+      <div class="cm-toolbar">
+        <b class="cm-hits" id="cm-count"></b>
+        <div class="cl-seg cm-tabs" id="cm-tabs" role="tablist" aria-label="Qué filas ver">
+          <button type="button" data-tab="all" class="is-on">Todas <span></span></button>
+          <button type="button" data-tab="upload" title="Las cartas tildadas: son las que se suben">A subir <span></span></button>
+          <button type="button" data-tab="errors" class="is-err" hidden>Con errores <span></span></button>
+        </div>
+        <input type="text" id="cm-q" placeholder="Filtrar por nombre o número" autocomplete="off">
+        <select id="cm-rarity" aria-label="Rareza"><option value="">Todas las rarezas</option></select>
+        <label class="cm-sort">Ordenar
+          <select id="cm-sort">
+            <option value="number">Número de carta</option>
+            <option value="az">Nombre A-Z</option>
+            <option value="za">Nombre Z-A</option>
+          </select>
+        </label>
+        <nav class="cm-pager" aria-label="Páginas">
+          <button type="button" data-page="-1" aria-label="Página anterior">‹</button>
+          <b id="cm-page"></b>
+          <button type="button" data-page="1" aria-label="Página siguiente">›</button>
+        </nav>
+      </div>
+
+      {# Qué significa cada insignia de la columna de acabado y particularidades. #}
+      <div class="cm-legend" id="cm-legend" aria-label="Referencias de las insignias"></div>
+
+      <div class="cm-table" role="table" aria-label="Cartas del set">
+        <div class="cm-cols cm-head" role="row">
+          <label class="cm-check" title="Tildar para subir todas las cartas de esta vista"><input type="checkbox" id="cm-all"></label>
+          <span>Nombre</span><span>Rareza</span><span>Idioma</span>
+          <span class="cm-fin-head" id="cm-fin-head" aria-label="Detalle y particularidades"></span><span>Condición</span>
+          <span>En stock</span><span class="is-num">Cant.</span><span title="Grupo de precio">Grupo</span><span class="is-num">Precio</span>
+          <span></span><span></span>
+        </div>
+        <div id="cm-rows"></div>
+        <div class="cl-empty" id="cm-none" hidden></div>
+      </div>
+
+      <div class="cl-hint cm-keys">
+        <kbd>Enter</kbd>/<kbd>Tab</kbd> baja · <kbd>⇧</kbd> sube · <kbd>↑</kbd><kbd>↓</kbd> fila ·
+        <kbd>Alt</kbd>+<kbd>←</kbd><kbd>→</kbd> columna · <kbd>Ctrl</kbd>+<kbd>Espacio</kbd> tilda para subir ·
+        <kbd>Ctrl</kbd>+<kbd>D</kbd> duplica (otra condición) · <kbd>Alt</kbd>+<kbd>1</kbd>…<kbd>6</kbd> grupo de precio
+      </div>
+    </div>
+
+    {% comment %}
+      Revisión antes de subir: nada impacta en el stock sin pasar por acá. Se
+      ve todo lo tildado, se puede corregir cantidad, precio o condición, o
+      quitar una carta, y recién "Confirmar y subir" guarda.
+    {% endcomment %}
+    <dialog class="cl-modal cm-review" id="cm-review" aria-labelledby="cm-review-title">
+      <div class="cl-modal-head">
+        <b id="cm-review-title">Revisá antes de subir</b>
+        <button type="button" class="cl-modal-x" data-close title="Volver a la tabla">&times;</button>
+      </div>
+      <div class="cm-review-cols cm-review-head">
+        <span></span><span>Carta</span><span>Condición</span>
+        <span class="is-num">Cant.</span><span class="is-num">Precio USD</span>
+        <span class="is-num">Subtotal</span><span></span>
+      </div>
+      <div class="cm-review-body" id="cm-review-body"></div>
+      <div class="cm-review-foot">
+        <div class="cm-review-total" id="cm-review-total"></div>
+        <button type="button" class="cl-btn" data-close>Volver a editar</button>
+        <button type="button" class="cl-btn cm-accent-btn" id="cm-review-confirm">Confirmar y subir</button>
+      </div>
+    </dialog>
+
+    <dialog class="cl-modal" id="cm-adv">
+      <div class="cl-modal-head">
+        <b id="cm-adv-title">Opciones</b>
+        <button type="button" class="cl-modal-x" data-close title="Cerrar">&times;</button>
+      </div>
+      <div class="cl-modal-body cl-detail is-open cm-adv-body" id="cm-adv-body"></div>
+    </dialog>
+  </section>
 </div>
 
 {{ card_sets|json_script:"cl-sets-data" }}
+{{ conditions_json|json_script:"cm-conditions" }}
+{{ finish_labels|json_script:"cm-finish-labels" }}
+{{ finish_badges|json_script:"cm-finish-badges" }}
+{{ attributes|json_script:"cm-attributes" }}
+{{ languages|json_script:"cm-languages" }}
+{{ language_flags|json_script:"cm-language-flags" }}
+
+{# Configuración de la carga masiva (static/admin/js/carga_masiva.js). #}
+<script id="cm-config" type="application/json">{
+  "setUrl": "{{ set_load_url|escapejs }}",
+  "saveUrl": "{{ set_load_save_url|escapejs }}",
+  "rate": {{ usd_to_ars|unlocalize|default:0 }},
+  "maxRows": {{ set_load_max_rows }},
+  "maxUnits": {{ set_load_max_units }},
+  "maxShots": {{ max_images }},
+  "defaultConditionId": "{{ default_condition_id }}",
+  "cloudinary": {{ cloudinary_enabled|yesno:"true,false" }},
+  "signUrl": "{{ cloudinary_signature_url|escapejs }}",
+  "registerUrl": "{{ cloudinary_register_url|escapejs }}"
+}</script>
 
 {# Listas para los desplegables que se dibujan desde JS en cada fila del lote. #}
 <select id="cl-src-conditions" hidden>
@@ -432,6 +571,33 @@
     .map((o) => ({ id: o.value, label: o.text }));
 
   const CONDITIONS = optionsOf("cl-src-conditions");
+  const jsonOf = (id) => JSON.parse(document.getElementById(id).textContent);
+
+  // Acabados y particularidades: las mismas insignias que la carga masiva
+  // (apps/catalog/finishes.py y Product.ATTRIBUTES).
+  const FINISH_LABELS = jsonOf("cm-finish-labels");
+  const finishLabel = (a) => FINISH_LABELS[a] || a;
+  const FINISH_CHIPS = jsonOf("cm-finish-badges");
+  const finishChip = (a) => FINISH_CHIPS.find((c) => c.printings.includes(a)) ||
+    { short: a.charAt(0).toUpperCase(), color: "#64748b" };
+  const ATTRIBUTES = jsonOf("cm-attributes");
+  // Idiomas que se eligen (japonés no: una carta de un set japonés ya lo es).
+  const LANGUAGES = jsonOf("cm-languages");
+  const LANGUAGE_INFO = jsonOf("cm-language-flags");
+  // Los acabados que se pueden marcar en una carta: los del catálogo menos el
+  // por defecto, más Reverse y 1st si no están (TCGplayer no siempre los
+  // publica; mismo criterio que finishes.OPTIONAL).
+  const finishOptions = (it) => {
+    const own = it.printings || [];
+    const list = own.slice(1);
+    const has = (re) => own.some((a) => re.test(a));
+    if (!has(/^Reverse/)) list.push("Reverse Holofoil");
+    if (!has(/^1st Edition/)) list.push(/Holofoil/.test(own[0] || "") ? "1st Edition Holofoil" : "1st Edition");
+    return list;
+  };
+  const badgeOf = (icon, short, color) => icon
+    ? `<img class="cm-badge" src="${esc(icon)}" alt="">`
+    : `<span class="cm-chip" style="--c:${color}">${esc(short)}</span>`;
 
   // Con qué condición entran las filas nuevas. Sale del backend resuelta por
   // abreviatura ("MT"), no por el texto del desplegable. Cadena vacía si esa
@@ -578,12 +744,33 @@
     setInput.setAttribute("aria-expanded", "false");
   }
 
+  /**
+   * Avisa que la expansión va a cambiar. La carga masiva escucha
+   * `cl:before-set-change` (cancelable: la frena si hay cambios sin guardar)
+   * y `cl:set-change` (trae el set nuevo).
+   */
+  function setChangeAllowed(id) {
+    if (String(id) === setHidden.value) return true;
+    return document.dispatchEvent(
+      new CustomEvent("cl:before-set-change", { cancelable: true, detail: { id } }));
+  }
+  const announceSet = () => document.dispatchEvent(
+    new CustomEvent("cl:set-change", { detail: { id: setHidden.value } }));
+
+  // Si se canceló el cambio, el texto vuelve a decir la expansión que sigue puesta.
+  function restoreSetInput() {
+    const current = SETS.find((s) => String(s.id) === setHidden.value);
+    setInput.value = current ? setLabel(current) : "";
+  }
+
   function pickSet(option) {
     if (!option) return;
+    if (!setChangeAllowed(option.id)) { closeSetList(); restoreSetInput(); return; }
     setHidden.value = option.id;
     setInput.value = setLabel(option);
     setCombo.classList.add("has-value");
     closeSetList();
+    announceSet();
     runSearch();
   }
 
@@ -592,6 +779,7 @@
     setInput.value = "";
     setCombo.classList.remove("has-value");
     closeSetList();
+    announceSet();
     if (refocus) setInput.focus();
     runSearch();
   }
@@ -753,6 +941,8 @@
    * Se vacía al guardar un lote, porque ahí cambia el "ya tenés N". */
   const searchCache = new Map();
   const SEARCH_CACHE_MAX = 60;
+  // La carga masiva guardó stock: los "ya tenés N" guardados quedaron viejos.
+  document.addEventListener("cl:stock-changed", () => searchCache.clear());
 
   function cacheSearch(key, rows) {
     // Map conserva el orden de inserción: el primero es el más viejo.
@@ -876,6 +1066,12 @@
       set_name: card ? card.set_name : "Sin carta del catálogo",
       thumb: card ? card.thumb : "",
       language: card ? card.language : "",
+      // El idioma elegido para el producto; arranca con el del set.
+      idioma: card ? card.language : "",
+      // Normal / Holofoil / Reverse Holofoil...: el primero es el por defecto.
+      printings: card ? card.printings || [] : [],
+      finish: card && card.printings && card.printings.length ? card.printings[0] : "",
+      attrs: {},
       name: "",
       tcg_id: TCGS.length === 1 ? TCGS[0].id : null,
       // Todo lo que cambia carta por carta entra con el mismo valor y se ajusta
@@ -965,7 +1161,9 @@
       // descripción ahora se editan en la fila, así que no van acá.
       const extras = (it.image_url ? 1 : 0) + (it.pricecharting_url ? 1 : 0) +
                      it.shots.length + (it.discount_percent ? 1 : 0) +
-                     (it.certification_grade_id ? 1 : 0);
+                     (it.certification_grade_id ? 1 : 0) +
+                     (it.finish && it.finish !== it.printings[0] ? 1 : 0) +
+                     ATTRIBUTES.filter((a) => it.attrs[a.field]).length;
       return `
       <div class="cl-batch-item${it.card_id ? "" : " is-manual"}" data-key="${it.key}">
         <div class="cl-batch-row cl-cols">
@@ -975,9 +1173,13 @@
               ? `<input type="text" class="cl-name-edit" value="${esc(it.name || it.label)}"
                         title="Nombre del producto. Se guarda solo en este producto, la carta del catálogo no se toca.">`
               : `<div class="cl-name">${esc(it.label)}</div>`}
-            <div class="cl-sub">${esc(it.set_name)}</div>
+            <div class="cl-sub">${esc(it.set_name)}${
+              needsCondition(rowKind) && it.finish && it.finish !== it.printings[0]
+                ? ` · <b class="cm-alt" style="--c:${finishChip(it.finish).color}">${esc(finishLabel(it.finish))}</b>` : ""}${
+              rowKind !== "sealed" ? ATTRIBUTES.filter((a) => it.attrs[a.field])
+                .map((a) => ` · <b class="cm-alt" style="--c:${a.color}">${esc(a.label)}</b>`).join("") : ""}</div>
           </div>
-          <span class="cl-lang">${it.language ? (it.language === "ja" ? "JP" : "EN") : "—"}</span>
+          <span class="cl-lang" title="${esc((LANGUAGE_INFO[it.idioma] || {}).label || "")}">${it.idioma ? esc(it.idioma.toUpperCase()) : "—"}</span>
           ${needsCondition(rowKind) ? `
             <select class="cl-cond${it.condition_id ? "" : " is-empty"}" title="Condición">
               <option value="">— condición —</option>
@@ -1024,6 +1226,39 @@
               <option value="">— sin condición —</option>
               ${opts(CONDITIONS, it.condition_id)}
             </select>`}
+
+          ${it.language === "ja" ? `
+            <label>Idioma</label>
+            <div class="cl-note">Japonés (sale del set japonés).</div>` : `
+            <label>Idioma</label>
+            <div class="cm-lang">
+              ${LANGUAGE_INFO[it.idioma] ? `<img class="cm-flag" src="${esc(LANGUAGE_INFO[it.idioma].flag)}" alt="">` : ""}
+              <select class="cl-f-idioma">
+                ${it.card_id ? "" : '<option value="">— sin idioma —</option>'}
+                ${opts(LANGUAGES, it.idioma)}
+              </select>
+            </div>`}
+
+          ${needsCondition(rowKind) && it.card_id ? `
+            <label>Detalle <span style="text-transform:none;letter-spacing:0;">(sin marcar = ${esc(finishLabel(it.printings[0] || "Normal"))})</span></label>
+            <div class="cm-fin-pick">
+              ${finishOptions(it).map((a) => {
+                const chip = finishChip(a);
+                return `<label class="cm-fin-opt${it.finish === a ? " is-on" : ""}" style="--c:${chip.color}">
+                  <input type="checkbox" class="cl-f-finish" value="${esc(a)}"${it.finish === a ? " checked" : ""}>
+                  ${badgeOf(chip.icon, chip.short, chip.color)} ${esc(finishLabel(a))}
+                </label>`;
+              }).join("")}
+            </div>
+            <div class="cl-note">Cada detalle es una publicación aparte. Para cargar la misma carta en otro detalle usá ⧉.</div>` : ""}
+
+          ${rowKind !== "sealed" ? `
+            <label>Particularidades</label>
+            <div class="cm-fin-pick">
+              ${ATTRIBUTES.map((a) => `<label class="cm-fin-opt${it.attrs[a.field] ? " is-on" : ""}" style="--c:${a.color}">
+                <input type="checkbox" class="cl-f-attr" value="${a.field}"${it.attrs[a.field] ? " checked" : ""}>
+                ${badgeOf(a.icon, a.short, a.color)} ${esc(a.label)}</label>`).join("")}
+            </div>` : ""}
 
           <label>% Descuento</label>
           <input type="number" class="cl-f-discount" min="0" max="100" value="${it.discount_percent}">
@@ -1115,6 +1350,16 @@
       renderBatch();
     } else if (t.classList.contains("cl-f-tcg")) {
       item.tcg_id = t.value || null;
+    } else if (t.classList.contains("cl-f-idioma")) {
+      item.idioma = t.value;
+      renderBatch();   // cambia la bandera y la columna
+    } else if (t.classList.contains("cl-f-attr")) {
+      item.attrs[t.value] = t.checked;
+      renderBatch();   // la particularidad se ve en la fila
+    } else if (t.classList.contains("cl-f-finish")) {
+      // Marcado: esa impresión. Desmarcado: vuelve a la de por defecto.
+      item.finish = t.checked ? t.value : item.printings[0] || "";
+      renderBatch();   // el acabado se ve en la fila
     } else if (t.classList.contains("cl-f-file")) {
       uploadShot(item, t.files[0]);
     }
@@ -1150,11 +1395,17 @@
     const copy = {
       ...item,
       key: ++seq,
+      // Otra unidad física: no hereda firmada, alterada, etc.
+      attrs: {},
       shots: [],
       draft_token: newToken(),
       uploading: false,
       open: false,
     };
+    // Lo más común es cargar la otra impresión (la reverse de la normal): la
+    // copia pasa al primer acabado que esa carta todavía no tenga en el lote.
+    const used = new Set(batch.filter((b) => b.card_id === item.card_id).map((b) => b.finish));
+    copy.finish = item.printings.find((a) => !used.has(a)) || item.finish;
     batch.splice(batch.indexOf(item) + 1, 0, copy);
     renderBatch();
 
@@ -1273,6 +1524,10 @@
             image_url: it.image_url,
             pricecharting_url: it.pricecharting_url,
             description: it.description,
+            // En una carta de un set japonés el idioma lo pone el servidor.
+            language: it.language === "ja" ? "" : it.idioma,
+            finish: needsCondition(kindOf(it.category_id)) ? it.finish : "",
+            ...Object.fromEntries(ATTRIBUTES.map((a) => [a.field, kindOf(it.category_id) !== "sealed" && !!it.attrs[a.field]])),
             draft_token: it.shots.length ? it.draft_token : "",
           })),
         }),
@@ -1305,4 +1560,5 @@
   applyCategoryMode();
 })();
 </script>
+<script src="{% static 'admin/js/carga_masiva.js' %}" defer></script>
 {% endblock %}

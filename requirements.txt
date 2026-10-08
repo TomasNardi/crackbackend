@@ -2,6 +2,8 @@
 Django==5.2
 djangorestframework==3.15.2
 djangorestframework-simplejwt==5.5.1
+# Valida los JWT de Supabase (ES256 con JWKS necesita `cryptography`)
+PyJWT[crypto]==2.10.1
 
 # Database
 dj-database-url==2.3.0

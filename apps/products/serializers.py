@@ -117,7 +117,28 @@ class ProductSearchSerializer(serializers.ModelSerializer):
         )
 
 
-class ProductListSerializer(serializers.ModelSerializer):
+class ProductTraitsMixin(serializers.Serializer):
+    """
+    Idioma, acabado y particularidades de la unidad, para la tienda.
+
+    `language` es el del producto; uno viejo sin idioma usa el de su set del
+    catálogo. El acabado viaja tal como lo publica TCGplayer ("Reverse
+    Holofoil"): el front lo traduce a la etiqueta corta.
+    """
+
+    language = serializers.SerializerMethodField()
+
+    def get_language(self, obj):
+        if obj.language:
+            return obj.language
+        card = obj.catalog_card
+        return card.card_set.language if card and card.card_set_id else ""
+
+
+TRAIT_FIELDS = ("language", "finish", "altered", "signed", "stamped", "freshly_opened")
+
+
+class ProductListSerializer(ProductTraitsMixin, serializers.ModelSerializer):
     tcg = TCGSerializer(read_only=True)
     category = serializers.StringRelatedField()
     condition = CardConditionSerializer(read_only=True)
@@ -139,7 +160,7 @@ class ProductListSerializer(serializers.ModelSerializer):
             "condition", "certification_entity", "certification_grade",
             "price_usd", "price_ars", "discount_percent", "final_price",
             "stock_quantity", "available_quantity", "in_stock", "image_url", "images", "rating", "rating_count", "created_at",
-            "catalog",
+            "catalog", *TRAIT_FIELDS,
         )
 
 
@@ -162,7 +183,7 @@ class ProductSuggestedSerializer(serializers.ModelSerializer):
         )
 
 
-class ProductDetailSerializer(serializers.ModelSerializer):
+class ProductDetailSerializer(ProductTraitsMixin, serializers.ModelSerializer):
     tcg = TCGSerializer(read_only=True)
     category = ProductCategorySerializer(read_only=True)
     condition = CardConditionSerializer(read_only=True)
@@ -209,7 +230,7 @@ class ProductDetailSerializer(serializers.ModelSerializer):
             "suggested_products",
             "rating", "rating_count",
             "pricecharting_url", "created_at", "updated_at",
-            "catalog",
+            "catalog", *TRAIT_FIELDS,
         )
 
 

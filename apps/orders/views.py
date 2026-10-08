@@ -16,6 +16,7 @@ from rest_framework.views import APIView
 
 from apps.catalog.services.r2 import R2ConfigurationError
 from apps.core.models import SiteConfig
+from apps.customers.services import link_order_to_session
 from .models import Order, DiscountCode, MercadoPagoPayment
 from .serializers import OrderCreateSerializer, OrderReadSerializer
 from .mercadopago_service import (
@@ -72,6 +73,7 @@ class OrderViewSet(viewsets.ModelViewSet):
         serializer = self.get_serializer(data=payload)
         serializer.is_valid(raise_exception=True)
         order = serializer.save()
+        link_order_to_session(order, request)
 
         checkout_payload = None
         if order.payment_method == Order.PAYMENT_MERCADOPAGO:

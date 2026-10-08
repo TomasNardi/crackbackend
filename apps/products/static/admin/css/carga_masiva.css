@@ -1,0 +1,316 @@
+/* Carga de stock: modos (individual / masiva) y grilla de la carga masiva.
+   Usa las variables --cl-* de la pantalla (templates/admin/products/product/bulk_load.html).
+   Es la de Delta Old adaptada a Crack: sin idioma, acabados ni atributos. */
+
+/* ------------------------------------------------------------- pantalla */
+/* Esta pantalla va a todo el ancho: sin el sidebar del admin y sin el tope de
+   ancho del contenedor. El resto del admin no se toca (este CSS solo se
+   carga acá). */
+#page > div:has(#nav-sidebar) { display:none !important; }
+#content.container { max-width:none !important; }
+html, body { overflow-x:hidden; }
+
+/* Cada modo tiene su color: todo lo que usa --cl-accent lo toma. La individual
+   conserva el dorado de Crack. */
+.cl-wrap { --cm-individual:#b8860b; --cm-individual-soft:#fdf6e3;
+           --cm-masiva:#7c3aed; --cm-masiva-soft:#f5f3ff; }
+.cl-wrap.is-masiva { --cl-accent:var(--cm-masiva); --cl-accent-soft:var(--cm-masiva-soft); }
+
+/* Qué se ve en cada modo. */
+.cl-wrap.is-masiva .cl-only-lote,
+.cl-wrap:not(.is-masiva) .cl-only-masiva { display:none !important; }
+
+/* Barra superior de color: dice en qué modo estás sin leer nada. */
+.cl-wrap { border-top:4px solid var(--cm-individual); padding-top:12px; }
+.cl-wrap.is-masiva { border-top-color:var(--cm-masiva); }
+
+.cm-modes { display:grid; grid-template-columns:repeat(2, minmax(0, 1fr)); gap:12px; margin-bottom:12px; }
+.cm-mode { display:flex; align-items:center; gap:14px; text-align:left; cursor:pointer;
+           padding:14px 18px; border-radius:12px; border:2px solid var(--cl-line);
+           background:var(--cl-bg); color:var(--cl-text); transition:border-color .15s, background .15s; }
+.cm-mode b { display:block; font-size:15px; }
+.cm-mode small { display:block; font-size:12.5px; color:var(--cl-dim); margin-top:2px; }
+.cm-mode-icon { width:40px; height:40px; border-radius:10px; flex-shrink:0; display:flex;
+                align-items:center; justify-content:center; font-size:20px; font-weight:700;
+                background:var(--cl-soft); color:var(--cl-dim); }
+.cm-mode.is-individual:hover { border-color:var(--cm-individual); }
+.cm-mode.is-masiva:hover { border-color:var(--cm-masiva); }
+.cm-mode.is-individual.is-on { border-color:var(--cm-individual); background:var(--cm-individual-soft); }
+.cm-mode.is-masiva.is-on { border-color:var(--cm-masiva); background:var(--cm-masiva-soft); }
+.cm-mode.is-individual.is-on .cm-mode-icon { background:var(--cm-individual); color:#fff; }
+.cm-mode.is-masiva.is-on .cm-mode-icon { background:var(--cm-masiva); color:#fff; }
+.cm-mode:focus-visible { outline:2px solid var(--cl-text); outline-offset:2px; }
+
+/* En la masiva los avisos flotan: si empujaran la tabla, el siguiente click
+   caería en otra fila. */
+.cl-wrap.is-masiva #cl-msg { position:fixed; bottom:20px; right:20px; z-index:100; max-width:460px; cursor:pointer;
+                             margin:0; box-shadow:0 12px 32px rgba(0,0,0,.18); }
+.cl-msg.warn { background:#fffbeb; color:#92400e; border:1px solid #fde68a; }
+
+.cm-accent-btn { background:var(--cl-accent) !important; border-color:var(--cl-accent) !important; color:#fff !important; }
+.cm-accent-btn:hover:not(:disabled) { filter:brightness(1.1); }
+.cm-accent-btn:disabled { opacity:.4; cursor:not-allowed; }
+
+.cm-start { border:1px dashed var(--cl-line); border-radius:12px; background:var(--cl-bg); }
+
+/* Monto con la moneda adelante y los pesos al lado. */
+.cm-money { position:relative; display:flex; align-items:center; gap:8px; }
+.cm-money > span { position:absolute; left:9px; font-size:11px; font-weight:700; color:var(--cl-dim);
+                   pointer-events:none; }
+.cm-money input { padding-left:38px !important; text-align:right; }
+.cm-money small { font-size:11px; color:var(--cl-dim); white-space:nowrap; min-width:58px; }
+
+/* Selector de idioma con su bandera (un <select> no muestra imágenes). */
+.cm-lang { position:relative; display:flex; align-items:center; }
+.cm-lang select { width:100%; }
+.cm-lang:has(.cm-flag) select { padding-left:34px !important; }
+.cm-flag { position:absolute; left:9px; width:18px; height:13px; border-radius:2px; object-fit:cover;
+           box-shadow:0 0 0 1px rgba(0,0,0,.12); pointer-events:none; }
+/* En un set japonés el idioma va fijo: no se elige. */
+.cm-lang.is-fixed { gap:8px; font-size:12.5px; color:var(--cl-dim); }
+.cm-lang.is-fixed .cm-flag { position:static; }
+.cm-flag-inline { width:16px; height:12px; border-radius:2px; object-fit:cover; box-shadow:0 0 0 1px rgba(0,0,0,.12); }
+
+/* ----------------------------------------------------------- diálogos */
+.cl-modal { border:none; border-radius:14px; padding:0; width:min(760px, calc(100vw - 32px));
+            color:var(--cl-text); background:var(--cl-bg); box-shadow:0 24px 60px rgba(0,0,0,.35); }
+.cl-modal::backdrop { background:rgba(0,0,0,.55); }
+.cl-modal-head { display:flex; justify-content:space-between; align-items:center; gap:12px;
+                 padding:14px 18px; border-bottom:1px solid var(--cl-line); }
+.cl-modal-head b { font-size:14px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.cl-modal-x { background:none; border:none; font-size:22px; line-height:1; cursor:pointer; color:var(--cl-dim); }
+.cl-modal-body { padding:16px 18px; }
+.cl-btn { border-radius:8px; padding:9px 14px; font-size:13px; font-weight:700; cursor:pointer;
+          border:1px solid var(--cl-line); background:var(--cl-bg); color:var(--cl-text); }
+.cl-btn:disabled { opacity:.4; cursor:not-allowed; }
+
+/* ----------------------------------------------------------------- lista */
+.cm-list[hidden] { display:none; }
+.cm-toolbar { display:flex; flex-wrap:wrap; gap:10px; align-items:center; margin-bottom:10px; }
+.cm-hits { font-size:15px; margin-right:6px; }
+.cm-tabs button span { font-weight:500; opacity:.8; margin-left:3px; }
+.cm-tabs button.is-err { color:var(--cl-warn); }
+.cm-tabs button.is-err.is-on { background:var(--cl-warn); color:#fff; }
+.cm-toolbar #cm-q { width:220px; }
+.cm-sort { display:flex; align-items:center; gap:8px; font-size:12.5px; color:var(--cl-dim); margin-left:auto; }
+.cm-pager { display:flex; align-items:center; gap:4px; font-size:13px; }
+.cm-pager button { width:30px; height:38px; border:1px solid var(--cl-line); border-radius:7px;
+                   background:var(--cl-bg); color:var(--cl-text); font-size:17px; cursor:pointer; }
+.cm-pager button:disabled { opacity:.35; cursor:default; }
+.cm-pager b { padding:0 6px; white-space:nowrap; }
+
+/* Columnas: las comparten encabezado y filas. Todas encogen: nunca hay scroll
+   lateral. */
+.cm-cols { display:grid; align-items:center; gap:10px;
+           grid-template-columns:
+             22px                    /* check            */
+             minmax(180px, 2.8fr)    /* imagen + nombre  */
+             minmax(80px, .9fr)      /* rareza           */
+             minmax(118px, 1fr)      /* idioma           */
+             var(--cm-fw, 30px)      /* acabado + partic.*/
+             minmax(140px, 1.1fr)    /* condición        */
+             minmax(90px, .9fr)      /* en stock         */
+             64px                    /* cantidad         */
+             var(--cm-gw, 44px)      /* grupo de precio  */
+             minmax(160px, 1.3fr)    /* precio           */
+             22px                    /* listo            */
+             72px; }                 /* duplicar / ✎     */
+.cm-table { background:var(--cl-bg); border:1px solid var(--cl-line); border-radius:12px; overflow:hidden; }
+.cm-head { padding:10px 14px; background:var(--cl-soft); border-bottom:1px solid var(--cl-line);
+           font-size:10.5px; font-weight:700; text-transform:uppercase; letter-spacing:.07em;
+           color:var(--cl-dim); }
+.cm-head .is-num { text-align:right; }
+
+.cm-row { min-height:66px; padding:6px 14px; border-bottom:1px solid var(--cl-line); font-size:13px; }
+.cm-row:last-child { border-bottom:none; }
+.cm-row:hover { background:var(--cl-soft); }
+.cm-row.is-focus { background:var(--cl-accent-soft); box-shadow:inset 3px 0 0 var(--cl-accent); }
+.cm-row.is-error { background:#fef2f2; box-shadow:inset 3px 0 0 var(--cl-warn); }
+.cm-row.is-copy { background:linear-gradient(90deg, var(--cl-accent-soft), transparent 40%); }
+.cm-row.is-copy .cm-id { padding-left:14px; border-left:2px solid var(--cl-accent); }
+
+.cm-check { display:flex; align-items:center; justify-content:center; cursor:pointer; }
+.cm-check input { width:16px; height:16px; margin:0; cursor:pointer; accent-color:var(--cl-accent); }
+
+.cm-card { display:flex; align-items:center; gap:10px; min-width:0; }
+.cm-card .cl-thumb { width:38px; height:53px; }
+.cm-id { min-width:0; }
+.cm-id .cl-name { font-size:13.5px; }
+.cm-id .cl-sub { font-size:11.5px; }
+.cm-row.is-error .cl-sub { color:var(--cl-warn); font-weight:600; white-space:normal; }
+.cm-rarity { font-size:11.5px; color:var(--cl-dim); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+
+.cm-stock { font-size:11.5px; color:var(--cl-dim); line-height:1.35; min-width:0;
+            overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.cm-stock b { color:var(--cl-accent); }
+.cm-stock.is-same b { color:#b45309; }
+
+.cm-row input, .cm-row select { width:100%; min-width:0; height:34px; padding:4px 8px; font-size:13px; }
+.cm-row select { font-size:12.5px; padding-right:26px; background-position:right 7px center; }
+.cm-row input[data-f="qty"] { text-align:right; }
+.cm-row input[data-f="qty"]:not(:placeholder-shown) { font-weight:700; }
+.cm-row.is-pending input[data-f="price"]:placeholder-shown,
+.cm-row.is-pending select[data-f="cond"]:invalid { border-color:var(--cl-warn); }
+.cm-na { text-align:center; color:var(--cl-dim); font-size:12px; }
+
+.cm-ok { width:20px; height:20px; border-radius:50%; display:flex; align-items:center; justify-content:center;
+         font-size:12px; background:var(--cl-soft); color:#a1a1aa; border:1px solid var(--cl-line); }
+.cm-row.is-ready .cm-ok { background:var(--cl-ok); border-color:var(--cl-ok); color:#fff; }
+
+.cm-actions { display:flex; gap:4px; }
+.cm-act { flex:1; height:34px; background:var(--cl-bg); border:1px solid var(--cl-line); border-radius:7px;
+          color:var(--cl-dim); cursor:pointer; font-size:14px; padding:0; }
+.cm-act:hover, .cm-act.has-data { border-color:var(--cl-accent); color:var(--cl-accent); background:var(--cl-accent-soft); }
+.cm-act.has-data { font-weight:700; font-size:12px; }
+.cm-act.is-del:hover { border-color:var(--cl-warn); color:var(--cl-warn); background:#fef2f2; }
+
+.cm-keys { margin:10px 2px 0; text-align:left; }
+
+/* Guardar va arriba de la tabla y queda pegado al borde de arriba al
+   scrollear: siempre visible, nunca hay que bajar hasta el final. */
+.cm-savebar { position:sticky; top:0; z-index:30; margin:0 0 12px; display:flex; flex-wrap:wrap;
+              align-items:center; gap:12px 18px; padding:10px 14px; border-radius:12px;
+              background:var(--cl-bg); border:2px solid var(--cl-accent);
+              box-shadow:0 8px 24px rgba(0,0,0,.10); }
+.cm-savebar[hidden] { display:none; }
+.cm-foot-info { flex:1; min-width:220px; display:flex; flex-wrap:wrap; justify-content:space-between;
+                align-items:center; gap:4px 16px; font-size:13px; color:var(--cl-dim); }
+.cm-foot-info b { font-size:15px; color:var(--cl-text); }
+/* Hay tildadas incompletas o cartas cargadas sin tildar: se lee en ámbar. */
+.cm-foot-info.is-warn > span { color:#b45309; font-weight:600; }
+.cm-savebar .cl-save { width:auto; min-width:220px; padding:11px 22px; }
+.cm-savebar .cl-save.is-loading { cursor:progress; opacity:.75; }
+/* Las filas no quedan escondidas debajo de la barra al moverse con el teclado. */
+.cm-row, .cm-list { scroll-margin-top:84px; }
+
+/* ------------------------------------------------------- grupos de precio */
+/* La barra fija lleva los grupos: número con su color, precio editable y
+   cuántas cartas tiene. Cada fila tiene una marquita por grupo. */
+.cm-groups { display:flex; flex-wrap:wrap; align-items:center; gap:8px; flex:2 1 520px; }
+.cm-groups-title { font-size:10.5px; font-weight:700; text-transform:uppercase; letter-spacing:.07em;
+                   color:var(--cl-dim); margin-right:2px; }
+.cm-groups-hint { font-size:12.5px; color:var(--cl-dim); }
+.cm-group { display:flex; align-items:center; gap:6px; padding:4px 6px 4px 5px; border-radius:10px;
+            border:2px solid var(--g); background:color-mix(in srgb, var(--g) 8%, var(--cl-bg)); }
+.cm-group .cm-money input { width:92px; height:30px !important; font-weight:700; }
+.cm-group small { font-size:11.5px; color:var(--cl-dim); white-space:nowrap; min-width:52px; }
+.cm-gdel { border:none; background:none; color:var(--cl-dim); font-size:16px; line-height:1; cursor:pointer;
+           padding:0 2px; }
+.cm-gdel:hover { color:var(--cl-warn); }
+.cm-gadd { height:34px; padding:0 12px; border-radius:9px; border:1px dashed var(--cl-accent);
+           background:var(--cl-bg); color:var(--cl-accent); font-weight:700; font-size:12.5px; cursor:pointer; }
+.cm-gadd:hover { background:var(--cl-accent-soft); }
+/* La marquita: un circulito con el número del grupo, lleno si la carta está adentro. */
+.cm-gdot { width:22px; height:22px; border-radius:50%; flex-shrink:0; box-sizing:border-box;
+           display:inline-flex; align-items:center; justify-content:center; cursor:pointer;
+           font-size:11px; font-weight:800; line-height:1; font-variant-numeric:tabular-nums;
+           padding:1px 0 0;
+           border:2px solid var(--g); background:var(--cl-bg); color:var(--g);
+           transition:transform .1s, background .1s; }
+@supports (text-box: trim-both cap alphabetic) {
+  .cm-gdot { padding:0; text-box:trim-both cap alphabetic; }
+}
+.cm-gdot:hover { transform:scale(1.12); }
+.cm-gdot.is-on { background:var(--g); color:#fff; }
+b.cm-gdot { cursor:default; }
+b.cm-gdot:hover { transform:none; }
+.cm-gcell { display:flex; gap:4px; align-items:center; }
+.cm-gnew { width:24px; height:24px; border-radius:50%; border:1px dashed var(--cl-line); background:var(--cl-bg);
+           color:var(--cl-dim); cursor:pointer; font-size:14px; line-height:1; padding:0; }
+.cm-gnew:hover { border-color:var(--cl-accent); color:var(--cl-accent); }
+
+.cm-adv-body { padding-top:4px; border-top:none; background:var(--cl-bg); }
+
+/* Acabado y particularidades, como en TCG Fans: en el encabezado una insignia
+   por cada acabado alternativo del set (R = Reverse Holo, 1st…) y por cada
+   particularidad (alterada, firmada…), y en cada fila una casilla debajo de
+   cada insignia. Un casillero de 30px por insignia, igual arriba y abajo. */
+.cm-fin-head, .cm-fins { display:grid; grid-auto-flow:column; grid-auto-columns:30px; gap:4px;
+                         align-items:center; justify-items:center; }
+.cm-chip { min-width:20px; height:20px; padding:0 3px; border-radius:5px; box-sizing:border-box; display:inline-flex;
+           align-items:center; justify-content:center; background:var(--c); color:#fff;
+           font-size:10px; font-weight:800; letter-spacing:0; text-transform:none; line-height:1;
+           box-shadow:inset 0 0 0 1px rgba(0,0,0,.12); cursor:help; }
+.cm-finbox { position:relative; width:20px; height:20px; border-radius:5px; flex-shrink:0; box-sizing:border-box;
+             display:inline-flex; align-items:center; justify-content:center; cursor:pointer;
+             border:1.5px solid var(--cl-line); background:var(--cl-bg); transition:border-color .1s, background .1s; }
+.cm-finbox.is-empty { border:none; background:none; cursor:default; }
+.cm-finbox:not(.is-empty):hover { border-color:var(--c); }
+.cm-finbox.is-on { background:var(--c); border-color:var(--c); }
+.cm-finbox.is-on::after { content:"✓"; color:#fff; font-size:12px; font-weight:800; line-height:1; }
+/* La casilla real queda encima, invisible: clic, foco y lector de pantalla funcionan. */
+.cm-finbox input { position:absolute; inset:0; margin:0; opacity:0; cursor:pointer; }
+.cm-finbox:focus-within { outline:2px solid var(--c); outline-offset:1px; }
+/* Carga individual (panel ✎): las mismas insignias, con su nombre al lado. */
+.cm-fin-pick { display:flex; flex-wrap:wrap; gap:8px; }
+.cm-fin-opt { display:inline-flex !important; align-items:center; gap:7px; margin:0 !important;
+              padding:6px 10px; border-radius:8px; border:1.5px solid var(--cl-line); background:var(--cl-bg);
+              font-size:12.5px !important; font-weight:600 !important; text-transform:none !important;
+              letter-spacing:0 !important; color:var(--cl-text) !important; cursor:pointer; }
+.cm-fin-opt input { width:15px; height:15px; margin:0; accent-color:var(--c); }
+.cm-fin-opt.is-on { border-color:var(--c); background:color-mix(in srgb, var(--c) 10%, var(--cl-bg)); }
+.cm-fin-opt .cm-chip { cursor:inherit; }
+/* Debajo del nombre: qué impresión es la fila si no es la de por defecto. */
+.cm-alt { color:var(--c); }
+/* Leyenda de las insignias (R, ALT, FIR, EST, REC, 1st): una línea sobre la tabla. */
+.cm-legend { display:flex; flex-wrap:wrap; gap:6px 16px; margin:0 2px 8px; font-size:12px; color:var(--cl-dim); }
+.cm-legend:empty { display:none; }
+.cm-legend span { display:inline-flex; align-items:center; gap:6px; text-transform:uppercase;
+                  letter-spacing:.02em; font-weight:600; }
+.cm-legend .cm-chip { cursor:default; }
+.cm-badge { width:20px; height:20px; border-radius:4px; display:block; cursor:help; }
+.cm-legend .cm-badge, .cm-fin-opt .cm-badge { width:16px; height:16px; cursor:default; }
+.cm-adv-body textarea { width:100%; }
+
+/* ------------------------------------------------------ revisión final */
+/* Antes de subir: todo lo tildado en una lista, con lo último que se puede
+   corregir (condición, cantidad, precio) y la opción de quitar. */
+.cm-review { width:min(1040px, calc(100vw - 32px)); }
+.cm-review-cols { display:grid; align-items:center; gap:10px;
+                  grid-template-columns:34px minmax(200px,1fr) 160px 72px 150px 120px 34px; }
+.cm-review-head { padding:9px 18px; background:var(--cl-soft); border-bottom:1px solid var(--cl-line);
+                  font-size:10.5px; font-weight:700; text-transform:uppercase; letter-spacing:.07em; color:var(--cl-dim); }
+.cm-review-head .is-num, .cm-review-sub { text-align:right; }
+.cm-review-body { max-height:min(58vh, 560px); overflow-y:auto; }
+.cm-review-row { padding:8px 18px; border-bottom:1px solid var(--cl-line); font-size:13px; }
+.cm-review-row:last-child { border-bottom:none; }
+.cm-review-row select, .cm-review-row input { width:100%; height:34px; padding:4px 8px; font-size:13px; }
+.cm-review-row input[data-r="qty"] { text-align:right; }
+.cm-review-row .cl-sub { display:flex; align-items:center; gap:4px; flex-wrap:wrap; }
+.cm-review-sub { font-size:13px; line-height:1.25; }
+.cm-review-sub small { display:block; font-size:11px; font-weight:500; color:var(--cl-dim); }
+.cm-review-foot { display:flex; flex-wrap:wrap; align-items:center; gap:10px; padding:14px 18px;
+                  border-top:1px solid var(--cl-line); background:var(--cl-soft); }
+.cm-review-total { flex:1; min-width:240px; font-size:13.5px; color:var(--cl-dim); }
+.cm-review-total b { color:var(--cl-text); }
+.cm-review-total .is-warn { color:#b45309; font-weight:600; }
+.cm-review-tag { font-size:11px; font-weight:700; color:var(--cl-accent); }
+#cm-review-confirm { padding:11px 20px; font-size:14px; }
+@media (max-width:760px) {
+  .cm-review-cols { grid-template-columns:minmax(0,1fr) 60px 110px 34px; }
+  .cm-review-cols > :nth-child(1), .cm-review-cols > :nth-child(3), .cm-review-cols > :nth-child(6) { display:none; }
+}
+
+/* --------------------------------------------------------------- angosto */
+/* Hijos de cada fila: 1 check · 2 carta · 3 rareza · 4 idioma · 5 acabado ·
+   6 condición · 7 en stock · 8 cant. · 9 grupo · 10 precio · 11 lista · 12 acciones */
+@media (max-width:1280px) {
+  .cm-cols { grid-template-columns:22px minmax(150px,2.2fr) minmax(108px,1fr) var(--cm-fw, 30px)
+             minmax(118px,1fr) minmax(76px,.8fr) 58px var(--cm-gw, 44px) minmax(132px,1.1fr) 22px 72px; }
+  .cm-cols > :nth-child(3) { display:none; }   /* rareza: va en el tooltip del nombre */
+}
+@media (max-width:980px) {
+  .cm-cols { grid-template-columns:22px minmax(120px,2fr) minmax(100px,1fr) var(--cm-fw, 30px)
+             minmax(104px,1fr) 52px var(--cm-gw, 44px) minmax(110px,1fr) 72px; }
+  .cm-cols > :nth-child(7), .cm-cols > :nth-child(11) { display:none; }
+  .cm-money small { display:none; }
+  .cm-modes { grid-template-columns:1fr; }
+}
+@media (max-width:700px) {
+  .cm-cols { grid-template-columns:22px minmax(0,1fr) 52px var(--cm-gw, 44px) minmax(92px,.9fr) 72px; }
+  .cm-cols > :nth-child(4), .cm-cols > :nth-child(5), .cm-cols > :nth-child(6) { display:none; }
+  .cm-card .cl-thumb { display:none; }
+  .cm-toolbar #cm-q, .cm-sort { width:100%; margin-left:0; }
+  .cm-savebar { position:static; }
+  .cm-savebar .cl-save { width:100%; }
+}

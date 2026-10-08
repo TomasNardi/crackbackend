@@ -26,6 +26,7 @@ from django.db import transaction
 from django.utils import timezone
 from django.utils.text import slugify
 
+from apps.catalog import finishes
 from apps.catalog.models import CardSet, CatalogCard
 from apps.catalog.services import tcgcsv
 from apps.products.models import TCG
@@ -100,14 +101,20 @@ class Command(BaseCommand):
                     continue
 
                 # Traer las cartas es una request por expansión. Si la fuente dice
-                # que no cambió, no tiene sentido volver a pedirla.
+                # que no cambió, no tiene sentido volver a pedirla. Los acabados
+                # sí, si todavía no se trajeron nunca (sets importados antes de
+                # que existieran).
                 if unchanged and not created:
+                    if not dry_run and not card_set.printings_synced_at:
+                        touched = self._import_printings(card_set, category_id)
+                        self.stdout.write(f"{prefix} — detalles de {touched} cartas")
                     totals["skipped"] += 1
                     continue
 
                 count = self._import_cards(card_set, category_id, group, dry_run)
                 totals["cards"] += count
-                self.stdout.write(f"{prefix} — {label}, {count} cartas")
+                touched = 0 if dry_run else self._import_printings(card_set, category_id)
+                self.stdout.write(f"{prefix} — {label}, {count} cartas, detalles de {touched}")
 
         self.stdout.write(self.style.SUCCESS(
             f"\nListo: {totals['sets']} expansiones, {totals['cards']} cartas."
@@ -255,6 +262,34 @@ class Command(BaseCommand):
             )
 
         return len(rows)
+
+    def _import_printings(self, card_set, category_id):
+        """
+        Guarda en cada carta del set sus acabados (Normal, Reverse Holofoil...).
+
+        Va aparte de las cartas porque sale de otro endpoint: si falla, las
+        cartas ya quedaron importadas y el set se reintenta en la próxima
+        corrida (no se marca `printings_synced_at`). Solo se escriben las cartas
+        que cambiaron. Devuelve cuántas tocó.
+        """
+        try:
+            by_product = tcgcsv.fetch_printings(category_id, card_set.external_id)
+        except tcgcsv.TcgCsvError as exc:
+            self.stderr.write(self.style.WARNING(f"    detalles: {exc}"))
+            return 0
+
+        changed = []
+        for card in CatalogCard.objects.filter(card_set=card_set).only("id", "external_id", "printings"):
+            printings = finishes.sort(by_product.get(card.external_id, []))
+            if printings != (card.printings or []):
+                card.printings = printings
+                changed.append(card)
+
+        with transaction.atomic():
+            if changed:
+                CatalogCard.objects.bulk_update(changed, ["printings"], batch_size=BATCH_SIZE)
+            CardSet.objects.filter(pk=card_set.pk).update(printings_synced_at=timezone.now())
+        return len(changed)
 
     @classmethod
     def _parse_date(cls, raw):

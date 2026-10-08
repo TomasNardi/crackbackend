@@ -245,6 +245,50 @@ class Product(models.Model):
         help_text="Solo para Slabs.",
     )
 
+    # Idioma de la carta impresa. Japonés no se elige al cargar: sale del set
+    # (las cartas japonesas tienen su propio set y su propia imagen). Vacío en
+    # accesorios y productos sin carta. Las banderas las pone el front.
+    LANGUAGE_EN = "en"
+    LANGUAGE_ES = "es"
+    LANGUAGE_PT = "pt"
+    LANGUAGE_JA = "ja"
+    LANGUAGE_ZH = "zh"
+    LANGUAGE_CHOICES = (
+        (LANGUAGE_EN, "Inglés"),
+        (LANGUAGE_ES, "Español"),
+        (LANGUAGE_PT, "Portugués"),
+        (LANGUAGE_JA, "Japonés"),
+        (LANGUAGE_ZH, "Chino"),
+    )
+    # Los que se pueden elegir al cargar una carta de un set no japonés.
+    SELECTABLE_LANGUAGES = (LANGUAGE_EN, LANGUAGE_ES, LANGUAGE_PT, LANGUAGE_ZH)
+    language = models.CharField(
+        "Idioma", max_length=2, choices=LANGUAGE_CHOICES, blank=True, default="", db_index=True,
+    )
+
+    # Variante de impresión, tal como la publica TCGplayer: "Normal",
+    # "Holofoil", "Reverse Holofoil", "1st Edition"... Sin choices a propósito:
+    # la lista la manda la fuente (CatalogCard.printings) y puede crecer. Ver
+    # apps/catalog/finishes.py. Vacío en sellados y productos viejos.
+    finish = models.CharField("Detalle", max_length=40, blank=True, default="")
+
+    # Particularidades de la unidad física que se vende (como en TCG Fans). Las
+    # que cambian qué es el producto van también en el nombre: "(Firmada)".
+    altered = models.BooleanField("Alterada", default=False)
+    signed = models.BooleanField("Firmada", default=False)
+    stamped = models.BooleanField("Estampada", default=False)
+    freshly_opened = models.BooleanField(
+        "Recién abierta", default=False, help_text="Sacada de un sobre recién abierto.",
+    )
+
+    # (campo, etiqueta, va en el nombre del producto)
+    ATTRIBUTES = (
+        ("altered", "Alterada", True),
+        ("signed", "Firmada", True),
+        ("stamped", "Estampada", True),
+        ("freshly_opened", "Recién abierta", False),
+    )
+
     # Timestamps (auto)
     created_at = models.DateTimeField("Creado", auto_now_add=True)
     updated_at = models.DateTimeField("Actualizado", auto_now=True)
@@ -253,6 +297,11 @@ class Product(models.Model):
         verbose_name = "Producto"
         verbose_name_plural = "Productos"
         ordering = ["-created_at"]
+        indexes = [
+            # El "ya tenés N" de la carga masiva: el stock de todas las cartas
+            # de un set en una sola consulta agregada.
+            models.Index(fields=["catalog_card", "in_stock"], name="product_card_stock_idx"),
+        ]
 
     def is_unique_product(self):
         category_name = self.category.name if self.category_id and self.category else ""
@@ -476,3 +525,27 @@ class ProductImageWebhookEvent(models.Model):
 
     def __str__(self):
         return f"{self.event_type} · {self.public_id or '-'}"
+
+
+class BulkLoadReceipt(models.Model):
+    """
+    Recibo de una carga masiva (apps/products/set_load).
+
+    Hace idempotente el guardado: el front manda un `request_id` por intento, y
+    si la respuesta se pierde y se reintenta, se devuelve el resultado de la
+    primera vez en vez de cargar todo de nuevo. Se borran solos a los 30 días.
+    """
+
+    request_id = models.UUIDField(unique=True)
+    result = models.JSONField(default=dict, blank=True)
+    user = models.ForeignKey(
+        "users.User", on_delete=models.SET_NULL, null=True, blank=True, related_name="+"
+    )
+    created_at = models.DateTimeField(auto_now_add=True, db_index=True)
+
+    class Meta:
+        verbose_name = "Carga masiva"
+        verbose_name_plural = "Cargas masivas"
+
+    def __str__(self):
+        return f"{self.request_id} ({self.created_at:%d/%m %H:%M})"

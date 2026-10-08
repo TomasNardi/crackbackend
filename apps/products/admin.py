@@ -6,6 +6,7 @@ from django.core.exceptions import PermissionDenied
 from django.urls import path
 from unfold.admin import ModelAdmin
 from . import bulk_load
+from .set_load import views as set_load_views
 from . import merge_duplicates_views  # TEMPORAL: se va con las rutas de duplicados
 from .forms import ProductAdminForm
 from .models import (
@@ -101,8 +102,8 @@ class ProductAdmin(ModelAdmin):
             "fields": ("cloudinary_draft_token", "images_payload", "image_url", "image_url_2", "image_url_3"),
         }),
         # --- Campos condicionales (JS los muestra/oculta según categoría) ---
-        ("Singles — Condición", {
-            "fields": ("condition",),
+        ("Singles — Condición, detalle y particularidades", {
+            "fields": ("condition", "language", "finish", "altered", "signed", "stamped", "freshly_opened"),
             "classes": ("fieldset-singles",),
         }),
         ("Slabs — Certificación", {
@@ -133,6 +134,17 @@ class ProductAdmin(ModelAdmin):
                 "carga-stock/guardar/",
                 self.admin_site.admin_view(bulk_load.save_view),
                 name="products_product_bulk_save",
+            ),
+            # Carga masiva por expansión (apps/products/set_load).
+            path(
+                "carga-stock/set/<int:set_id>/",
+                self.admin_site.admin_view(set_load_views.set_view),
+                name="products_product_set_load",
+            ),
+            path(
+                "carga-stock/guardar-masivo/",
+                self.admin_site.admin_view(set_load_views.save_view),
+                name="products_product_set_load_save",
             ),
             # TEMPORAL: junta los duplicados que dejó el criterio viejo (una
             # publicación por copia). Borrar esta ruta y el módulo cuando esté.

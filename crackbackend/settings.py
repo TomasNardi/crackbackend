@@ -72,6 +72,7 @@ LOCAL_APPS = [
     "apps.orders",
     "apps.ebay",
     "apps.users",
+    "apps.customers",
 ]
 
 INSTALLED_APPS = DJANGO_APPS + THIRD_PARTY_APPS + LOCAL_APPS
@@ -236,6 +237,27 @@ CORS_ALLOWED_ORIGIN_REGEXES = [
 ]
 
 CORS_ALLOW_CREDENTIALS = True
+
+# El token de Supabase del comprador viaja en un header propio para no
+# cruzarse con el JWT del staff (ver apps/customers/authentication.py).
+from corsheaders.defaults import default_headers  # noqa: E402
+
+CORS_ALLOW_HEADERS = (*default_headers, "x-customer-token")
+
+# ---------------------------------------------------------------------------
+# Supabase Auth — cuentas de compradores (app `customers`)
+# ---------------------------------------------------------------------------
+# SUPABASE_URL: https://<proyecto>.supabase.co. Con eso alcanza si el proyecto
+#   firma con claves asimétricas (lo que traen los proyectos nuevos).
+# SUPABASE_JWT_SECRET: solo si el proyecto sigue con el JWT secret (HS256).
+# SUPABASE_TRUST_EMAIL_PROVIDER: con login por código, Supabase solo da sesión
+#   después de que el comprador puso el código del mail, así que su email está
+#   verificado. Es lo que permite traer sus compras de invitado. Dejarlo en true
+#   mientras "Confirm email" siga activo en Supabase.
+# Sin SUPABASE_URL el sitio vende igual; solo se apagan las cuentas.
+SUPABASE_URL = os.environ.get("SUPABASE_URL", "").rstrip("/")
+SUPABASE_JWT_SECRET = os.environ.get("SUPABASE_JWT_SECRET", "")
+SUPABASE_TRUST_EMAIL_PROVIDER = _env_bool("SUPABASE_TRUST_EMAIL_PROVIDER", True)
 
 # ---------------------------------------------------------------------------
 # Static files (WhiteNoise)
@@ -744,6 +766,12 @@ UNFOLD = {
                 "separator": True,
                 "collapsible": False,
                 "items": [
+                    {
+                        "title": "Clientes",
+                        "icon": "person",
+                        "link": "/admin/customers/customer/",
+                        "permission": admin_has_perm("customers.view_customer"),
+                    },
                     {
                         "title": "Usuarios",
                         "icon": "people",

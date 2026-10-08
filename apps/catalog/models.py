@@ -66,6 +66,11 @@ class CardSet(models.Model):
 
     imported_at = models.DateTimeField("Importado", auto_now=True)
 
+    # Cuándo se trajeron por última vez los acabados de sus cartas
+    # (`CatalogCard.printings`). Vacío = todavía no: el próximo import los trae
+    # aunque el set no haya cambiado.
+    printings_synced_at = models.DateTimeField("Detalles al día", null=True, blank=True)
+
     class Meta:
         verbose_name = "Expansión"
         verbose_name_plural = "Expansiones"
@@ -136,6 +141,11 @@ class CatalogCard(models.Model):
     image_error = models.TextField("Error de imagen", blank=True)
 
     extended_data = models.JSONField("Datos extra", default=dict, blank=True)
+
+    # Acabados (variantes de impresión) que existen de la carta, tal como los
+    # publica TCGplayer: ["Normal", "Reverse Holofoil"]. El primero es el por
+    # defecto. Ver apps/catalog/finishes.py.
+    printings = models.JSONField("Detalles", default=list, blank=True)
 
     created_at = models.DateTimeField("Creado", auto_now_add=True)
     updated_at = models.DateTimeField("Actualizado", auto_now=True)
