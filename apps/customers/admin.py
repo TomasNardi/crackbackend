@@ -30,6 +30,8 @@ class CustomerAdmin(ModelAdmin):
     list_display = ("email", "full_name", "phone", "provider", "email_verified", "created_at", "last_login_at")
     list_filter = ("provider", "email_verified")
     search_fields = ("email", "first_name", "last_name", "phone")
+    # El "de N en total" con filtros cuesta un COUNT(*) más por página.
+    show_full_result_count = False
     readonly_fields = ("supabase_uid", "email", "email_verified", "provider", "avatar_url", "created_at", "last_login_at")
     fields = (
         "email", "first_name", "last_name", "phone",

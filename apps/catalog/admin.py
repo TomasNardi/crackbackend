@@ -1,4 +1,5 @@
 from django.contrib import admin, messages
+from django.db.models import Count
 from django.utils.html import format_html
 from unfold.admin import ModelAdmin
 
@@ -13,10 +14,16 @@ class CardSetAdmin(ModelAdmin):
     search_fields = ("name", "abbreviation")
     readonly_fields = ("external_id", "slug", "imported_at")
     ordering = ("-released_at", "name")
+    list_per_page = 50
+    show_full_result_count = False
 
-    @admin.display(description="Cartas")
+    def get_queryset(self, request):
+        # El conteo de cartas en la misma consulta: antes era un COUNT por fila.
+        return super().get_queryset(request).annotate(_card_count=Count("cards"))
+
+    @admin.display(description="Cartas", ordering="_card_count")
     def card_count(self, obj):
-        return obj.cards.count()
+        return obj._card_count if hasattr(obj, "_card_count") else obj.cards.count()
 
     def has_add_permission(self, request):
         # Las expansiones entran por `import_catalog`, no a mano.
@@ -38,6 +45,9 @@ class CatalogCardAdmin(ModelAdmin):
         "image_status", "image_error", "preview", "created_at", "updated_at",
     )
     list_select_related = ("card_set",)
+    list_per_page = 25
+    # Contar 63k filas dos veces por página no aporta nada.
+    show_full_result_count = False
     actions = ("action_download_images",)
 
     @admin.display(description="")

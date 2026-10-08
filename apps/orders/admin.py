@@ -172,6 +172,8 @@ class OrderAdmin(ModelAdmin):
     ordering = ("-created_at",)
     list_per_page = 40
     list_max_show_all = 200
+    # El "de N en total" con filtros cuesta un COUNT(*) más por página.
+    show_full_result_count = False
     inlines = [OrderItemInline, MercadoPagoPaymentInline]
     actions = [
         "action_mark_transfer_paid",
@@ -180,8 +182,9 @@ class OrderAdmin(ModelAdmin):
     ]
 
     def get_queryset(self, request):
-        # Las que no se concretaron viven en "Logs de órdenes".
-        return super().get_queryset(request).exclude(logged_orders_q())
+        # Las que no se concretaron viven en "Logs de órdenes". Los pagos de
+        # Mercado Pago vienen juntos: la columna de estado era una consulta por fila.
+        return super().get_queryset(request).exclude(logged_orders_q()).prefetch_related("mp_payments")
 
     def get_object(self, request, object_id, from_field=None):
         """
@@ -340,7 +343,10 @@ class OrderAdmin(ModelAdmin):
             return "paid_transfer", "Pagada", "#2ea44f"
 
         if obj.payment_method == Order.PAYMENT_MERCADOPAGO:
-            mp_payment = obj.mp_payments.order_by("-updated_at", "-created_at").first()
+            # Sobre lo prefetcheado: ordenar en Python no vuelve a la base.
+            mp_payment = max(
+                obj.mp_payments.all(), key=lambda p: (p.updated_at, p.created_at), default=None,
+            )
             if not mp_payment:
                 return "none", "Sin novedades", "#888888"
 
@@ -853,6 +859,8 @@ class OrderLogAdmin(ModelAdmin):
     ordering = ("-created_at",)
     date_hierarchy = "created_at"
     list_per_page = 40
+    # El "de N en total" con filtros cuesta un COUNT(*) más por página.
+    show_full_result_count = False
 
     def get_queryset(self, request):
         return (
@@ -1101,6 +1109,7 @@ class ShippingModeFilter(SimpleListFilter):
 
 @admin.register(ShippingOrder)
 class ShippingOrderAdmin(ModelAdmin):
+    show_full_result_count = False
     list_display = (
         "order_link",
         "customer_name",

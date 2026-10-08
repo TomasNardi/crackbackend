@@ -6,6 +6,7 @@ solo la acción que corresponde al paso siguiente, con el mismo patrón de
 botones que ya usa OrderAdmin (get_urls + format_html).
 """
 
+
 import logging
 from decimal import Decimal
 
@@ -21,6 +22,7 @@ from unfold.admin import ModelAdmin, TabularInline
 from apps.ebay import tasks
 from apps.ebay.models import EbayConfig, EbayOrder, EbayOrderItem
 from apps.ebay.pdf_generator import generate_ebay_order_pdf
+from apps.core.admin_performance import singleton_exists
 
 logger = logging.getLogger(__name__)
 
@@ -176,6 +178,8 @@ class EbayOrderAdmin(ModelAdmin):
     search_fields = ("order_code", "customer_name", "customer_email", "items__title", "items__ebay_item_id")
     ordering = ("-created_at",)
     list_per_page = 40
+    # El "de N en total" con filtros cuesta un COUNT(*) más por página.
+    show_full_result_count = False
     inlines = [EbayOrderItemInline]
 
     readonly_fields = (
@@ -573,7 +577,7 @@ class EbayConfigAdmin(ModelAdmin):
 
     def has_add_permission(self, request):
         # Singleton: se entra siempre al mismo registro.
-        return not EbayConfig.objects.exists()
+        return not singleton_exists(EbayConfig)
 
     def has_delete_permission(self, request, obj=None):
         return False

@@ -10,6 +10,7 @@ from django.db.models import Q, Sum
 from django.utils.html import format_html
 from ckeditor.widgets import CKEditorWidget
 from unfold.admin import ModelAdmin
+from apps.core.admin_performance import singleton_exists
 from .emails import send_sale_request_status_email
 from .models import (
     SiteConfig,
@@ -31,7 +32,7 @@ class ExchangeRateAdmin(ModelAdmin):
     readonly_fields = ("updated_at",)
 
     def has_add_permission(self, request):
-        return not ExchangeRate.objects.exists()
+        return not singleton_exists(ExchangeRate)
 
     def has_delete_permission(self, request, obj=None):
         return False
@@ -59,7 +60,7 @@ class SiteConfigAdmin(ModelAdmin):
         return "Visible" if obj.show_top_banner else "Oculto"
 
     def has_add_permission(self, request):
-        return not SiteConfig.objects.exists()
+        return not singleton_exists(SiteConfig)
 
     def has_delete_permission(self, request, obj=None):
         return False

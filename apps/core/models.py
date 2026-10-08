@@ -4,6 +4,8 @@ Core Models
 Configuración general del sitio: estado de la página, tipo de cambio y suscripciones de email.
 """
 
+import time
+
 from django.db import models
 
 
@@ -30,10 +32,25 @@ class ExchangeRate(models.Model):
     def save(self, *args, **kwargs):
         self.pk = 1
         super().save(*args, **kwargs)
+        # El precio en pesos tiene que reflejar el dólar nuevo ya mismo.
+        ExchangeRate._cached = None
+
+    # El dólar se lee al calcular cada precio en pesos (`Product.price_ars`):
+    # un listado de la tienda lo pedía una vez por producto, y cada lectura es
+    # un viaje a la base. Se guarda en memoria unos segundos; guardarlo desde
+    # el admin lo refresca en el acto.
+    _cached = None
+    _cached_at = 0.0
+    CACHE_SECONDS = 30
 
     @classmethod
     def get(cls):
+        now = time.monotonic()
+        cached = cls._cached
+        if cached is not None and now - cls._cached_at < cls.CACHE_SECONDS:
+            return cached
         obj, _ = cls.objects.get_or_create(pk=1, defaults={"usd_to_ars": 1000})
+        cls._cached, cls._cached_at = obj, now
         return obj
 
 

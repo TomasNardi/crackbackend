@@ -3,6 +3,7 @@ import json
 from django.contrib import admin
 from django.contrib import messages
 from django.core.exceptions import PermissionDenied
+from django.db.models import Subquery
 from django.urls import path
 from unfold.admin import ModelAdmin
 from . import bulk_load
@@ -78,8 +79,27 @@ class ProductAdmin(ModelAdmin):
     def price_ars_display(self, obj):
         if not obj.pk or not obj.price_usd:
             return "—"
-        return f"${obj.price_ars:,.0f}"
+        # En el listado el dólar viene anotado en la misma consulta (ver
+        # get_queryset); `price_ars` lo leía de la base una vez por fila.
+        rate = getattr(obj, "_usd_to_ars", None)
+        price = obj.price_usd * rate if rate is not None else obj.price_ars
+        return f"${price:,.0f}"
     price_ars_display.short_description = "Precio ARS"
+
+    # Las columnas TCG y categoría eran una consulta por fila cada una.
+    list_select_related = ("category", "tcg")
+    # El costo del listado es el render de cada fila (Unfold arma las celdas
+    # con su formulario de stock): con 25 la página sale en la mitad de tiempo.
+    list_per_page = 25
+    # El "de N en total" con filtros cuesta un COUNT(*) más por página.
+    show_full_result_count = False
+
+    def get_queryset(self, request):
+        from apps.core.models import ExchangeRate
+
+        return super().get_queryset(request).annotate(
+            _usd_to_ars=Subquery(ExchangeRate.objects.filter(pk=1).values("usd_to_ars")[:1])
+        )
 
     autocomplete_fields = ("catalog_card",)
 

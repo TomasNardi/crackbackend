@@ -6,6 +6,11 @@ class CoreConfig(AppConfig):
     name = "apps.core"
 
     def ready(self):
+        # Velocidad del admin: ver apps/core/admin_performance.py.
+        from .admin_performance import apply
+
+        apply()
+
         # Ocultar modelos internos de JWT del panel admin
         from django.contrib import admin
 
